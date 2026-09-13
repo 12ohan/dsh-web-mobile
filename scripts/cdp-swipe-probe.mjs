@@ -573,22 +573,27 @@ async function main() {
     // — the narrower nav rail — so the drag froze ~81px short of the edge:
     // the drawer stalled under a still-moving finger (user report 「半开不开」)
     // and the release had to creep the remainder (「停在我最终滑动的地方，
-    // 之后消失」). Needs a long stroke, so start at the frame's right side
-    // (legal since close strokes accept the whole frame).
-    const kWide = await client.evaluate(`(() => {
-      const d = document.querySelector('[data-mobile-nav="frame"]')?.firstElementChild
-      return d ? Math.round(d.getBoundingClientRect().width) : null
-    })()`)
-    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: touch(380, 300) })
-    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: touch(340, 300) })
+    // 之后消失」). The slot ARITHMETIC is pinned by the unit test
+    // 「followTranslate: the close slot must be 110% of the OPEN drawer
+    // width」. On a 390px phone the 2026-09-13 narrowing leaves no legal
+    // start for a -280px drag: every x ≥ 214 (the files-zone boundary) is a
+    // files-family stroke that must not drag the drawer, and the deepest
+    // drawer-family start (x=213) yields at most -211px of travel. So this
+    // scene asserts the follow is ALIVE across the whole legal drag — the
+    // finger's full travel, no mid-drag freeze — and hands the slot math to
+    // the unit test.
+    const zonePx = Math.round(390 * 0.45)
+    const kStart = 390 - zonePx - 1
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: touch(kStart, 300) })
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: touch(kStart - 40, 300) })
     await sleep(40, signal)
     await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: touch(2, 300) })
     await sleep(60, signal)
     const kFar = await inlineTx()
     check(
       'swipe.close-follow-reaches-slot',
-      computedTxOf(kFar.computed) <= -kWide,
-      `width=${kWide} travel=-378 computed=${kFar.computed} (must clear -110% of the OPEN drawer width, not the collapsed rail's -226.7px slot)`,
+      computedTxOf(kFar.computed) <= -(kStart - 2) + 3,
+      `start=${kStart} computed=${kFar.computed} (the follow must track the finger's full travel from the deepest legal drawer-family start; slot math is pinned by the unit test)`,
     )
     await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
     await sleep(450, signal)
@@ -649,37 +654,47 @@ async function main() {
     check('swipe.backdrop-single-reopen', reopen.backdropCount === 1, `count=${reopen.backdropCount}`)
     await sleep(500, signal)
 
-    // --- Checklist 4b: closing accepts BOTH directions and the WHOLE frame ---
-    // (2026-08-29 sixth round, user report 「根本没法左滑关闭」+「希望打开抽屉
-    //  之后以外的部分可以进行左滑」.) The drawer is open here.
+    // --- Checklist 4b: the zone beside the drawer belongs to the FILES
+    // gesture (2026-09-13 narrowing of the sixth-round anywhere-close).
+    // The drawer is open here. Leftward closes remain valid from INSIDE the
+    // drawer (drawer mode, anywhere-close), but a leftward stroke beside the
+    // drawer must NOT close it anymore (the files panel would mount under
+    // the drawer, z-1100, invisible). A RIGHTWARD stroke beside the drawer
+    // still closes it — the animated commitFollowClose path — and its
+    // synthetic click must not re-open it.
     await touchSwipe(client, 200, 300, 60, 300, 140, signal) // leftward, inside the drawer
     const leftClosed = await waitDrawer(client, 'leftward close from inside the drawer', config.timeoutMs, signal, false)
     check('swipe.close-leftward-inside', leftClosed !== null, 'collapsed=true (pushing the drawer back into its slot must close it)')
     await sleep(500, signal)
-
-    // Reopen, then close with a leftward stroke that STARTS on the backdrop
-    // (the ~28% of the screen beside the drawer, which used to reject every
-    // stroke). The synthetic backdrop click must not re-open it.
+    // Reopen for the beside-the-drawer checks.
     await touchSwipe(client, 8, 300, 200, 300, 140, signal)
-    await waitDrawer(client, 'reopen for backdrop-start close', config.timeoutMs, signal, true)
+    await waitDrawer(client, 'reopen for files-zone close checks', config.timeoutMs, signal, true)
     await sleep(500, signal)
-    const backdropStartX = await client.evaluate(`(() => {
+    const besideX = await client.evaluate(`(() => {
       const d = document.querySelector('[data-mobile-nav="frame"]')?.firstElementChild
       if (!d) return null
       return Math.round(d.getBoundingClientRect().right + 40)
     })()`)
-    await touchSwipe(client, backdropStartX, 300, backdropStartX - 140, 300, 140, signal)
-    const backClosed = await waitDrawer(client, 'backdrop-start leftward close', config.timeoutMs, signal, false)
-    await sleep(500, signal)
-    const afterBackdropClose = await drawerState(client)
+    await touchSwipe(client, besideX, 300, besideX - 140, 300, 140, signal)
+    await sleep(600, signal)
+    const besideLeft = await drawerState(client)
     check(
-      'swipe.close-from-backdrop-area',
-      backClosed !== null && afterBackdropClose.collapsed === true && afterBackdropClose.backdropCount === 0,
-      `startX=${backdropStartX} collapsed=${afterBackdropClose.collapsed} backdrops=${afterBackdropClose.backdropCount} (a stroke beside the drawer must close it, and its synthetic backdrop click must not re-open it)`,
+      'swipe.files-zone-leftward-keeps-drawer',
+      besideLeft.collapsed === false,
+      `startX=${besideX} collapsed=${besideLeft.collapsed} (a leftward stroke beside the drawer belongs to the files gesture and must not close the drawer)`,
+    )
+    await touchSwipe(client, besideX, 300, besideX + 140, 300, 100, signal)
+    const rightClosed = await waitDrawer(client, 'right-zone rightward close', config.timeoutMs, signal, false)
+    await sleep(600, signal)
+    const afterRightClose = await drawerState(client)
+    check(
+      'swipe.close-from-right-zone',
+      rightClosed !== null && afterRightClose.collapsed === true && afterRightClose.backdropCount === 0,
+      `startX=${besideX} collapsed=${afterRightClose.collapsed} backdrops=${afterRightClose.backdropCount} (a rightward stroke beside the drawer must close it, and its synthetic click must not re-open it)`,
     )
     // Back to open for the checklists that follow.
     await touchSwipe(client, 8, 300, 200, 300, 140, signal)
-    await waitDrawer(client, 'reopen after bidirectional close checks', config.timeoutMs, signal, true)
+    await waitDrawer(client, 'reopen after files-zone close checks', config.timeoutMs, signal, true)
     await sleep(500, signal)
 
     // --- Checklist 5: post-gesture zero side effects ---
