@@ -1,6 +1,7 @@
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { MobileNavToggle } from './components/MobileNavToggle.tsx'
 import { MobileDrawerFooter } from './components/MobileDrawerFooter.tsx'
+import { openFilesPanel } from './components/open-files-panel.ts'
 import { MOBILE_CSS } from './styles/index.ts'
 
 import { installFrameController, installOverlayInteractions, installPhoneChrome, installReconciler, registerReconcileTasks, MOBILE_QUERY } from './effects/phone-chrome.ts'
@@ -182,8 +183,12 @@ export function apply(ctx: ClientContext): void {
   installSessionMenuDelete(ctx)
 
   // Sidebar swipe gestures: edge swipe-in opens the drawer, content swipe-out
-  // closes it (release-classified, zero inline transforms — A 档).
-  installSidebarSwipe(ctx)
+  // closes it (release-classified, zero inline transforms — A 档). Since
+  // 2026-09-13 the layer also owns the right-edge files gesture (leftward
+  // opens the files panel via openFilesPanel, rightward closes whatever is
+  // on top — the panel or the drawer); a leftward stroke never collapses
+  // anything.
+  installSidebarSwipe(ctx, openFilesPanel)
 
   // Lineage-count chip: reliable open/close on touch pointers (upstream is
   // hover-timer driven and has no onClick on the count variant).
