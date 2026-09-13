@@ -580,8 +580,10 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
 
   /* --- Session header on mobile ---
      Keep the host-owned metadata in one responsive row. The conversation
-     title and running/subagent status keep their lanes; the mode text is the
-     first to ellipsize when space runs out, while Files keeps its hit area. */
+     title, the mode text and the running/subagent status all keep their
+     words; the one tenant that yields width when a phone runs out of it is
+     the background-job trigger's verbose label ("1 background job running"),
+     while Files keeps its hit area. */
   /* Both !important flags are load-bearing. The host's session-controller sheet
      ships [data-dsh-frame] [data-dsh-responsive-part="conversation-header"] with
      padding-left: 60px !important under (max-width: 768px), so a plain
@@ -593,6 +595,30 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-mobile-nav="frame"] [data-phase] header {
     padding-left: 0 !important;
     padding-right: 8px !important;
+  }
+  /* Header popovers resolve against the header, not against their 28px flow
+     box. 0.1.5's background-job chip anchors its menu with
+     position:absolute; top:calc(100% + 5px) inside .QsffPG_root
+     {position:relative} — a 28px-tall chip — so the menu was laid out at
+     x=-16 (our right:8px resolved against that 156px chip root) and then
+     clipped twice: by our own overflow:hidden on the chip root and by the
+     host's [data-dsh-responsive-part="session-title-cluster"]
+     {overflow:hidden}. The chip still reported aria-expanded=true with
+     nothing painted and nothing hit-testable: measured 2026-09-14 at 390px,
+     menu rect [-16,49,336,40], elementFromPoint at its centre returned the
+     view tabs row. A positioned header plus a static chip root puts the same
+     menu at [46,77,336,73] — inside the viewport, its rows hit-testable, and
+     an outside tap still dismisses it (menus 1 -> 0).
+     BOTH halves are load-bearing: forcing the chip root static without
+     positioning the header moves the containing block out to the frame, and
+     the menu lands at x=8 y=849 — past the 844px viewport (A/B 2026-09-13).
+     Scoped to the header actions slot, so the subagent lineage root inside
+     the crumbs keeps its own anchored, fixed-position menu. */
+  [data-mobile-nav="frame"] [data-phase] header {
+    position: relative !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) {
+    position: static !important;
   }
   /* The tab strip is a separate grid item from the title row and does not
      inherit the title row's inset, so after the header padding above went to 0
@@ -645,7 +671,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      pinned to the top-right corner). Absolute positioning also returns its
      28px of flow width to the title lane, and the containing block is the same
      one the toggle resolves against, so both controls shift together with the
-     frame's safe-area padding. */
+     frame's safe-area padding. The 44px reservation itself is trimmed to the
+     28px band this button actually paints in the compact-rows block below, so
+     the title lane keeps the difference. */
   [data-mobile-nav="files"] {
     position: absolute !important;
     right: 8px !important;
@@ -680,14 +708,20 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     text-overflow: ellipsis;
     white-space: nowrap !important;
   }
-  /* Mode label: preserve its icon and scale with the viewport — it yields
-     space to the title and subagent status first, but can use more width on
-     wider screens up to 220px before ellipsizing. */
+  /* Mode label: keep the icon AND the words. On a phone this chip is the only
+     mode switcher there is, so its text is not the surplus it was once
+     treated as: the longest preset name measured needs 121px including the
+     18px icon seat, while the old cap min(22vw, 220px) allowed just 85.8px at
+     390px — the text was clipped at every phone width even before the
+     crowding rules below pinned it to the icon alone (2026-09-14 phone
+     report: the mode label showed only its glyph). 38vw keeps the label whole
+     from 320px up and still lets it ellipsize before the title on wider
+     screens. */
   [data-mobile-nav="frame"] [data-phase] header [class*="_label"]:has(> svg) {
     order: 1;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: min(22vw, 220px);
+    max-width: min(38vw, 220px);
     display: block;
     position: relative;
     box-sizing: border-box;
@@ -710,16 +744,19 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      [class*="_root"] and exclude the switcher root ([class*="_switcherRoot"])
      so only the count/job roots get pinned (the switcher must stay shrinkable
      so its own title can ellipsize). */
-  /* flex 0 1 with a cap instead of an unshrinkable max-content pin: the pin made
-     these chips eat the session title, whose flex basis is 0. Measured at 320px,
-     the crumb went 68px -> 16px and the painted title was EMPTY while the chip
-     kept its full text. The cap keeps the count readable and leaves the title
-     its share; the hit area is unchanged (still one inline-flex button).
-     NOTE: no position override. The host anchors these chips' popovers with
-     position:absolute; top:calc(100% + 5px) against the official
-     .root{position:relative}; forcing static moved the containing block out to
-     the frame, so the popup landed at x=8 y=849 (offscreen, past the 844px
-     viewport) instead of under its chip (A/B 2026-09-13). */
+  /* Pinned (flex 0 0 auto) with a max-width cap. A shrinkable chip is squeezed
+     below its content and the count reads as clipped or overwritten (the
+     2026-08-22 report), while a bare max-content pin eats the session title,
+     whose flex basis is 0: measured 2026-09-13 at 320px, the crumb went 68px
+     -> 16px and the painted title was EMPTY while the chip kept its full text.
+     Pinned + capped + the crumbs min-width floor above is what holds both —
+     the title ellipsizes, the count keeps its words, and the hit area stays
+     one inline-flex button.
+     NOTE: the popover containment lives with the header rules above, which
+     force this root position:static. That only works together with the
+     positioned header: static on its own moved the containing block out to
+     the frame and the menu landed at x=8 y=849, past the 844px viewport
+     (A/B 2026-09-13). */
   [data-mobile-nav="frame"] [data-phase] header [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) {
     order: 2;
     flex: 0 0 auto;
@@ -765,6 +802,11 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      the release stays for any plugin that registers a header dropdown here. */
   [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_headerUtilities"] {
     overflow: visible !important;
+    /* The seat is empty on a phone (its only button is hidden just below) yet
+       still 44px tall, which floors the whole title row — see the compact-rows
+       block after the tab strip. */
+    height: 30px !important;
+    min-height: 0 !important;
   }
   [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_headerUtilities"] [class*="nL4_yW_moreButton"] {
     display: none !important;
@@ -814,37 +856,76 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     white-space: nowrap;
     scroll-snap-align: start;
   }
+  /* Compact session header rows (2026-09-14 phone report: the top is very
+     empty). The host's own mobile sheet lays the header out as
+     grid-template-rows: minmax(32px, auto) minmax(44px, auto) with
+     [role="tab"] { min-height: 44px }, and both rows then grow to 44: the
+     title row is floored by the empty utilities seat above, the tab row by the
+     buttons' own floor. Measured at 390px: header 97px = 8 padding + 44 + 44 +
+     1 border, for 36px of painted content. Capping the rows at 36/32 and the
+     tabs at their own content height gives 77px, with nothing else degraded —
+     title, mode text, status chips, chevrons and both pinned corner buttons
+     keep their measured geometry, and the tab strip keeps its #41 contract
+     (horizontal scroll, 16px gap, whole labels, pan-x).
+     The host's 8px padding-top is deliberately kept: the title row's 28px
+     content then centres at y=26, exactly the centre of the pinned corner
+     controls (toggle and Files opener both sit at top:12, 28px tall). Trimming
+     that padding to 4 shaved 4 more px but left the text row visibly riding
+     above both buttons (2026-09-14 phone report: the text row sits too high
+     against the drawer and Files controls), so the row height is what pays for
+     the compaction, not the alignment.
+     :has(> *) guards the hero header: it is an EMPTY, host-hidden grid that
+     still occupies 85px while the composer is laid out under it. In the hero
+     the header has 0 element children, so the guard leaves it at its official
+     height — measured, the hero composer rect [0,349,388,231] is identical
+     with and without this block. */
+  [data-mobile-nav="frame"] [data-phase] header:has(> *) {
+    min-height: 0 !important;
+    grid-template-rows: minmax(36px, auto) minmax(32px, auto) !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header [role="tab"] {
+    min-height: 32px !important;
+  }
+  /* The title cluster reserves its last 44px for that empty utilities seat,
+     while our Files opener only paints a 28px band at right:8 — so 18px of the
+     reservation is dead space the title lane can have. Trimming it to 26px
+     hands the title 18px back (measured at 390px with a lineage chip present:
+     crumb 64 -> 82px) and still clears the opener by 8px (actions right edge
+     346 against button left edge 354, with the button keeping its hit test). */
+  [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_titleCluster"] {
+    padding-right: 26px !important;
+  }
   /* Header crowding on narrow phones.
-     A background-job trigger in the header actions, or the subagent lineage
-     count ("N 个子代理") living inside the crumbs nav, consumes the width the
-     mode label would otherwise use. This squeezes the crumbs nav so hard that
-     the subagent count is clipped by the nav's overflow:hidden — the text
-     looks overwritten and the trigger's right edge stops being reliably
-     tappable. Mode text is the lowest-priority item, so it is compressed
-     first. The lineage root (dsh-client-ui-subagent) sits in the crumbs for
-     BOTH running and idle descendants, so we key the guards on that root
-     rather than the transient running-state dot — otherwise the count gets
-     clipped again the moment agents go idle. Match roots with
-     [class*="_root"] (the real class carries a trailing space; [class*="_root"]
-     matches nothing). */
+     Three tenants want the same row: the session title, the mode chip and the
+     status chips. The status chips are the only ones whose words are
+     redundant — the background-job chip keeps its state dot, its chevron and
+     its aria-label, and the popover above now lists the jobs — so the job
+     trigger's verbose label ("1 background job running") is what yields. The
+     mode chip is the only mode switcher a phone has and the title is the only
+     session identity, so both keep their words and the title ellipsizes
+     instead (measured 2026-09-14 at 390px with a lineage chip present: after
+     this the mode label keeps 101px of text and the crumb 135px).
+     The lineage root (dsh-client-ui-subagent) sits in the crumbs for BOTH
+     running and idle descendants, so the guards below key on that root rather
+     than the transient running-state dot — otherwise the row would reflow the
+     moment agents go idle. Match roots with [class*="_root"] (the real class
+     carries a trailing space; [class*="_root"] matches nothing). */
   @media (max-width: 440px) {
     [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] {
       padding-right: 8px;
     }
-    [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"]:has([class*="_root"]) [class*="_label"]:has(> svg),
-    [data-mobile-nav="frame"] [data-phase] header:has([class*="_crumbs"] [class*="_root"]) [class*="_label"]:has(> svg) {
-      max-width: 18px;
-      min-width: 18px;
-      padding-left: 18px;
-      padding-right: 0 !important;
+    /* The job label is the single widest tenant of the actions lane and the
+       only one whose text is already carried elsewhere (aria-label + popover).
+       Truncating it to a number instead would print the wrong count for a
+       double-digit job list, so it is dropped whole — dot, chevron and tap
+       target stay. */
+    [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) [class*="_count"] {
+      display: none !important;
     }
   }
-  /* When the subagent lineage (any state) AND a background job are present
-     together, even the mode icon is not enough room by itself. Keep the full
-     subagent count (the reported-overwritten text) by compacting the job
-     trigger to its dot/chevron, and keep mode icon-only so the crumbs nav can
-     also hold a small right-hand gap — the subagent text should never sit
-     flush against the mode component. */
+  /* With the subagent lineage (any state) AND a background job present
+     together, 390px cannot hold the title, the mode words, the lineage count
+     and the job label at once; the job label goes first, above 440px too. */
   @media (max-width: 559px) {
     [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] {
       padding-right: 8px;
@@ -852,13 +933,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     [data-mobile-nav="frame"] [data-phase] header:has([class*="_crumbs"] [class*="_root"]) [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) [class*="_count"] {
       display: none !important;
     }
-    [data-mobile-nav="frame"] [data-phase] header:has([class*="_crumbs"] [class*="_root"]):has([class*="_headerActions"] [class*="_root"]) [class*="_label"]:has(> svg) {
-      max-width: 18px;
-      min-width: 18px;
-      padding-left: 18px;
-      padding-right: 0 !important;
-    }
   }
+  /* Last resort on 320px-class screens: the title and both status chips cannot
+     share the row with the mode words, so the mode chip keeps only its icon. */
   @media (max-width: 359px) {
     [data-mobile-nav="frame"] [data-phase] header:has([class*="_crumbs"] [class*="_root"]):has([class*="_headerActions"] [class*="_root"]) [class*="_label"]:has(> svg) {
       display: none !important;
@@ -866,13 +943,15 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   }
 
   /* --- Header popovers on mobile (dsh-client-ui-jobs / dsh-client-ui-subagent) --- */
-  /* The official entries sit in the session header actions. Their popovers
-     are anchored to the trigger's left edge, so clamp them to the viewport. */
-  /* These chips sit at the RIGHT edge of the header (measured: chip right edge
-     374 of a 390px viewport) while the host anchors the popover to the chip's
-     left edge (left:0 inside the relative root), so a 336px panel runs off the
-     screen. Right-anchor it instead. Do NOT clamp with left:8px: measured, that
-     put the panel at x=350..686 (off-screen) against x=30..366 here. */
+  /* Both entries sit in the session header and both anchor their panel to the
+     trigger's left edge (left:0 inside their own root), so clamp them to the
+     viewport. The background-job menu resolves against the header (see the
+     containment rules at the top of this section) and the subagent lineage
+     menu is position:fixed, so right:8px pins either panel 8px from the
+     phone's right edge: measured [46,77,336,73] for the job menu and
+     [38,41,336,58] for the lineage menu at 390px, both fully inside the
+     viewport. Do NOT clamp with left:8px: measured, that put the panel at
+     x=350..686 (off-screen) against a right-anchored x=30..366. */
   [data-mobile-nav="frame"] [data-phase] header [class*="_menu"] {
     left: auto !important;
     right: 8px !important;
