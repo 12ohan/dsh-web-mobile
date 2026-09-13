@@ -57,6 +57,7 @@ export declare function getFrame(): HTMLElement | null;
  * deadlock). We read `position` on the un-collapsed column instead.
  */
 export declare function isNativeDrawerGeneration(frame: HTMLElement | null): boolean;
+export declare function ensureDismissShadow(): void;
 /** Mirror the probe onto the root element, where the stylesheet gates on it. */
 export declare function updateNativeDrawerGen(): void;
 export declare function installFrameController(): () => void;

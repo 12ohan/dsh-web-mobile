@@ -52,7 +52,7 @@
 
 ## 会话 header 拥挤保护的选择器必须用 `[class*="_root"]`，不是 `[class$="_root"]`
 
-**会话 header 拥挤保护的选择器必须用 `[class*="_root"]`，不是 `[class$="_root"]`**：子代理计数（"N 个子代理"）渲染在 crumbs 的 lineage 里，后台任务触发器（"N 个后台任务运行中"）在 headerActions。关键坑：subagent 插件的 lineage root class 是 `class="ZKlsPq_root "`——**带尾随空格**（模板字符串 className `${root} ${variant==="switcher"?switcherRoot:""}` 拼出来的），于是 `[class$="_root"]` 在真实 DOM 里 **0 命中**（实测 `querySelectorAll` 返回 0），所有依赖它的保护/钉宽规则全部静默失效——这就是「修完还是截断」的根本原因（测试用干净 class 字符串的合成 fixture 复现不出，只有真渲染能暴露）。修正：门控用 `header:has([class*="_crumbs"] [class*="_root"])`（lineage root 运行/空闲都在，也覆盖 `_activitySlot` 瞬态点的坑）；钉宽只钉计数/jobs root：`header [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) { flex:0 0 auto; min-width:max-content }`，排除 switcher root 让它内部 `.switcherTitle` 保持可省略号收缩（switcher trigger 的 class 同样带尾随空格 `ZKlsPq_switcherTrigger `）。另外：根会话 lineage 计数自带官方 `ZKlsPq_separator` "/"（桌面 chrome，语义像多了一级面包屑），移动端已用 `header [class*="_crumbs"] [class*="_separator"] { display:none }` 隐藏；crumbSep "/"（子代理会话段间分隔）保留。计数 root 不收缩后，crumbs 里让位的是 title/switcher title——省略号截断标题是预期行为。
+**会话 header 拥挤保护的选择器必须用 `[class*="_root"]`，不是 `[class$="_root"]`**：子代理计数（"N 个子代理"）渲染在 crumbs 的 lineage 里，后台任务触发器（"N 个后台任务运行中"）在 headerActions。关键坑：subagent 插件的 lineage root class 是 `class="ZKlsPq_root "`——**带尾随空格**（模板字符串 className `${root} ${variant==="switcher"?switcherRoot:""}` 拼出来的），于是 `[class$="_root"]` 在真实 DOM 里 **0 命中**（实测 `querySelectorAll` 返回 0），所有依赖它的保护/钉宽规则全部静默失效——这就是「修完还是截断」的根本原因（测试用干净 class 字符串的合成 fixture 复现不出，只有真渲染能暴露）。修正：门控用 `header:has([class*="_crumbs"] [class*="_root"])`（lineage root 运行/空闲都在，也覆盖 `_activitySlot` 瞬态点的坑）；钉宽只钉计数/jobs root：`header [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) { flex:0 0 auto; min-width:max-content }`，排除 switcher root 让它内部 `.switcherTitle` 保持可省略号收缩（switcher trigger 的 class 同样带尾随空格 `ZKlsPq_switcherTrigger `）。另外：根会话 lineage 计数自带官方 `ZKlsPq_separator` "/"（桌面 chrome，语义像多了一级面包屑），移动端已用 `header [class*="_crumbs"] [class*="_separator"] { display:none }` 隐藏；crumbSep "/"（子代理会话段间分隔）保留。计数 root 不收缩后，crumbs 里让位的是 title/switcher title——省略号截断标题是预期行为。**2026-09-14 让位优先级反转**（模式名与标题保文字、后台任务 chip 的长标签让位）＋同轮的「弹层包含块 / 行高 / 座位线」见下节 §header 行高与弹层。
 
 ---
 
@@ -188,10 +188,141 @@
 
 ### 竖向：它仍然随状态栏下移（预期）
 
-插 47px inset 后两个角按钮同时从 top 12 → 59（`top: 12px` 的包含块是 `wSkVaW_root`，它在被 padding 下推的 frame 内容里）。**这是必须的**：不让它下移就会被状态栏压住。所以「不受状态栏影响」只能理解为「水平方向不要漂、贴住右上角」，不能理解为「纵向不动」。
+插 47px inset 后两个角按钮同时从 top 12 → 59（`top: 12px` 的包含块随包含块体系一起走：`wSkVaW_root` → 本轮起是 `header`，两者都在被 padding 下推的 frame 内容里，实测 12 → 59 不变）。**这是必须的**：不让它下移就会被状态栏压住。所以「不受状态栏影响」只能理解为「水平方向不要漂、贴住右上角」，不能理解为「纵向不动」。
 
 ### 边界
 
 - hero 态（无会话）该 slot 不渲染（实测 `[data-mobile-nav="files"]` absent），不存在「钉到别的容器」的风险；hero 的 Files 入口在抽屉 footer（`data-mobile-nav="explorer"`）。
-- utilities 座位哪天真的渲染出控件，我们的按钮会与它重叠 8px——届时按锚点提示改 `right` 值或让位（锚点断言里已记录该座位的坐标与宽度）。
+- utilities 座位自 2026-09-14 起被插件限高 30px（它只顶行高，不画东西）；哪天它真的渲染出控件，我们的按钮会与它重叠 8px——届时按锚点提示改 `right` 值或让位（锚点断言里已记录该座位的坐标与宽度）。
 - 装置层验证：`scripts/probes/header-files-pin-probe.mjs`（12 断言）；真机读数走 `?mobile-nav-debug=1` 的调试上报（见 Testing & QA）。
+
+---
+
+## 会话 header：行高、座位线与弹层包含块（2026-09-14 真机三项反馈）
+
+原话：「模式几个字都被压缩没了，仅留模式选择那个图案」「后台运行命令元素展开无 ui」「顶部状态栏加上下边的对话轨迹一栏合一起空隙非常大」＋追加「文字行总体在上边，感觉十分不协调」。三件事同域，一次收口。
+
+### ① 「后台任务」芯片展开无 UI ＝ 弹层被三重困住
+
+`dsh-client-ui-jobs` 的菜单是 `position:absolute; top:calc(100% + 5px)`，挂在它自己的 `.QsffPG_root{position:relative}` 上——一个 **28px 高的流式盒**。三重问题叠加：
+
+| 层 | 事实 | 后果 |
+|---|---|---|
+| 我们 | `[class*="_root"]…{overflow:hidden}` | 菜单被裁在芯片盒内 |
+| 宿主 | `[data-dsh-responsive-part="session-title-cluster"]{overflow:hidden}` | 从上层再裁一次 |
+| 定位 | 我们给 `_menu` 的 `right:8px` 相对 156px 的 chip root 解析 | 菜单落在 `[-16,49,336,40]`（x 为负、屏外） |
+
+修前实测：芯片 `aria-expanded=true`，菜单 rect `[-16,49,336,40]`，`elementFromPoint` 在菜单中心命中的是**不可见的 view tabs 行**——「有 DOM、没 UI」。
+
+**修复的两半都必需**（A/B 实锤）：
+
+```css
+[data-mobile-nav="frame"] [data-phase] header { position: relative !important; }
+[data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) { position: static !important; }
+```
+
+- 只加 `position:static`（header 仍 static）＝包含块外移到 frame，菜单落到 `x=8 y=849`，比 844px 视口还低（2026-09-13 那次 A/B 只做了这一半，于是留下「不许动 position」的错误结论，本次 A/B 推翻）。
+- 两半齐上：菜单 `[46,77,336,73]`，落在 header 下缘（`top:calc(100%+5px)` 的 100% 此时是 header 的 padding box），行可命中（`elementFromPoint` 命中 `QsffPG_row`），点外部仍由宿主 `useDismissOnOutsidePointer` 收起（menus 1→0）。
+- 作用域限定 `_headerActions`：crumbs 里的 lineage root 不命中，它的菜单本来就是 `position:fixed`（不受祖先裁切影响），行为不变。
+
+### ② 空隙很大 ＝ 两行各被顶到 44px
+
+宿主手机版 `[data-dsh-responsive-part="conversation-header"]{grid-template-rows:minmax(32px,auto) minmax(44px,auto)}` + `[role="tab"]{min-height:44px}`。两行的实际高度：
+
+| 行 | 名义 | 被谁顶上去 | 内容 |
+|---|---|---|---|
+| 标题行 | `minmax(32px,auto)` | utilities 座位（44×44 的 flex 单元，手机端恒空，里面只有我们隐藏的 More-actions 按钮） | 28px chips |
+| tab 行 | `minmax(44px,auto)` | `[role=tab]{min-height:44px}` | 13px 标签（行高 16 + padding-bottom 9 = 25px） |
+
+97px = 8 padding + 44 + 44 + 1 border，其中只有 36px 是画出来的内容。压法（`:has(> *)` 门控，见 ④）：
+
+```css
+header:has(> *){ min-height:0!important; grid-template-rows:minmax(36px,auto) minmax(32px,auto)!important }
+header [class*="wSkVaW_headerUtilities"]{ height:30px!important; min-height:0!important }
+header [role="tab"]{ min-height:32px!important }
+header [class*="wSkVaW_titleCluster"]{ padding-right:26px!important }
+```
+
+⇒ 77px，其余几何零退化（title/mode/chips/chevron/两角按钮全部实测不变；tab strip 的 #41 契约不变：`overflow-x:auto`、gap 16、labels 完整、`touch-action:pan-x`）。最后那条把 title cluster 给空 utilities 座位预留的 44px 裁到 26px（我们的 Files 按钮只画 28px 带），标题道再回收 18px（390px 带 lineage chip 实测 crumb 64→82px），仍与按钮留 8px 净空。
+
+### ③ 座位线：文字行必须与两角按钮共线（用户追加反馈）
+
+第一版顺手把 `padding-top` 从 8 收到 4（省 4px）——用户立刻报「文字行总体在上边，感觉十分不协调」。数字对得上：
+
+| 状态 | 标题行元素中心 | toggle/files 中心 | 差 |
+|---|---|---|---|
+| padding-top 4 | 22（crumb/mode/lineage/jobs 全是 22） | 26 | 文字高 4px |
+| padding-top 8（最终） | **26** | 26 | **共线** |
+
+两个角按钮是 `top:12px` + 28px ⇒ 中心 26。标题行内容 28px 要在 36px 行里居中到 26，行顶必须落在 8（宿主自己的 padding 就是这个值）。**结论：行高由 rows 承担，对齐不许动 padding**；`top:12` 这条座位线因此保持不变。
+
+插 47px inset 的复验：header/toggle/files/文字行整体下移 47（12→59、中心 26→73）且仍共线，弹层随之下移到 `y=128` 仍在视口内，`scrollHeight == clientHeight == 844`（无溢出）。
+
+### ④ `:has(> *)` 门控：hero 的空 header 不许被压
+
+hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session header：`wSkVaW_header wSkVaW_headerHidden`，0 个元素子节点，却占 85px（rows 32/44），composer 因此被居中下推 42px。压行规则若命中它，hero 布局会整体上移。`:has(> *)`（有元素子节点才压缩）在**同一页面 A/B** 下验证：hero composer rect 加不加规则逐字节相同（当时 85px header 在场：`[0,349,388,231]`；重建后 hero 实测该 header 未渲染，composer `[0,307,388,231]`——两种状态都不受影响）。
+
+### ⑤ 拥挤让位优先级反转（用户拍板）
+
+模式名让位规则（`max-width:18px; min-width:18px`）原为「模式文字是手机端最冗余的一项」。实际上它是**手机端唯一的模式切换入口**，而它的 22vw 上限（390px → 85.8px）本来就装不下 121px 的模式名——「压缩」在执行前就已经是「抹掉」。反转后：
+
+| 项 | 处置 |
+|---|---|
+| 模式名 | 上限 `min(38vw,220px)`（320px 起完整），保留图标 + 文字 |
+| 会话标题 | 保留文字，超宽走宿主省略号（crumbs `min-width:30%` 兜底） |
+| 子代理计数 chip | 保留全文（pin + cap，不收缩） |
+| 后台任务 chip `_count` | **让位**：≤440px 直接 `display:none`（dot/chevron/tap 保留，`aria-label` 仍报 "N background jobs"）；≤559px 再加「lineage 同时在场」条件 |
+
+`display:none` 而非截成数字：两位数任务（"10 background jobs"）截宽后会显示成 "1"，是**错误的计数**。题外：chip 消失只发生在 `jobs.length===0`，实测杀掉任务后 chip 整个消失，settled 态不常驻。
+
+### ⑥ 这一轮实测矩阵（真实 bundle，非注入）
+
+| 场景 | 结果 |
+|---|---|
+| 390px 会话（lineage + jobs chip） | header 77 / rows 36,32 / 六个元素中心全 26 / 模式 "Creator mode" 103px 完整 / crumb 80 / gap(actions→files) 8px / 两角按钮命中本体 |
+| 弹层（触摸 tap） | 开 `[46,81,336,73]`、行命中、外点关；谱系 chip 菜单 `[38,41,336,58]` 同为固定定位、行命中 |
+| 320 / 360 / 430 / 559 / 768 | header 77 恒定；模式名 360 起完整；320 走 ≤359 兜底（模式仅图标）；768 后台标签恢复全文 |
+| 900×700 鼠标 | `MOBILE_QUERY=false`、frame 缺省、rows `none`（桌面布局），规则零作用 |
+| hero | 空 header 不被压（见 ④） |
+| inset 47 | 见 ③ |
+
+装置层回归：`scripts/probes/header-files-pin-probe.mjs` 12/12（含 inset 场景）、主探针 `pnpm smoke:cdp` 13 pass / 0 fail / `page.errors 0`。
+
+## 抽屉里的行菜单（⋯）在手机上不可达：长按没反应 + 弹出后压在抽屉底下（2026-09-14 真机两连）
+
+用户原话：「抽屉内的极多元素点击之后都会导致抽屉关闭…长按一个会话，不应该有三个点吗？点击三个点，弹出的弹窗会被抽屉压在底下」。实测（390×844、headless Chromium + touch、0.1.5-rc.1 + `@linxin666/dsh-web-all` 0.3.20）拆出**四个独立机制**，前两个是「点不到三点」，后两个是「点到了也看不到/点不动」。
+
+### ① 三点被第三方 shim 关掉（长按前）
+
+`dsh-web-all` 的 `installMobileSidebarDismiss(frame)`（`lib/client.js` 约 55366 行）在 frame 上挂**捕获** click，`(max-width: 768px)` 时两条分支都靠 `frame.querySelector('[data-dsh-responsive-part="sidebar-toggle"]')` 拿宿主 logo 行的开关，再 `.click()` 收抽屉：
+
+- 抽屉开着 + 点击目标不在 `[data-pane="sidebar"]` 内 → `preventDefault(); stopPropagation(); toggle?.click()`；
+- 否则点击目标命中 `[data-dsh-part="sidebar-entry"], [role="treeitem"]` → rAF 里再 `toggle?.click()`。
+
+**它的兄弟实现 `@linxin666/dsh-remote-web-ui/src/client/mobile-adapt.ts` 在同一分支里有 `_rowActions` 豁免，这一份没有**，于是点会话行右侧的 ⋯（`_rowActions` 内、行又是 `[role="treeitem"]`）被当成「点了会话行」。实测 trace：可信 pointerdown/pointerup/click 落在 ⋯ 上（抽屉仍开）→ **13 ms 后一个 UNTRUSTED `.click()` 打到 `BUTTON.hHd-Xa_iconButton.hHd-Xa_toggle`**（堆栈落在 concatenated bundle 的 shim rAF 行）→ `data-sidebar-collapsed` 置位。
+
+**修复＝中立化它的把手，而不是抢它的行为**：插件注入一个惰性 `<span data-mobile-nav="dismiss-shadow" data-dsh-responsive-part="sidebar-toggle">`，以 inline `display:none !important` 隐藏（挡它的 `display:inline-flex !important` 折叠 rail 规则），插在**sidebar pane 的第一个子节点**（插 logo 行会连品牌一起藏掉；`pane.firstElementChild === shadow` + 同父即认为已就位，满足全树 reconciler 的幂等要求）。它的 `querySelector` 先命中影子 → 两条分支都变成 no-op。抽屉的关闭权回到插件：行内导航走「选中标题变化」observer / pointerup，遮罩走 document 捕获 click，Escape 不变。
+
+### ② 触摸永远看不到三点（长按前）
+
+宿主行操作是 `display: none` 直到 `:hover` 或 `menuOpen`（桌面悬停），触摸设备两者都到不了；第三方那份「长按 500 ms 显示 `_rowActions` 并点开」的实现被它自己的 `if (!active) return` 门控（本 profile `body.className === ''`、无 `#dshRemoteWhale` → 未激活）。实测长按后 `menus: 0`、`actionsDisplay: none`，抬手反而触发导航并关抽屉。
+
+**修复＝插件自己实现长按**（`phone-chrome.ts`，`pointerType` 限 touch/pen、移动 > 10px 或 `isStrokeLocked()` 取消）：500 ms 后若页面无 `[role="menu"]` 就点该行 `_rowActions` 里的 ⋯ → 宿主自己的菜单；抬手时武装 800 ms 的合成 click 吞噬（按的是那一行才吞），并给宿主菜单 1200 ms 的 `pointerleave` 守卫——**抬手本身就会给菜单锚点发一次 pointerleave**，而宿主菜单 `closeOnPointerLeave`。
+
+### ③ 菜单被压在抽屉底下（用户报告的「压在底下」）
+
+宿主菜单 portal 到 `<body>` 且是 `position: fixed; z-index: 1100`，而抽屉列 1300、插件遮罩 1250。实测菜单 rect `[160,454,218,168]`，`elementFromPoint` 在**中心**与**两端**取到的都是抽屉内元素（`DIV.bhn1Oq_list`、`SPAN.YDXeBa_title`）——整块菜单既看不到也点不到（右侧露在抽屉外的部分被 1250 的遮罩盖住）。宿主自己的设置弹窗没这个问题，因为它渲染在 sidebar pane 内部，天然继承 1300 带。
+
+**修复＝移动分支一条 body 级层带**（`base.css.ts`）：`body:has([data-mobile-nav="frame"]:not([data-sidebar-collapsed])) [role="menu"] { z-index: 1400 !important }`（遮罩在时抽屉外点不动，所以「抽屉开着才会有菜单」这条门控是充分的；桌面与关抽屉态零影响）。
+
+### ④ 同一个 shim 还会吞掉「frame 内、抽屉外」的一切点击
+
+它的第一分支在 `preventDefault/stopPropagation` 之后才去点那个（已被我们变 no-op 的）开关，但**吞事件这一步还在**：插件自己的删除确认卡原先 `frame.appendChild`，于是卡片上的「取消/删除」永远收不到 click——实测真触摸点「取消」后卡片仍在（只能 Escape 关），且卡片左侧 272px（x<280）命中的是抽屉自己的按钮。
+
+**修复＝确认卡/错误卡改挂 `<body>`**（`session-menu.ts`）：整张卡脱离 frame，shim 的捕获监听根本看不到它（它自己的菜单也是 portal 到 body 才一直好用的），再配 1400/1401 层带（`delete-dialog-backdrop` / `delete-dialog`），卡片落在抽屉之上、整宽可点。
+
+### 回归锚点与遗留
+
+`scripts/probes/drawer-row-actions-probe.mjs`（13 断言）：长按出菜单（4 项含注入的「删除会话」）、**抬手后菜单与抽屉都在**、**菜单中心/两端的命中测试都落在菜单内**（4b——DOM-only 断言曾经在「菜单渲染了但被盖住」时全绿）、⋯ 点击只切菜单不关抽屉、确认卡 body 挂载 + 抽屉带上命中 + 真触摸「取消」可关、行点击仍导航并关抽屉、遮罩点击仍关抽屉。
+
+**遗留**：workspace（项目）行的 ⋯ 同样是 `:hover` 独占，本次只按用户报告修了会话行；项目行的长按是同一处的一行扩展，但项目菜单含「删除 workspace」，留给用户拍板。**上游建议**：给 `dsh-web-all` 的 `installMobileSidebarDismiss` 补上兄弟实现已有的 `_rowActions` 豁免，并把「点击吞掉」限制在真正需要收抽屉的目标上。

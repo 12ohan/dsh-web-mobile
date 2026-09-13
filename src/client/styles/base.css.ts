@@ -168,6 +168,34 @@ export const BASE_CSS = `
   }
 }
 
+/* ---------- popover band above the open drawer (mobile only) ----------
+   The host portals its menus to <body> as position: fixed with z-index 1100,
+   while the drawer column carries 1300 and our backdrop 1250. A menu opened
+   from inside the drawer therefore painted UNDER both: measured 2026-09-14 at
+   390px on the session row's ⋯ menu — menu rect [160,454,218,168] z1100, and
+   elementFromPoint at its centre AND at both of its ends returned drawer
+   elements, so the whole menu was unreachable and the row could not be
+   renamed/forked/archived/deleted from the phone (the second half of the
+   owner's report: the popup the ⋯ opens is pressed under the drawer).
+   The raise is gated on the open drawer: our backdrop makes that the only
+   state in which a menu can be opened from the drawer, so the closed-drawer
+   and desktop stacks keep the host's own ordering.
+   The plugin's own confirm card sits in the same band — it is appended to the
+   frame as a SIBLING of the drawer column and carried z 55/56, so the drawer
+   covered its left 272px (measured: elementFromPoint inside that band hit the
+   drawer's own button, and the confirm card is 358px wide starting at x=8). */
+@media (max-width: 1023px) and (pointer: coarse) {
+  body:has([data-mobile-nav="frame"]:not([data-sidebar-collapsed])) [role="menu"] {
+    z-index: 1400 !important;
+  }
+  [data-mobile-nav="delete-dialog-backdrop"] {
+    z-index: 1400 !important;
+  }
+  [data-mobile-nav="delete-dialog"] {
+    z-index: 1401 !important;
+  }
+}
+
 /* Floating fallback button (hero / blank phases without a session header).
    Top aligns with the session header's toggle row (that row sits 12px below
    the frame's safe-area padding); when the client has set viewport-fit=cover

@@ -60,7 +60,10 @@ export function createOverlayTask(
           backdrop.dataset.mobileNav = 'backdrop'
           backdrop.setAttribute('role', 'button')
           backdrop.setAttribute('aria-label', t('backdrop'))
-          backdrop.addEventListener('click', toggleSidebar)
+          // No element-level click listener: phone-chrome's capture-phase click
+          // handler owns the backdrop tap. The third-party mobile shim stops
+          // click propagation at the frame for anything outside the drawer, so
+          // a listener down here never sees the tap (2026-09-14).
           frame.appendChild(backdrop)
           faded = false
         } else if (faded && backdropRemoveTimer !== null) {

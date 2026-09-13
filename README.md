@@ -41,6 +41,10 @@
 - 抽屉内的导航项（新会话 / 任务板 / SSH / 搜索）点按后正常执行，抽屉同时收起
 - 文件列表面板的顶部一行（标签 / 新建 / 分屏 / 退出全屏）不再被手机状态栏遮挡
 - 会话头部的「打开文件列表」按钮固定在屏幕右上角，与左侧的目录抽屉按钮对称
+- 「后台任务」芯片可以展开了：弹层不再被会话头裁掉，也不再落到屏幕外，列表项可点、点外部可收起
+- 手机端会话头不再把模式名压成一个图标：模式名、会话标题与子代理计数各自保留文字，窄屏让位的是后台任务芯片的长标签
+- 会话头两行紧凑化（97 → 77px），标题行与左右两侧的抽屉 / 文件列表按钮对齐在同一水平线上
+- 抽屉里会话行的 ⋯ 菜单在手机上可用：长按会话行即打开，点按 ⋯ 只切换菜单、不再顺手收起抽屉，菜单与删除确认弹窗都显示在抽屉之上且可点
 
 ### v2.4.1
 
@@ -192,7 +196,7 @@ pnpm build
 
 - **先读 [AGENTS.md](AGENTS.md)**：带注释的仓库树、每条 Pitfall 的紧凑不变式与完整档案（`docs/maintenance/pitfalls.md`）。
 - 本地门：`pnpm verify`（typecheck）→ `pnpm test:core`（单测）→ `pnpm build`；`lib/` 随源码入库，漏构建会被 CI 的 `git diff --exit-code lib` 新鲜度门拦下。
-- 回归探针：`scripts/probes/` 十二个锚点可单跑（会话删除探针兼作宿主升级绊线）；主探针 `pnpm smoke:cdp`、手势门 `scripts/cdp-swipe-failures.mjs`、iOS 放大守卫 `scripts/cdp-zoom-probe.mjs`（CDP 环境参数见 AGENTS.md）。
+- 回归探针：`scripts/probes/` 十四个锚点可单跑（会话删除探针兼作宿主升级绊线）；主探针 `pnpm smoke:cdp`、手势门 `scripts/cdp-swipe-failures.mjs`、iOS 放大守卫 `scripts/cdp-zoom-probe.mjs`（CDP 环境参数见 AGENTS.md）。
 - 设计文档在 `docs/specs/`；宿主升级对账走 `docs/upstream/`——`node scripts/cdp-compat-contracts.mjs` 一键核对 CSS module 哈希是否漂移。
 
 ## License

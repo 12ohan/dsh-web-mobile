@@ -24,7 +24,7 @@
  * `dsh-mobile-nav-*` names, which silently no-op).
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import { MOBILE_QUERY, TOUCH_QUERY, getFrame, installMobileEffect } from './phone-chrome.ts'
+import { MOBILE_QUERY, TOUCH_QUERY, installMobileEffect } from './phone-chrome.ts'
 
 // Mirrored from src/client/locales.ts: the custom client bundler cannot
 // resolve `../` requires from effects/. Keep in sync.
@@ -162,10 +162,19 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       }
     }
 
-    /** Show the delete confirmation as a bottom card over the frame. */
+    /** Show the delete confirmation as a bottom card over the frame.
+     *  Mounted on <body>, NOT in the frame: the third-party mobile shim
+     *  (@linxin666/dsh-web-all) listens in the CAPTURE phase on the frame and,
+     *  while the drawer is open, answers every click inside the frame but
+     *  outside [data-pane="sidebar"] with preventDefault + stopPropagation.
+     *  A card inside the frame therefore had dead buttons — measured
+     *  2026-09-14: a real touch tap on 「取消」 left the card open, and only
+     *  Escape closed it. Body-level, the shim's listener never sees these
+     *  clicks (its sibling menus are portaled there for the same reason), and
+     *  the card's own band lives in base.css (z 1400/1401, above the drawer). */
     const showDeleteDialog = (sessionId: string, title: string): void => {
       closeDialog()
-      const frame = getFrame() ?? document.body
+      const host = document.body
       const backdrop = document.createElement('div')
       backdrop.dataset.mobileNav = 'delete-dialog-backdrop'
       const card = document.createElement('div')
@@ -248,15 +257,15 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
         if (wasCurrent && window.matchMedia(MOBILE_QUERY).matches) ctx.layout.toggleSidebar()
       })
 
-      frame.appendChild(backdrop)
-      frame.appendChild(card)
+      host.appendChild(backdrop)
+      host.appendChild(card)
       dialogHost = { backdrop, card }
     }
 
     /** Show a non-destructive error card (session could not be resolved). */
     const showError = (message: string): void => {
       closeDialog()
-      const frame = getFrame() ?? document.body
+      const host = document.body
       const backdrop = document.createElement('div')
       backdrop.dataset.mobileNav = 'delete-dialog-backdrop'
       const card = document.createElement('div')
@@ -276,8 +285,8 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       }
       document.addEventListener('keydown', onKey, true)
       closeDialogOnKey = onKey
-      frame.appendChild(backdrop)
-      frame.appendChild(card)
+      host.appendChild(backdrop)
+      host.appendChild(card)
       dialogHost = { backdrop, card }
     }
 
