@@ -2,11 +2,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   classifySwipe,
+  classifyFilesSwipe,
   slidingVelocity,
   hitTestStart,
   followTranslate,
   followOpenTransform,
   findHorizontalScroller,
+  filesZoneHit,
   selectionOwnsStroke,
   startZonePxFor,
   type SwipeThresholds,
@@ -536,4 +538,89 @@ test('selectionOwnsStroke: the document selection still wins with no focused fie
     if (originalDocument === undefined) delete g.document
     else g.document = originalDocument
   }
+})
+
+// --- Files gesture pure functions (spec 2026-09-13-files-swipe-gesture-design.md) ---
+
+const FILES_BASE = {
+  distanceRatio: 0.16,
+  velocity: 0.45,
+  lockPx: 8,
+  viewportWidthPx: 390,
+}
+
+function filesClassify(
+  over: Partial<Parameters<typeof classifyFilesSwipe>[0] & Parameters<typeof classifyFilesSwipe>[1]>,
+  rtl = false,
+): 'open' | 'close' | 'files' | 'none' {
+  const t = {
+    ...FILES_BASE,
+    panelOpen: false,
+    drawerOpen: false,
+    ...(over as { panelOpen?: boolean; drawerOpen?: boolean }),
+  }
+  const m = {
+    dx: 0,
+    dy: 0,
+    velX: 0,
+    ...(over as { dx?: number; dy?: number; velX?: number }),
+  }
+  return classifyFilesSwipe(t, m, rtl)
+}
+
+test('filesZoneHit: right-edge zone boundaries (LTR)', () => {
+  const zone = 176 // startZonePxFor(390, 0.45)
+  assert.equal(filesZoneHit(390, 390, false, zone), true) // edge 0
+  assert.equal(filesZoneHit(389, 390, false, zone), true) // edge 1
+  assert.equal(filesZoneHit(214, 390, false, zone), true) // edge 176 = zone
+  assert.equal(filesZoneHit(213, 390, false, zone), false) // edge 177
+})
+
+test('filesZoneHit: RTL mirrors to the LEFT edge', () => {
+  const zone = 176
+  assert.equal(filesZoneHit(0, 390, true, zone), true) // edge 0
+  assert.equal(filesZoneHit(176, 390, true, zone), true) // edge 176
+  assert.equal(filesZoneHit(177, 390, true, zone), false) // edge 177
+})
+
+test('classifyFilesSwipe: lock slop + axis dominance', () => {
+  assert.equal(filesClassify({ dx: 7, dy: 0 }), 'none')
+  assert.equal(filesClassify({ dx: -7, dy: 0 }), 'none')
+  assert.equal(filesClassify({ dx: 10, dy: 10 }), 'none')
+})
+
+test('classifyFilesSwipe: both closed — leftward opens files, rightward is none', () => {
+  assert.equal(filesClassify({ dx: -63, dy: 0 }), 'files') // 63/390 = 0.1615 ≥ 0.16
+  assert.equal(filesClassify({ dx: -50, dy: 0, velX: -0.7 }), 'files') // short fast fling
+  assert.equal(filesClassify({ dx: -100, dy: 0, velX: -0.1 }), 'files') // slow long drag
+  assert.equal(filesClassify({ dx: -30, dy: 0, velX: -0.2 }), 'none') // too short + too slow
+  assert.equal(filesClassify({ dx: 120, dy: 0 }), 'none') // rightward, everything closed
+})
+
+test('classifyFilesSwipe: panel open — rightward closes it, leftward NEVER collapses (左滑永不收起)', () => {
+  assert.equal(filesClassify({ dx: 63, dy: 0, panelOpen: true }), 'files')
+  assert.equal(filesClassify({ dx: 40, dy: 0, velX: 0.7, panelOpen: true }), 'files')
+  assert.equal(filesClassify({ dx: -120, dy: 0, panelOpen: true }), 'none')
+  assert.equal(filesClassify({ dx: 40, dy: 0, velX: -0.7, panelOpen: true }), 'none') // velocity contradicts direction
+})
+
+test('classifyFilesSwipe: drawer open — rightward routes to the animated drawer close, leftward is none (2026-09-13 narrowing)', () => {
+  assert.equal(filesClassify({ dx: 51, dy: 0, drawerOpen: true }), 'close')
+  assert.equal(filesClassify({ dx: 40, dy: 0, velX: 0.7, drawerOpen: true }), 'close')
+  // THE load-bearing narrowing: a leftward stroke beside the open drawer must NOT close it.
+  assert.equal(filesClassify({ dx: -120, dy: 0, drawerOpen: true }), 'none')
+  assert.equal(filesClassify({ dx: -40, dy: 0, velX: -0.7, drawerOpen: true }), 'none')
+})
+
+test('classifyFilesSwipe: both open — the visible top (drawer) owns the close', () => {
+  assert.equal(filesClassify({ dx: 120, dy: 0, panelOpen: true, drawerOpen: true }), 'close')
+  assert.equal(filesClassify({ dx: -120, dy: 0, panelOpen: true, drawerOpen: true }), 'none')
+})
+
+test('classifyFilesSwipe: RTL mirrors the directions', () => {
+  assert.equal(filesClassify({ dx: 63, dy: 0 }, true), 'files') // raw +63 = leftward-logical
+  assert.equal(filesClassify({ dx: 40, dy: 0, velX: 0.7 }, true), 'files') // rtl leftward fling
+  assert.equal(filesClassify({ dx: -63, dy: 0, panelOpen: true }, true), 'files') // raw -63 = rightward-logical
+  assert.equal(filesClassify({ dx: -63, dy: 0, drawerOpen: true }, true), 'close')
+  assert.equal(filesClassify({ dx: -120, dy: 0 }, true), 'none') // rtl rightward, everything closed
 })

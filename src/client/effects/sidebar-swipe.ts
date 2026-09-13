@@ -154,6 +154,26 @@ const COMMIT_ANIM_MS = 280
  * where CLOSED_SLOT_PCT is used verbatim. */
 const OPEN_FOLLOW_BASE_PCT = 101
 
+/**
+ * Files-panel (host right sidebar) gesture constants — the right-edge mirror
+ * of the drawer layer (spec 2026-09-13-files-swipe-gesture-design.md).
+ *
+ * FILES_ZONE_RATIO mirrors the drawer's START_ZONE_RATIO: a narrow strip
+ * cannot be used because Chrome Android's history-nav edge strip (~48dp)
+ * pointercancels strokes starting inside it — the same reason the drawer
+ * zone grew to 45% of the viewport.
+ */
+const FILES_ZONE_RATIO = 0.45
+/**
+ * Distance threshold as a fraction of the viewport width for BOTH files
+ * directions (≈62px on a 390px phone). The drawer's separate close ratio
+ * (0.13) exists because the close stroke follows into its slot; files
+ * strokes have no follow, so one ratio serves both directions.
+ */
+const FILES_DISTANCE_RATIO = 0.16
+/** px/ms velocity threshold for both files directions (drawer parity). */
+const FILES_VELOCITY = 0.45
+
 /** Pointer id we are tracking (multi-touch is ignored). */
 let trackingPointer = 0
 /** True once the stroke is axis-locked (direction bias passed). */
@@ -239,6 +259,58 @@ export function classifySwipe(
   return velX >= t.openVelocity ? 'open' : 'none'
 }
 
+/** Threshold shape for the files classifier (pure, node:testable). */
+export interface FilesThresholds {
+  distanceRatio: number
+  velocity: number
+  lockPx: number
+  viewportWidthPx: number
+  /** Files panel mounted at lock time. */
+  panelOpen: boolean
+  /** Drawer open at lock time. */
+  drawerOpen: boolean
+}
+
+/**
+ * Pure decision for the FILES gesture (right-edge zone), the mirror twin of
+ * classifySwipe. RTL mirrors the X axis exactly like classifySwipe. The
+ * verdict space extends the drawer's with `files` (the files-panel commit:
+ * open the panel on a leftward stroke when everything is closed, close it on
+ * a rightward stroke when it is open):
+ * - leftward-logical strokes only ever mean "open the panel" and fire ONLY
+ *   when panel and drawer are BOTH closed — the panel would mount under the
+ *   open drawer (z-1100) and be invisible, so the stroke is 'none' (the
+ *   2026-09-13 narrowing: a leftward stroke NEVER collapses anything);
+ * - rightward-logical strokes close the VISIBLE TOP: drawer open → 'close'
+ *   (the animated commitFollowClose path, identical to today's right-zone
+ *   close); else panel open → 'files'; else 'none'.
+ */
+export function classifyFilesSwipe(
+  t: FilesThresholds,
+  m: { dx: number; dy: number; velX: number },
+  rtl: boolean,
+): 'open' | 'close' | 'files' | 'none' {
+  const dx = rtl ? -m.dx : m.dx
+  if (Math.abs(dx) <= t.lockPx) return 'none'
+  if (Math.abs(dx) <= Math.abs(m.dy)) return 'none'
+  const velX = rtl ? -m.velX : m.velX
+  if (dx < 0) {
+    if (t.panelOpen || t.drawerOpen) return 'none'
+    if (-dx / t.viewportWidthPx >= t.distanceRatio) return 'files'
+    // A fling only counts when it agrees with the stroke's own direction
+    // (the same contradiction guard classifySwipe applies).
+    if (velX > 0 !== dx > 0) return 'none'
+    return -velX >= t.velocity ? 'files' : 'none'
+  }
+  if (t.drawerOpen) return 'close'
+  if (t.panelOpen) {
+    if (dx / t.viewportWidthPx >= t.distanceRatio) return 'files'
+    if (velX > 0 !== dx > 0) return 'none'
+    return velX >= t.velocity ? 'files' : 'none'
+  }
+  return 'none'
+}
+
 /**
  * Recent-window instantaneous velocity (px/ms) from the tail of the last
  * `windowMs` milliseconds of samples, up to `now`. Sliding X per ms between
@@ -275,6 +347,21 @@ export function hitTestStart(
 ): boolean {
   const edge = rtl ? viewportWidthPx - clientX : clientX
   return edge >= 0 && edge <= t.startZonePx
+}
+
+/**
+ * Geometric start-hit test for the FILES gesture: the pointer went down in
+ * the RIGHT edge zone (RTL: LEFT) — the exact mirror of hitTestStart. Pure
+ * and viewport-relative.
+ */
+export function filesZoneHit(
+  clientX: number,
+  viewportWidthPx: number,
+  rtl: boolean,
+  zonePx: number,
+): boolean {
+  const edge = rtl ? clientX : viewportWidthPx - clientX
+  return edge >= 0 && edge <= zonePx
 }
 
 /**
