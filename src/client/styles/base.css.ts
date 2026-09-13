@@ -199,11 +199,15 @@ export const BASE_CSS = `
   outline-offset: 2px;
 }
 
-/* Dimmed backdrop under the open drawer; above every column, below the drawer. */
+/* Dimmed backdrop under the open drawer; above every column, below the drawer.
+   z 1250: 0.1.5 pins its native sidebarCol at z-index:1100 and paints mid
+   layers up to that band; the backdrop must sit above the host stack
+   (below the drawer's 1300) so the dim covers the content area on every
+   host generation. Keep in sync with the drawer z in layout.css.ts. */
 [data-mobile-nav="backdrop"] {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: 1250;
   background: rgba(0, 0, 0, .45);
   cursor: pointer;
   animation: dsh-web-mobile-fade .2s var(--ds-ease-in-out, ease-in-out);

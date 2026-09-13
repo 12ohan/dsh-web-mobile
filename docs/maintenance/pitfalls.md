@@ -115,3 +115,83 @@
 **流式期插件每帧热点的性能契约**：三个已落地优化——① stats-line 快路径：`statsAnchorAlive(el)`（纯判定，tests/stats-line-fastpath.test.ts）锚点仍在位（isConnected + [data-phase] 内 + composerStack 内）时 O(1) 返回；失位必须先摘旧标记再回落慢路径，scopes 仍须 `['*']`。② installed-list 观察者经 `core/raf-scheduler.ts`（createRafScheduler，零 import 可测）rAF 合并，flush 时重验 mq 防桌面误写，dispose 必须 cancel。③ 抽屉会话树 `content-visibility: auto`（misc.css.ts，`[data-mobile-nav="frame"] > :first-child [role="tree"]` + `contain-intrinsic-size: auto 600px`）——屏外挂载与流式期跳过树 layout/paint。真会话差分实测：抽屉树仅 15 行会话时该规则无可测收益（差异在噪声内），保留仅作为会话数增大后的渐进增强，无成本。arm-open 冻结主因＝宿主 React 互斥子树同步挂载（rail 79→drawer 389 节点，4x 节流下 308ms longtask / rAF 间隙 225ms），插件 CSS 只能消 layout/paint 份额，治本在宿主（挂载分帧或双子树常驻）。测量方法论：这版 chromium trace 无 RunTask 事件，用最大 FunctionCall 锚点 + 功能族归因；窗口求和会混入后台线程 GC 事件，主线程结论只看 biggestJs。
 
 ---
+
+## 会话删除注入的菜单形状按宿主分代（0.1.5 真机实测，2026-09-13）
+
+**会话删除注入的菜单形状按宿主分代（0.1.5 真机实测，2026-09-13）**：0.1.5 把会话行 ⋯ 菜单换成了共享菜单组件——`._list_1nxmc_8 > ._scrollable_1nxmc_22 > ._viewport_1nxmc_22 > ._itemWrap_1nxmc_92 > button._item_1nxmc_92[role="menuitem"]`，按钮直排文本（无子元素），仍恰 3 项 rename/fork/archive（上游无删除项）。rc.2 的 `_itemIcon`/`_itemLabel` span 模板在此代消失。**危害链**：`isSessionMenu` 只读 `[role="menuitem"] [class*="_itemLabel"]` → 0.1.5 返回空 → `labels.length===3` 恒假 → 菜单不被识别 → 整个删除注入**静默失效**（连克隆都不发生）；即便识别过了，`injectInto` 拿不到 label span → 克隆项顶着被克隆项的原文案（「重命名」）挂着危险色丢失。修复（session-menu.ts）：`itemLabel(item)` 辅助——先找 `[class*="_itemLabel"]`，找不到回落到按钮自身 `textContent`（svg 图标不贡献文本，rc.2 两代读数一致）；注入分支在无 label span 且 `button.firstElementChild === null` 时整按钮改文+染色，**有子元素却无 label span 的未知形状不猜文本**（不注入文案，避免盲改）。判定法（为什么当初静态推断错了）：我从 0.1.5 bundle 静态 grep 推出「`data-side` 消失/`data-sidebar-collapsed` 被官方占用必须改名」两个错误结论，读源码后发现——①插件 CSS 里根本没有 `[data-side="sidebar"]` 规则（浏览器审查清单的假设句，从未落地）；②`data-sidebar-collapsed` 从来就是官方属性、插件只读不写（`ctx.layout.toggleSidebar()` 由官方翻转属性，layout.css 把 `frame:not([data-sidebar-collapsed]) > :first-child` 当抽屉展开态）——官方占用≠冲突，是既有架构。教训：**改属性名/判定锚点前必须先 grep 谁写谁读**（setAttribute/removeAttribute 证据），不要只看 marker 契约清单；探针证实的 DOM 形状变化要落到源码不变量测试（tests/session-menu.test.ts）而不只是改注释。
+
+---
+
+## 0.1.5 官方窄屏 expanded 已是原生 overlay 抽屉，插件抽屉视觉管理必须让位（z 压制实锤，2026-09-14）
+
+**0.1.5 官方窄屏 expanded 已是原生 overlay 抽屉，插件的抽屉视觉管理必须整体让位**：0.1.5 把窄屏侧栏重做成了原生 overlay——`pI_x6G_sidebarCol` 计算样式 `position:absolute; z-index:1100`（两态恒定），frame grid 变单轨 `390px`（内容不被挤压），collapsed＝52px 官方 rail 且 `pointer-events:none`、expanded＝321px 且 `pe:auto`，另有 `pI_x6G_handle`（276×8）拖宽把手。**官方自己把「抽屉负优化」修好了**。插件旧 col 规则的 `z-index:40!important` 会把官方 1100 压到 40，抽屉随即落到宿主层之下——**有 layout box、computed 全部正常，却既不绘制也不命中**（描边实验：删除插件 CSS 后红 outline 立刻画出；inline z 提到 999 仍不画，只有官方原生值才正常），而插件的全屏 backdrop（官方原生 expanded 没有全屏遮罩）成了唯一可见的暗层、点外关闭判定又因命中异常全落 frame——用户看到的「打开抽屉一片全黑 + 点哪都关」就是这三层叠加。修复＝代际让位：`phone-chrome.ts` 的 frame-marker 任务每 flush 跑 `updateNativeDrawerGen()`，命中时在 `<html>` 挂 `data-mobile-nav-gen="native-drawer"`；layout.css 的 col 视觉规则（absolute/inset/width/z-index/transform/transition/background）、开态 transform:none、prefers-reduced-motion、drag-handles 隐藏块全部用 `:root:not([data-mobile-nav-gen="native-drawer"])` 门控；overlay-backdrop-fab 在该代不创建 backdrop（FAB 保留 hero 态）。**代际检测必须用结构类名（col 类含 `sidebarCol`）＋ computed position，绝不能用 computed z-index**：检测跑在我们 CSS 还在场的时候，读到的 z 是我们自己压出来的 40，用 z 阈值检测会永久 false 形成死锁（2026-09-14 实测：z 阈值版探针 A1/A2 恒 FAIL）。手势层**零改动兼容**——手势 commit 本来就是 `ctx.layout.toggleSidebar()`（开=锁轴即 commit、关=inline 滑出落地后 commit），官方 absolute col 上 inline transform 照常工作；cdp-swipe-failures 16 场景实测 12 场景全过（composer 场景为探针脚本形状漂移，见 runbook）。主探针 7/9 与修复前同基线（mobile.open-control＝鲸鱼盖 toggle 的独立待决项）。升级对账点：`sidebarCol` 类子串（0.1.5 哈希 `pI_x6G_` 会变，升级后按 `docs/upstream/compat-contracts.json` 对账）；官方 expanded 无全屏遮罩＝内容可点语义，抽屉外点击走官方收起按钮（`hHd-Xa_iconButton`），与插件 backdrop 时代的「点遮罩关」语义不同属预期。
+
+
+---
+
+## 抽屉里的导航项必须在 click 落地后才关抽屉（2026-09-13「点新会话只收回抽屉」根因）
+
+**抽屉里的非会话行导航项必须在浏览器合成的 click 落地之后才关抽屉，pointerup 关闭会把 click 一起取消**：`installOverlayInteractions` 原来对非 `[role="treeitem"]` 的导航目标（`[class*="newSession"]` / taskboard / ssh / search 行）在 document 捕获 `pointerup` 里直接 `toggleSidebar()`。触摸序列是 pointerdown → pointerup →（浏览器合成）click，而 click 派发给**派发时刻触摸点下的元素**：pointerup 就把抽屉收起来（collapsed 态整列平移出屏）后，该点已不属于按钮，Chrome **根本不派发 click**——CDP 实测 trace `pointerdown@open>pointerup@closed`，此后无 click（鼠标点击则 `...>click@closed`），宿主 `onClick`（`startSession()`）从不执行。用户感知即「抽屉里点新会话没反应、抽屉只是收回去了」。会话行（treeitem）早在 #32 就绕开了同一竞态（pointerup 只 arm「选中标题变化」observer），非行目标是同根因的漏网分支。修复＝删掉该分支的 `toggleSidebar()`，改由既有的 document 捕获 click 处理器收抽屉：click 是**已经派发给按钮之后**才收抽屉的，事件路径在派发时已固定，React 的委托监听照样收到该 click（A/B 三态：鼠标点击、触摸点击、「只摘掉这一个 pointerup 监听」的触摸点击都能建会话，trace `pointerdown@open>pointerup@open>click@closed`；仅当前代码的触摸路径是死路）。判定探针：`scripts/probes/drawer-new-session-probe.mjs`（5 断言：会话已激活 / 抽屉打开 / 按钮可见 / 点后切到新会话 id / 抽屉收起）。通用教训：**任何在 pointerup 里收起容器或改动布局的写法，都要先问「这一次手势的 click 还没派发吧」**。
+
+---
+
+## Files 面板（宿主 ui-sidebar-right）的顶行压在手机状态栏下（2026-09-14 修复）
+
+**现象**：手机上打开文件列表（右栏 Files 面板）后，面板顶部那一行——tab 标签、`+`（New tab）、Split、退出全屏——被状态栏压住。**机制**：这个面板是宿主自己的全屏 fixed sheet，`[data-sidebar-right-panel=fullscreen]` 的计算样式是 `position: fixed; inset: 0`（z-index 40，背景 `--dsw-alias-bg-base`），而宿主 CSS 里**没有任何 safe-area 处理**（对 `dsh-web-frontend/dist/assets/*.css` grep `safe-area-inset` 零命中）。插件既有的 safe-area 体系是给 frame 加 `padding-top: env(safe-area-inset-top)`（layout.css），但 fixed 元素的包含块是**视口**，不继承 frame 的内边距——面板是唯一漏网的固定全屏层，于是它 y=0…38 的顶行正好落在手机状态栏（实测 24–48px）底下。**修复**：在移动分支给面板本体吃 inset——`@media (max-width: 1023px) and (pointer: coarse)` 内加 `[data-sidebar-right-panel] { padding-top: env(safe-area-inset-top, 0px) !important }`。两个前提缺一不可：①面板自绘 `--dsw-alias-bg-base` 背景（实测 `rgb(255, 255, 255)`），状态栏那一条不露底、没有接缝；②面板是 border-box，padding 只把内容下推，面板本身仍铺满视口。**几何取证**（390×844 + touch emulation，CDP 读 `getBoundingClientRect` 取整；headless 的 `env(safe-area-inset-top)` 恒为 0，inset 用同值 inline `padding-top: 47px !important` 模拟）：inset=0 时面板 [0,0,390,844]、strip y=0、tab 标签 y=15、`+` y=10、Split y=10（右缘 348）、退出全屏 y=10（右缘 384）、paneBody [0,38,390,806]；inset=47 时面板仍 [0,0,390,844]、strip y=47、标签 y=62、`+` y=57、Split 与退出全屏 y=57（右缘仍是 348 / 384）、paneBody [0,85,390,759]。即整行**按 inset 精确下移**（0→47），右侧那组按钮依旧钉在右缘（退出全屏右缘 = 390−6），行内相对对齐不变（strip 与退出全屏的 y 差 −10 两态一致），面板 body 不溢出视口。**为什么不是给 frame 加内边距**：面板是 fixed 全屏层，frame 的内边距与它无关；把面板从 fixed 拉回文档流会与宿主的 fullscreen 形态打架，宿主升级即碎——只加面板自身一条 padding，最小且可逆。**验证**：回归锚点 `scripts/probes/files-panel-safe-area-probe.mjs`（18 断言：规则在场且在移动分支、宿主契约是 `position:fixed; inset:0` 全屏且自绘背景、模拟 inset 后整行下移而右缘不动、paneBody 不溢出），宿主改名或改形态即翻红。桌面零影响：规则在移动 media 块内，1280×720 `pointer: fine` 实测 `matchMedia('(max-width: 1023px) and (pointer: coarse)').matches === false`；Playwright 设备仿真（isMobile + hasTouch、390×844、DPR 2）独立复跑同一组几何断言全过。
+
+### 形态限定：只给 fullscreen 吃 inset，停靠形态必须排除（2026-09-14 补测）
+
+`data-sidebar-right-panel` 有两种值，一种才是全屏 sheet：
+
+| 视口 | form | position | 几何 | 是否要 inset |
+|---|---|---|---|---|
+| 390×844（手机，pointer coarse） | `fullscreen` | `fixed; inset:0` | `[0,0,390,844]` | **要**——包含块是视口，顶行 y=0 落在状态栏下 |
+| 820×1180（平板，pointer coarse） | `push` | `absolute; right-anchored 365px` | `[455,0,365,1180]` | **不要**——包含块是 frame 的 padding box，已在状态栏下方 |
+
+首版规则写成裸 `[data-sidebar-right-panel]`，理由是「宿主只是换 position/inset，问题是同一个」——实测被推翻：停靠形态是 frame 内的绝对定位面板，frame 的 safe-area padding 已经作用于它的包含块，再吃一次 inset 会把顶行顶下**两倍**状态栏高度。现规则带 `="fullscreen"` 形态限定，探针场景 5 用 820×1180 断言：规则选择器不命中停靠面板、其 computed `padding-top` 为 0、且面板确实在 frame 子树内（`frame.contains(panel)`）。
+
+代价与对账点：形态值被宿主改名（或新增第三种形态）时，修复会在**没有** inset 的形态上静默失效——所以场景 1 的断言把选择器文本钉死为 `[data-sidebar-right-panel="fullscreen"]`（放宽或改名都会翻红），场景 2 另断宿主手机态 form 仍为 `fullscreen`。
+
+## 「打开文件列表」按钮没有钉在右上角（2026-09-14 真机反馈）
+
+原话：「打开文件列表的按钮……没有进行固定，它仍然受到状态栏自适应影响」。**主语是按钮，不是文件列表面板**——同一天的 safe-area 修复修的是面板顶行，两者不是一回事。
+
+### 机制
+
+宿主把 `conversation.session.header.actions` slot 挂在 `wSkVaW_titleCluster` 里，而 cluster 自带 `padding-right: 44px`：
+
+| 元素 | 390×844 实测 | 说明 |
+|---|---|---|
+| `wSkVaW_titleCluster` | `[40,16,332,28]`，`display:flex`，`padding-right:44px` | 44px 是给右侧工具座位的预留 |
+| `wSkVaW_headerUtilities` | `[374,8,0,44]`，宽 **0** | 手机端该座位恒空（内部子元素被插件隐藏） |
+| `wSkVaW_headerActions` | `[212,16,116,28]`，`justify-content:flex-end` | 我们的按钮是它最右侧的流式项 |
+| `[data-mobile-nav="files"]` 修前 | `[300,16,28,28]` | 右缘 328，离视口右缘还差 **62px** |
+| `[data-mobile-nav="toggle"]` | `[8,12,28,28]`（绝对定位） | 左侧那个早就钉死了 |
+
+结论：**流式布局 + 宿主预留的 44px，按钮永远够不到右边缘**——这就是「没有固定」。
+
+### 修复
+
+移动分支里把按钮改成绝对定位，与左侧按钮对称：
+
+```css
+[data-mobile-nav="files"] {
+  position: absolute !important;
+  right: 8px !important;
+  left: auto !important;
+  top: 12px !important;
+  z-index: 2 !important;
+}
+```
+
+修后实测：`[354,12,28,28]`（右缘 382 = 390−8，与左按钮同为 top 12）；`elementFromPoint(中心)` 命中按钮本体；utilities 座位宽 0 → 无重叠；标题道回收 28px（crumbs 170→200）。
+
+### 竖向：它仍然随状态栏下移（预期）
+
+插 47px inset 后两个角按钮同时从 top 12 → 59（`top: 12px` 的包含块是 `wSkVaW_root`，它在被 padding 下推的 frame 内容里）。**这是必须的**：不让它下移就会被状态栏压住。所以「不受状态栏影响」只能理解为「水平方向不要漂、贴住右上角」，不能理解为「纵向不动」。
+
+### 边界
+
+- hero 态（无会话）该 slot 不渲染（实测 `[data-mobile-nav="files"]` absent），不存在「钉到别的容器」的风险；hero 的 Files 入口在抽屉 footer（`data-mobile-nav="explorer"`）。
+- utilities 座位哪天真的渲染出控件，我们的按钮会与它重叠 8px——届时按锚点提示改 `right` 值或让位（锚点断言里已记录该座位的坐标与宽度）。
+- 装置层验证：`scripts/probes/header-files-pin-probe.mjs`（12 断言）；真机读数走 `?mobile-nav-debug=1` 的调试上报（见 Testing & QA）。

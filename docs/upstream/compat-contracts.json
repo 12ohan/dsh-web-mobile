@@ -1,6 +1,7 @@
 {
   "$comment": "上游契约机读清单（upgrade-runbook §2 的数据版）。消费方：node scripts/cdp-compat-contracts.mjs——在真实页面扫描 DOM class 与全部 CSSRule 文本，按 needle 判 HIT/MISS/SKIP。lazy=true 表示该哈希属状态门控/懒加载资源（miss 记 SKIP 并提示手动步骤，不计退出码）；lazy=false 的 MISS 计退出码。宿主升级后跑一次即可知道漂了哪几个，不用等布局坏了再排雷。",
   "contracts": [
+    { "id": "sidebar-right-panel", "kind": "marker", "needle": "[data-sidebar-right-panel]", "owner": "dsh-client-ui-sidebar-right", "lazy": true, "state": "打开文件列表面板（Files）后复扫", "note": "面板 safe-area padding 落点；须为 position:fixed; inset:0 全屏形态且自绘背景（files-panel-safe-area-probe 守）" },
     { "id": "dshmarket-installed-row", "kind": "hash", "needle": "eGUBIq_", "owner": "dshmarket", "lazy": true, "state": "打开设置→插件市场后复扫", "note": "outer-row :not 排除 irowActions/irowTrailing + 标题行 wrap + Tasks 弹卡" },
     { "id": "agent-preset-menu", "kind": "hash", "needle": "cubgiG_", "owner": "dsh-client-ui-agent-preset", "lazy": false, "note": "模式选择菜单底部弹层 :has(cubgiG_item)" },
     { "id": "subagent-hover-gen", "kind": "hash", "needle": "ZKlsPq_", "owner": "dsh-client-ui-subagent", "lazy": false, "note": "hover 代：count 触摸兼容/lineage 钉宽/尾随空格坑" },

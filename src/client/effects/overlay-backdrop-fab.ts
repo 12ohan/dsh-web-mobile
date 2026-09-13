@@ -31,7 +31,14 @@ export function createOverlayTask(
   let faded = false
   const drawerOpen = (): boolean => {
     const frame = getFrame()
-    return frame !== null && !frame.hasAttribute('data-sidebar-collapsed')
+    if (frame === null) return false
+    // The user's call (2026-09-13): our drawer is the one users get, even on
+    // hosts that ship their own overlay drawer. The host's version measures
+    // 321px wide with z-index:1100 and, notably, NO full-screen backdrop at all
+    // (measured: the conversation stays hit-testable beside it), which is the
+    // behaviour the phone owner rejected as unusable. So the legacy column
+    // rules stay armed and this backdrop keeps being created.
+    return !frame.hasAttribute('data-sidebar-collapsed')
   }
   const heroPhase = (): boolean =>
     document.querySelector('[data-phase="active"]') === null

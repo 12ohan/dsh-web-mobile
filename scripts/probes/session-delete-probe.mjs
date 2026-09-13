@@ -53,12 +53,17 @@ async function boot(c, evaluate, { touch, width, height }) {
   await c.send('Page.enable'); await c.send('Runtime.enable')
   await c.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 3, mobile: touch })
   if (touch) await c.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
+  if (process.env.DSH_PROBE_COOKIE) {
+    const raw = process.env.DSH_PROBE_COOKIE
+    const eq = raw.indexOf('=')
+    await c.send('Network.setCookie', { name: raw.slice(0, eq), value: raw.slice(eq + 1), url: URL_BASE })
+  }
   await c.send('Page.navigate', { url: URL_BASE })
   await waitFor(() => evaluate(`document.readyState === 'complete'`), 'load', 30000)
   await sleep(1500)
   // 隔离 profile 的 Internal Testing Notice 模态必须整 root 移除（mask 拦触摸）。
   await evaluate(`for (const m of document.querySelectorAll('[n="true"]')) m.remove()`)
-  const sid = await latestSessionId()
+  const sid = process.env.DSH_PROBE_SESSION_ID ?? await latestSessionId()
   if (!sid) throw new Error('no session dir found to seed')
   await evaluate(`localStorage.setItem('dsh.sessions.current', ${JSON.stringify(JSON.stringify({ sessionId: sid }))})`)
   await c.send('Page.navigate', { url: URL_BASE })

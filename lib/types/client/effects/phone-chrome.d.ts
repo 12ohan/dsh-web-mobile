@@ -39,6 +39,26 @@ export declare function getFrame(): HTMLElement | null;
  * disposer that unregisters the task and resets the installed flag, so a
  * same-environment plugin reload can rebuild the reconciler from scratch.
  */
+/**
+ * Host generation probe for the sidebar drawer.
+ *
+ * 0.1.5 turned the official expanded sidebar into an overlay drawer of its
+ * own: `pI_x6G_sidebarCol` carries `position:absolute; z-index:1100` while
+ * expanded and a drag handle to resize itself. Our legacy column rules
+ * (`z-index:40 !important` plus a full-screen backdrop) then paint OVER it:
+ * the official drawer still has a box and healthy computed styles, but it is
+ * ordered below and stops being painted and hit-testable - the user sees a
+ * full-screen dim with no drawer ("全屏都是阴影"). Newer hosts therefore need
+ * the legacy rules to yield.
+ *
+ * The signal must be structural, NOT computed `z-index`: this probe runs while
+ * our own stylesheet is present, so a computed z-index read would return the 40
+ * we ourselves forced and the check would latch false forever (measured
+ * deadlock). We read `position` on the un-collapsed column instead.
+ */
+export declare function isNativeDrawerGeneration(frame: HTMLElement | null): boolean;
+/** Mirror the probe onto the root element, where the stylesheet gates on it. */
+export declare function updateNativeDrawerGen(): void;
 export declare function installFrameController(): () => void;
 /**
  * One unit of DOM reconciliation driven by the shared full-tree observer.
@@ -109,6 +129,12 @@ export declare function installPhoneChrome(ctx: ClientContext): void;
  *   ssh takeover entries, search results) closes the drawer so the content
  *   it opened gets the whole screen. Session-row action buttons (kebab) are
  *   excluded — they open a menu that must survive the tap.
+ *
+ * The touch close always rides the synthesized click. Closing a non-row
+ * target from pointerup collapsed the drawer before that click existed, and
+ * a collapsed drawer no longer owns the touch point, so the browser
+ * dispatched no click at all and the target's own onClick never ran (「新会话」
+ * did nothing but retract the drawer, 2026-09-13).
  */
 export declare function installOverlayInteractions(ctx: ClientContext): void;
 /**

@@ -83,6 +83,40 @@ export function getFrame(): HTMLElement | null {
  * disposer that unregisters the task and resets the installed flag, so a
  * same-environment plugin reload can rebuild the reconciler from scratch.
  */
+/**
+ * Host generation probe for the sidebar drawer.
+ *
+ * 0.1.5 turned the official expanded sidebar into an overlay drawer of its
+ * own: `pI_x6G_sidebarCol` carries `position:absolute; z-index:1100` while
+ * expanded and a drag handle to resize itself. Our legacy column rules
+ * (`z-index:40 !important` plus a full-screen backdrop) then paint OVER it:
+ * the official drawer still has a box and healthy computed styles, but it is
+ * ordered below and stops being painted and hit-testable - the user sees a
+ * full-screen dim with no drawer ("全屏都是阴影"). Newer hosts therefore need
+ * the legacy rules to yield.
+ *
+ * The signal must be structural, NOT computed `z-index`: this probe runs while
+ * our own stylesheet is present, so a computed z-index read would return the 40
+ * we ourselves forced and the check would latch false forever (measured
+ * deadlock). We read `position` on the un-collapsed column instead.
+ */
+export function isNativeDrawerGeneration(frame: HTMLElement | null): boolean {
+  if (frame === null) return false
+  const col = frame.firstElementChild
+  if (!(col instanceof HTMLElement)) return false
+  if (frame.hasAttribute('data-sidebar-collapsed')) return false
+  return getComputedStyle(col).position === 'absolute'
+}
+
+/** Mirror the probe onto the root element, where the stylesheet gates on it. */
+export function updateNativeDrawerGen(): void {
+  if (typeof document === 'undefined') return
+  const frame = findFrame()
+  const root = document.documentElement
+  if (isNativeDrawerGeneration(frame)) root.setAttribute('data-mobile-nav-gen', 'native-drawer')
+  else root.removeAttribute('data-mobile-nav-gen')
+}
+
 export function installFrameController(): () => void {
   if (frameControllerInstalled) return () => {}
   frameControllerInstalled = true
@@ -95,6 +129,7 @@ export function installFrameController(): () => void {
       if (frame !== null && !frame.hasAttribute('data-mobile-nav')) {
         frame.setAttribute('data-mobile-nav', 'frame')
       }
+      updateNativeDrawerGen()
     },
     dispose: () => {
       if (frame !== null) {
@@ -102,6 +137,9 @@ export function installFrameController(): () => void {
         frame.removeAttribute('data-mobile-preview-full')
         frame.removeAttribute('data-aionui-explorer-open')
         frame.removeAttribute('data-aionui-preview-open')
+      }
+      if (typeof document !== 'undefined') {
+        document.documentElement.removeAttribute('data-mobile-nav-gen')
       }
       frame = null
     },
@@ -349,6 +387,12 @@ export function installPhoneChrome(ctx: ClientContext): void {
  *   ssh takeover entries, search results) closes the drawer so the content
  *   it opened gets the whole screen. Session-row action buttons (kebab) are
  *   excluded — they open a menu that must survive the tap.
+ *
+ * The touch close always rides the synthesized click. Closing a non-row
+ * target from pointerup collapsed the drawer before that click existed, and
+ * a collapsed drawer no longer owns the touch point, so the browser
+ * dispatched no click at all and the target's own onClick never ran (「新会话」
+ * did nothing but retract the drawer, 2026-09-13).
  */
 export function installOverlayInteractions(ctx: ClientContext): void {
   installMobileEffect(ctx, 'dsh-web-mobile: drawer close (Escape + navigate)', () => {
@@ -468,8 +512,9 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       }
 
       // Non-row nav targets (newSession / taskboard / ssh / search rows that
-      // are not treeitems): the pointerup close path is still correct.
-      toggleSidebar()
+      // are not treeitems) are closed by the capture click handler below:
+      // closing here would retract the drawer before the browser dispatches
+      // the tap's click, and the target's onClick would never run.
     }
 
     document.addEventListener('keydown', onKeyDown, true)

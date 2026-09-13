@@ -8,7 +8,8 @@ import { DESKTOP_QUERY, MOBILE_QUERY } from './effects/phone-chrome.ts'
  */
 export function installDebugBadge(ctx: ClientContext): void {
   ctx.effect(() => {
-    if (!new URLSearchParams(location.search).has('mobile-nav-debug')) return () => {}
+    const params = new URLSearchParams(location.search)
+    if (!params.has('mobile-nav-debug')) return () => {}
     const errors: string[] = []
     const onError = (event: ErrorEvent) => errors.push(`ERR ${event.message.slice(0, 120)}`)
     const onRejection = (event: PromiseRejectionEvent) => errors.push(`REJ ${String(event.reason).slice(0, 120)}`)
@@ -30,11 +31,24 @@ export function installDebugBadge(ctx: ClientContext): void {
         return el === null ? 'absent' : getComputedStyle(el).visibility
       }
       const frame = document.querySelector<HTMLElement>('[data-mobile-nav="frame"]')
+      // Safe-area diagnosis (read-only: the observer below re-enters on any
+      // node this adds to the document). framePad IS the resolved
+      // env(safe-area-inset-top) - the frame already consumes it - and
+      // rightPanel reports whether the host panel carries it too. If a phone
+      // shows a covered top row while framePad reads 0px, the inset is 0 on
+      // that device and the fix needs another source for the height.
+      const rightPanel = (): string => {
+        const el = document.querySelector<HTMLElement>('[data-sidebar-right-panel]')
+        if (el === null) return 'absent'
+        const b = el.getBoundingClientRect()
+        return `${el.getAttribute('data-sidebar-right-panel')} pad ${getComputedStyle(el).paddingTop} rect ${Math.round(b.top)},${Math.round(b.left)} ${Math.round(b.width)}x${Math.round(b.height)}`
+      }
       return [
-        `build 20260906 (overlay takeover re-scope)`,
+        `build 20260914 (right-panel safe-area)`,
         `URL ${location.pathname}${location.search}`,
         `W ${innerWidth} x ${innerHeight} dpr ${devicePixelRatio}`,
         `mq≤1023 ${matchMedia(MOBILE_QUERY).matches}  mq≥1024 ${matchMedia(DESKTOP_QUERY).matches}`,
+        `safeTop framePad ${frame === null ? 'n/a' : getComputedStyle(frame).paddingTop}  rightPanel ${rightPanel()}`,
         `css ${q('style[data-plugin-css*="mobile"]')}  frame ${!!frame}`,
         `previewCol ${vis('[data-aionui-preview-col]')}  explorerCol ${vis('[data-aionui-explorer-col]')}`,
         `previewOpen ${frame?.hasAttribute('data-aionui-preview-open') ?? '?'}  explorerOpen ${frame?.hasAttribute('data-aionui-explorer-open') ?? '?'}  previewFull ${frame?.hasAttribute('data-mobile-preview-full') ?? '?'}`,
@@ -60,11 +74,39 @@ export function installDebugBadge(ctx: ClientContext): void {
     observer.observe(document.body, { childList: true, subtree: true, attributes: true })
     const timer = setInterval(paint, 1500)
     document.body.appendChild(badge)
+
+    // Opt-in device beacon: the same readings are POSTed to a local listener
+    // (default http://127.0.0.1:3199/diag, override with ?beacon=<url>) so a
+    // phone-side repro can be read from the machine serving the page without
+    // anyone copying numbers off the screen. no-cors + a string body keeps it a
+    // simple request (no preflight); a missing listener is ignored.
+    // Rects of the plugin's own header controls plus the host row they live in:
+    // the phone-side position of the files opener is what a "not pinned to the
+    // top-right corner" report is about, and it cannot be measured headless.
+    const marker = (sel: string): string => {
+      const el = document.querySelector<HTMLElement>(sel)
+      if (el === null) return 'absent'
+      const b = el.getBoundingClientRect()
+      return `${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.width)}x${Math.round(b.height)}`
+    }
+    const payload = (): string => [
+      read(),
+      `rects toggle ${marker('[data-mobile-nav="toggle"]')} files ${marker('[data-mobile-nav="files"]')} header ${marker('[data-phase] header')} titleCluster ${marker('[class*="_titleCluster"]')}`,
+      `ua ${navigator.userAgent}`,
+      `screen ${screen.width}x${screen.height} standalone ${matchMedia('(display-mode: standalone)').matches}`,
+      `vv ${visualViewport === null ? 'n/a' : `${Math.round(visualViewport.width)}x${Math.round(visualViewport.height)}@${Math.round(visualViewport.offsetTop)}`}`,
+    ].join('\n')
+    const beacon = params.get('beacon') || 'http://127.0.0.1:3199/diag'
+    const beaconTimer = setInterval(() => {
+      void fetch(beacon, { method: 'POST', mode: 'no-cors', body: payload() }).catch(() => {})
+    }, 2000)
+
     return () => {
       window.removeEventListener('error', onError)
       window.removeEventListener('unhandledrejection', onRejection)
       observer.disconnect()
       clearInterval(timer)
+      clearInterval(beaconTimer)
       badge.remove()
     }
   }, 'dsh-web-mobile: debug badge')

@@ -353,6 +353,11 @@ async function main() {
 
     // Mobile touch viewport for gesture injection.
     await setViewport(client, 390, 844, true, true)
+    if (process.env.DSH_PROBE_COOKIE) {
+      const raw = process.env.DSH_PROBE_COOKIE
+      const eq = raw.indexOf('=')
+      await client.send('Network.setCookie', { name: raw.slice(0, eq), value: raw.slice(eq + 1), url: config.url })
+    }
     await client.send('Page.navigate', { url: config.url })
     await waitFor('page load', config.timeoutMs, signal, async () => {
       try {
