@@ -1,5 +1,6 @@
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { consumeIfGestured, isStrokeLocked } from './gesture-guard.ts'
+import { findSessionIdInFiber, isTapWithinSlop, reactFiberOf } from './session-row-fiber.ts'
 import { createReconcilerCore } from '../core/reconciler-core.ts'
 import type { ReconcilerTask } from '../core/reconciler-core.ts'
 import { createPreviewCloseTask, createSheetRiseTask } from './aionui-compat.ts'
@@ -51,6 +52,18 @@ const LONG_PRESS_MENU_GUARD_MS = 1200
 /** Window in which the press's own synthesized click is swallowed, so the lift
  *  neither navigates the row nor collapses the drawer. */
 const LONG_PRESS_CLICK_SWALLOW_MS = 800
+/** Finger-down to finger-up travel that still counts as a tap on a session row
+ *  (#49). Per-axis (`isTapWithinSlop` is max-norm, not Euclidean): the drawer
+ *  list scrolls vertically, so a 60px vertical drift must not navigate while a
+ *  diagonal wobble still reads as a tap. */
+const TAP_NAV_SLOP_PX = 12
+
+/** Where the current touch started (null for a mouse, and between touches).
+ *  The no-click row-tap fallback resolves the row's session id at pointerup and
+ *  only when the finger stayed put, so every touch pointerdown records this
+ *  BEFORE any early return — a missed record silently disables the whole
+ *  fallback. Cleared by the effect's disposer. */
+let touchDownAt: { x: number; y: number } | null = null
 
 /**
  * Re-arm a mobile-only DOM effect on every query change. Replaces the
@@ -560,7 +573,59 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       navTimer = window.setTimeout(disarmNav, 2000)
     }
 
+    /** Whether the session list really knows an id. The fiber walk has no
+     *  shape heuristic on purpose: hop 32 of a row's chain is a ScopeProvider
+     *  whose `props.scope` is the literal 'session-maybe', and
+     *  `ctx.sessions.open` fails loud on unknown ids — membership is the only
+     *  filter that can never hand the host a guess. */
+    const isKnownSessionId = (id: string): boolean => {
+      const snapshot = ctx.sessions.list.getSnapshot()
+      return snapshot.byId[id] !== undefined
+    }
+
+    /** The session a finished tap on `row` should open, or null to fall back to
+     *  the DOM observer: no finger-down record, a release that travelled (a
+     *  scroll or a swipe, not a tap), a fiber chain offering no known id, or a
+     *  row that is already the current session. */
+    const tappedRowSessionId = (row: Element, event: PointerEvent): string | null => {
+      if (touchDownAt === null) return null
+      if (!isTapWithinSlop(touchDownAt, { x: event.clientX, y: event.clientY }, TAP_NAV_SLOP_PX)) return null
+      const id = findSessionIdInFiber(reactFiberOf(row), isKnownSessionId)
+      if (id === null) return null
+      return ctx.sessions.list.getSnapshot().current === id ? null : id
+    }
+
+    // Close the drawer once the navigation we started ourselves lands (#49).
+    // `armNav` watched the drawer's *selected row* change, but when WebKit drops
+    // the tap's click the row's own onClick never runs, so that signal never
+    // arrives — the store is the honest source of "navigation happened".
+    let closeOnNavUnsub: (() => void) | null = null
+    let closeOnNavDone = false
+
+    const disarmCloseOnNav = (): void => {
+      closeOnNavUnsub?.()
+      closeOnNavUnsub = null
+    }
+
+    const closeOnNavigation = (id: string): void => {
+      disarmCloseOnNav()
+      closeOnNavDone = false
+      const fire = (): void => {
+        if (closeOnNavDone) return
+        closeOnNavDone = true
+        disarmCloseOnNav()
+        if (drawerOpen()) toggleSidebar()
+      }
+      closeOnNavUnsub = ctx.sessions.list.subscribe(() => {
+        if (ctx.sessions.list.getSnapshot().current !== id) return
+        window.setTimeout(fire, 0)
+      })
+    }
+
     const onDrawerPointerDown = (event: PointerEvent): void => {
+      touchDownAt = event.pointerType === 'touch' || event.pointerType === 'pen'
+        ? { x: event.clientX, y: event.clientY }
+        : null
       clearPress()
       if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return
       if (isStrokeLocked()) return
@@ -670,8 +735,17 @@ export function installOverlayInteractions(ctx: ClientContext): void {
           // Already-selected row will not navigate; closing immediately is safe.
           toggleSidebar()
         } else {
-          // Unselected row: let navigation land, then close via the observer.
-          armNav()
+          // Unselected row: navigate from the id we resolved at the touch point
+          // when this tap can supply one — on WebKit the row's own click may
+          // never come, and then nothing else would open the session. Fall back
+          // to closing once the DOM shows a navigation landed when it cannot.
+          const tappedId = tappedRowSessionId(row, event)
+          if (tappedId === null) {
+            armNav()
+          } else {
+            closeOnNavigation(tappedId)
+            ctx.sessions.open(tappedId)
+          }
         }
         return
       }
@@ -690,6 +764,11 @@ export function installOverlayInteractions(ctx: ClientContext): void {
     document.addEventListener('pointerup', onDrawerPointerUp, true)
     return () => {
       disarmNav()
+      disarmCloseOnNav()
+      // A pending close (scheduled by the store subscription) must not outlive
+      // the effect: a reload would otherwise toggle the drawer once more.
+      closeOnNavDone = true
+      touchDownAt = null
       clearPress()
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('click', onDrawerClick, true)
