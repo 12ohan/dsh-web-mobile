@@ -378,3 +378,31 @@ hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session heade
 **② Termux 上 headless chromium**：必须给可写的 `TMPDIR` 与 `XDG_RUNTIME_DIR`（spawn env 指到 `~/tmp` 下自建目录），否则 ProcessSingleton 建 socket 失败报「Failed to create a ProcessSingleton」直接退出、CDP 端口永不上线。工具 exec 环境里 `$HOME` 可能为空（`mkdir -p $HOME/x` 会打到 `/tmp`）——env 一律用绝对路径。node 的 `spawn` 无法 exec `chromium-browser` 包装脚本（symlink → `chromium-launcher.sh`，libuv 拿 EACCES，而经 sh 跑同一脚本却正常），探针要用 `DSH_PROBE_CHROME=/data/data/com.termux/files/usr/lib/chromium/chrome` 直指真实 ELF（实测 750ms 就绪）。临时脚本与截图放 `~/tmp/` 用完清理。
 
 **③ Playwright MCP（本机已装，2026-09-14 实测）**：MCP 自带 Chromium（`~/.cache/ms-playwright/chromium-1232`，149.0.7827.155）在本机正常起浏览器并访问 `127.0.0.1` 的 DSH Web，设备仿真优先用它；仓库内脚本化回归仍走原生 CDP。用法：`browser_run_code_unsafe` 里 `browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })` + 从已有 context 复制 cookie + `addInitScript` 写 `localStorage['dsh.sessions.current']` 就是一台手机；被桌面布局隐藏的元素用 `document.querySelector(sel).click()` 而非 `page.click()`（后者要可见性检查，必失败）。两个环境前提：`~/tmp/pw-dsh-tmp` 必须先存在（否则 `mkdtemp ENOENT`），且该 Chromium 协议里没有 `Emulation.setSafeAreaInsets`（回 was not found）——inset 仍只能模拟。仓库内 `playwright-core` 的 registry 在 android 平台抛 `Unsupported platform: android`，所以脚本化回归的可行做法是：spawn 系统 chromium（`--headless=new --no-sandbox --disable-dev-shm-usage --remote-debugging-port=<port> --user-data-dir=<dir>`）+ fetch `/json` 取 `webSocketDebuggerUrl` + 原生 WebSocket 收发 CDP（`Page.navigate` / `Runtime.evaluate(returnByValue)` / `Input.dispatchMouseEvent` / `Page.captureScreenshot` / `Emulation.setDeviceMetricsOverride`），参考 `scripts/cdp-probe.mjs` 的 `createCdpClient`；会话注入在导航前用 `Page.addScriptToEvaluateOnNewDocument` 写 `localStorage['dsh.sessions.current']`。用它独立复跑过 Files 面板 safe-area 几何断言 13/13。
+
+---
+
+## 消息字号必须跟随宿主字号轴（#52）：两处「守卫空转」陷阱
+
+**消息字号必须跟随宿主字号轴（#52）**：插件移动分支原来把消息列**连同**它的 `p` / `li` / `[class*="_text_"]` 后代一起钉在 `font-size: 15px !important`，而宿主把「设置 → 字号大小」写在 `<body>` 的 inline 自定义属性上（ThemePresenter 用 `document.body.style.setProperty('--dsh-content-font-size', '12px')`，见 `@deepseek-ai/dsh-client-ui-theme/lib/client.js`），再由 `body{…}` 块里的 `--dsw-font-markdown-base-font-size: var(--dsh-content-font-size,14px)` 派生。于是设置 12–17 只驱动宿主自己画的 markdown 块，消息文字恒 15px——**同一条消息里混着两种字号**（探针 `scripts/probes/message-font-axis-probe.mjs` 修前红：`paragraph=15px container=15px markdown=12px`，轴调到 17px 时同款）。修法：容器读长写 token 作整条回退链 `font-size: var(--dsw-font-markdown-base-font-size, var(--dsh-content-font-size, 14px)) !important`（layout.css.ts，仅此一条手改规则），后代改 `font-size: inherit !important`——再给每个 `p`/`li` 各钉一条等于把轴第二次切断。
+
+**`font:` 复合简写 token 不能当 `font-size` 用**：`--dsw-font-markdown-base` 存的是 `尺寸 / 行高 字族` 三元组（`var(--dsh-content-font-size,14px) / calc(24px + var(--dsh-content-font-delta)) var(--dsw-font-family)`），`font-size: var(--dsw-font-markdown-base)` 是**非法声明**——解析器静默丢弃、级联回退到继承值，不报错也不生效。只有结尾 `-font-size` 的长写 token 可用；两个 token 只差一个后缀，抄错时症状是「写了字号但完全没变化」。
+
+### 守卫别遍历 DOM 级联：`@keyframes` 处没有判别依据
+
+「消息文字族不再硬编码 px」这类断言只有两条路能走：断**源模板串**（`LAYOUT_CSS`）配一个纯函数选择器配对器（`src/client/core/css-rules.ts`，零 import，`tests/css-rules.test.ts` 驱动），或真的去递归 `document.styleSheets`。后者在 `@keyframes` 处拿不到判别依据（Chromium 149 `CSSStyleSheet` 实测）：`CSSKeyframesRule` **没有** `selectorText`、**没有** `style`（读 `rule.style.cssText` 直接 `TypeError: Cannot read properties of undefined`），但它**有** `cssRules`；它的子规则 `CSSKeyframeRule` 反过来**有** `style` 却**没有** `selectorText`（只有 `keyText`，`from` → `"0%"`）。于是「按成员判断这是不是样式规则」的遍历只有两种下场：在容器上抛错中断（探针/审计里再套一层 try/catch 就变成**静默截断的规则集**，后面的 `@media` 规则永远不被访问），或把关键帧步骤当规则收进来（实测把 `opacity: 0;` 收成一条"规则"）。两种都让断言**空转且恒绿**。源级解析器有同族的两个反面：不剥整段 `@keyframes` 会把 `from`/`to` 这类非选择器混入块列表（Task 2 实测草稿 `blocks.length = 3`，应为 1）；反过来整块跳过 at-rule 则一条也匹配不到——`tests/css-rules.test.ts` 第一个测试把 `@keyframes` + `@media` 混合输入钉成「只许 1 个块」。**配套铁律**：`fontSizeFor` 返回 `null` 时必须大声失败（`assert.ok(hit !== null)`），否则「守卫什么都没查到」与「守卫通过」在输出上无法区分——草稿里 `:has(p)` 被近似成"元素本身是 p"，真实规则永远 `null`，正是这一类。
+
+### 「守卫什么也没守」的同族第二例：正则对它要抓的字符串恒不匹配
+
+同一条守卫里的 `assert.doesNotMatch(hit.value, /px$/)` 对本仓库自己的声明风格**恒真**——所有 `font-size` 都写成 `15px !important`，字符串不以 `px` 结尾，于是这条断言永远绿；真正拦下硬编码的是同组的 `assert.match(hit.value, /var\(/)`（Task 2 反向验证实测：临时把 `15px !important` 放回去，红的是后一条）。已改成锚定值开头的 `/^\s*[\d.]+px/`——不能退回裸 `/px/`，它会把回退链里合法的 `14px` 一起抓。**判定一条断言是否真在守：把它要抓的字符串喂进去，看它红不红**；同族历史见 §header 拥挤的尾随空格（合成 fixture 复现不出）、§hero 输入框下限（11 断言全绿却漏网）、§tooltip（断言断在 bug 本身）。
+
+---
+
+## 抽屉的两个 closer 必须互斥（#49 的 tap 接线把隐式不变式变成显式的）
+
+**抽屉的两个 closer 必须互斥（#49 的 tap 接线把隐式不变式变成显式的）**：会话行 tap 有两条关抽屉路径——`armNav()`（MutationObserver 看「选中行的标题变化」，2000ms 自 disarm）与 `closeOnNavigation(id)`（订阅 `ctx.sessions.list`，导航落地后 `setTimeout(fire, 0)` 关）。旧代码里每次未选中行 `pointerup` 都调 `armNav()`，而它的首句就是 `disarmNav()`——「同一时刻只有一个 closer 被武装」这条不变式当年是靠**调用结构隐式**维持的，没人写下来。#49 让 tap 在能解析出会话 id 时改走 `closeOnNavigation()`，这条路径**不碰观察者**，不变式于是破了：「回退释放」（漂移 > `TAP_NAV_SLOP_PX` 的滑动释放，抽屉仍开着、观察者已武装且 2s 内才自 disarm）+「2s 内再一次解析成功的 tap」会让观察者（选中标题变化）与 store 落点（`fire`）**为同一次导航各调一次 `toggleSidebar()`**，谁先谁后取决于 React commit 时序——表现就是本仓库「抽屉没关 / 要点两次」家族。修复＝两个分支**在决策点各自先 disarm 对方**（`tappedId === null` 分支先 `disarmCloseOnNav()` 再 `armNav()`；解析成功分支先 `disarmNav()` 再 `closeOnNavigation()`），两条路径各留一段注释说明为什么。
+
+**同族收紧**：`disarmCloseOnNav()` 现在同时置 `closeOnNavDone = true`——只退订拦不住已经排进 `setTimeout(fire, 0)` 的那次 `fire`，不置位就仍会在 disarm 之后补一次 `toggleSidebar()`；effect 的 disposer 里那句显式置位因此变成冗余（同一件事现在由 `disarmCloseOnNav()` 做），已删。这条竞态**没有仓库内复现**：修复是按结构论证的（重放需要在共用 dev server 上把 bundle 换回 `6edaaed`，A/B 窗口对用户可见且结果依时序而定），别把它当已复现的 bug 记账。
+
+**`isTapWithinSlop` 是逐轴 max-norm，不是欧氏距离**（`|dx| <= slop && |dy| <= slop`，`TAP_NAV_SLOP_PX = 12`）：这是刻意取 `hypot` 圆盘的**超集**——`hypot` 会让斜向 tap 比轴向 tap 严格更难通过，而抽屉列表本身就是纵向滚动列表，真正要排除的是「纵向漂了一大段还停在行上」的滚动释放（同一次 45° 斜移 9px/9px：逐轴判据两轴都在 12px 内＝照常 tap，`hypot` 半径 12.7px 早已出界＝被当滚动丢掉）。**别把它"修正"成 `hypot`**。
+
+**锚点**：`scripts/probes/row-tap-no-click-probe.mjs`（7 断言、端口 9355、临时 profile `~/tmp/cdp-noclick-*`）。双场景共用同一 tap 几何：A 对照（不吞 click，证明探针几何真的驱动了宿主路径——A 红=整条 tap 路断了，A 绿+B 红=只是新分支坏了）+ B 在 document 捕获阶段对指向会话行的 click 做 `preventDefault + stopImmediatePropagation`（React 18 的事件委托挂在 root container 上，document 捕获早于它 —— 与 WebKit 根本没派发 click 对 React 等价），断言 5 计数「确实吞到了」以防 B 什么都没证明。**它证明不了真机 WebKit**：pointerup 次序、`pointercancel`、整体吞事件的 iOS 壳都在模拟范围之外。

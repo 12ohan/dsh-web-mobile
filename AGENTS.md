@@ -22,12 +22,12 @@
   │     ├─ index.tsx         ← 浏览器半区入口（2 slots）
   │     ├─ debug.ts          ← ?mobile-nav-debug=1 诊断徽章
   │     ├─ components/       ← MobileNavToggle / MobileDrawerFooter
-  │     ├─ core/             ← reconciler-core.ts（零 import）+ raf-scheduler.ts
-  │     ├─ effects/          ← 13 个效果模块：phone-chrome · sidebar-swipe ·
+  │     ├─ core/             ← reconciler-core.ts（零 import）+ raf-scheduler.ts · css-rules.ts
+  │     ├─ effects/          ← 14 个效果模块：phone-chrome · sidebar-swipe ·
   │     │                       gesture-guard · subagent-chip-touch · composer-keyboard-guard ·
   │     │                       file-viewer-compat · aionui-compat · stats-line ·
-  │     │                       git-chip-reparent · settings-toolbar-reparent ·
-  │     │                       preview-fullscreen · overlay-backdrop-fab · session-menu
+  │     │                       git-chip-reparent · settings-toolbar-reparent · preview-fullscreen ·
+  │     │                       overlay-backdrop-fab · session-menu · session-row-fiber
   │     ├─ styles/           ← index.ts（base→layout→compat→misc 承载顺序）+ 4 个 .css.ts
   │     └─ i18n/locales.ts
   ├─ lib/                    ← 生成物：随 pnpm build 刷新，勿手改（client.js≈2 万行内联 bundle）
@@ -37,7 +37,7 @@
   │  ├─ cdp-probe.mjs        ← 主探针 32 断言（EXPECTED_FAILURES 基线）
   │  ├─ cdp-swipe-probe/failures · cdp-zoom-probe · cdp-compat-contracts (.mjs)
   │  └─ probes/              ← 17 个回归锚点（builtin-only，可单跑）
-  ├─ tests/                  ← 14 个 .test.ts（node --test，type-stripping 直跑）
+  ├─ tests/                  ← 17 个 .test.ts（node --test，type-stripping 直跑）
   ├─ docs/
   │  ├─ specs/               ← 7 篇权威设计文档（入库）
   │  ├─ audits/ · maintenance/pitfalls.md · upstream/（runbook + compat-contracts.json）· fork-wzxmt-zhc/
@@ -184,10 +184,13 @@ dsh web
 
 - **npm 包改名边界（2026-08-30：dsh-mobile-nav → dsh-web-mobile）**：包名、patch 行 id/name、client loader id、served 路径 `/plugins/dsh-web-mobile/`、style dataset `data-plugin` 与 CSS 动画名（`dsh-web-mobile-fade/sheet-in/sheet-up`）全部随新名；**刻意不改**：DOM 标记 `data-mobile-nav="frame"` 族与 `?mobile-nav-debug=1` 参数（用户可见契约，保持短且已文档化）。旧 npm 名 dsh-mobile-nav（2.2.0/2.3.0）已整包 unpublish、不可恢复；DSHA 的 vendored 副本仍是 `@dsh-external/dsh-mobile-nav`（2.1.x 代），不影响其 APK 运行，等它 re-vendor 才对齐。仓库目录名保持 `~/dsh-mobile-nav` 不改（AGENTS/Shiki patch 备份路径引用它，改目录名会断链）。本机 profile 换新名需重跑 `dsh plugin --profile web add link:~/dsh-mobile-nav` 并重启 `dsh web`。旧名用户的迁移契约：**必须 rm 旧名 → add 新名，不能并存**——patch 行 id 随包名一起换了，两行 bundle 会让宿主把同一插件加载两份（style/slot/locale 双重注册，locale 重复注册直接抛错）；旧名 unpublish 后死依赖会毒化 profile 的所有后续 install（与 /root 机 dsh-api-dashboard 404 同机制），所以这是强制迁移而非可选更新；README 包名说明里已附迁移命令。
 
+- **消息字号只读长写 `--dsw-font-markdown-base-font-size`（`-base` 是 `font:` 简写）；守卫断源串，勿遍历 DOM 级联（`@keyframes` 处不可判别 → 断言空转仍绿）→ `docs/maintenance/pitfalls.md` §字号轴。
+- **只许一个抽屉 closer 武装**：`armNav()` 与 `closeOnNavigation()` 各自先 disarm 对方；`isTapWithinSlop` 逐轴 max-norm，勿改 `hypot` → `docs/maintenance/pitfalls.md` §两个 closer。
+
 ## Testing & QA
 
 - **设置/插件市场调试地图**：`docs/debug/settings-market-debug-map.md` —— 设置区与市场 UI 的 DOM 层级图、入口链路、CSS module 哈希对照表（VOzbGW_/eGUBIq_/hHd-Xa_…）、compat 干预点索引与 CDP 取证 SOP。排查该区域布局/弹层问题先读它，不要重新摸索层级。（此文档仅本地保留，已加入 .gitignore 不随仓库上传。）
-- Automated gates: `pnpm verify` (typecheck) and `pnpm test:core`（14 个测试文件，glob 覆盖 `tests/` 全部）. `pnpm build` additionally exercises the custom client bundler. Use `git diff --check` for whitespace hygiene.
+- Automated gates: `pnpm verify` (typecheck) and `pnpm test:core`（17 个测试文件，glob 覆盖 `tests/` 全部）. `pnpm build` additionally exercises the custom client bundler. Use `git diff --check` for whitespace hygiene.
 - There is no linter, formatter, or coverage setup; the CI workflow (`.github/workflows/ci.yml`) additionally runs the lib freshness gate `git diff --exit-code lib`.
 - After source/layout changes, install the linked plugin in a real DSH Web profile, restart `dsh web`, and check both sides of the breakpoint:
   - **Narrow phone (~390px):** rail hidden; drawer/FAB/backdrop open and close; Escape; session-row action menus do not close the drawer; settings remains usable; Files opens explorer/preview sheets; session-log/footer actions work; preview fullscreen opens and resets.

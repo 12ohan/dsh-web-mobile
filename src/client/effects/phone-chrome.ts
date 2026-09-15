@@ -602,7 +602,11 @@ export function installOverlayInteractions(ctx: ClientContext): void {
     let closeOnNavUnsub: (() => void) | null = null
     let closeOnNavDone = false
 
+    /** Disarming means spent: mark the close done before dropping the
+     *  subscription, so a `fire` a subscription tick already queued cannot
+     *  toggle the drawer after the close was handed to the other closer. */
     const disarmCloseOnNav = (): void => {
+      closeOnNavDone = true
       closeOnNavUnsub?.()
       closeOnNavUnsub = null
     }
@@ -612,7 +616,6 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       closeOnNavDone = false
       const fire = (): void => {
         if (closeOnNavDone) return
-        closeOnNavDone = true
         disarmCloseOnNav()
         if (drawerOpen()) toggleSidebar()
       }
@@ -773,10 +776,8 @@ export function installOverlayInteractions(ctx: ClientContext): void {
     document.addEventListener('pointerup', onDrawerPointerUp, true)
     return () => {
       disarmNav()
+      // Also marks the close spent, so a queued `fire` cannot outlive the effect.
       disarmCloseOnNav()
-      // A pending close (scheduled by the store subscription) must not outlive
-      // the effect: a reload would otherwise toggle the drawer once more.
-      closeOnNavDone = true
       touchDownAt = null
       clearPress()
       document.removeEventListener('keydown', onKeyDown, true)
