@@ -160,6 +160,15 @@ async function main() {
       '2.top-row-controls-present', 'tab label / + / Split / Exit fullscreen')
     record(base.form === 'fullscreen', '2.host-form-is-fullscreen', `data-sidebar-right-panel=${base.form}`)
     record(base.padTop === '0px', '2.headless-baseline', `padding-top=${base.padTop} (env() is 0 without a real inset)`)
+    // The load-bearing link: the injected rule's selector must MATCH this live
+    // panel. Section 3 pushes an inline padding and watches the row move, which
+    // only re-proves the box model — if the selector stopped matching the real
+    // markup, 2/3 would still be green while the fix did nothing on device.
+    const match = await json(`(() => {
+      const p = document.querySelector('[data-sidebar-right-panel="fullscreen"]')
+      return JSON.stringify({ matches: p !== null && p.matches('[data-sidebar-right-panel="fullscreen"]'), tag: p ? p.tagName.toLowerCase() : null })
+    })()`)
+    record(match.matches === true, '2.rule-selector-matches-live-panel', `matches=${match.matches} tag=${match.tag}`)
 
     // ---- 3. with the inset in place the whole row clears the status bar ----
     await evaluate(`(() => { const p = document.querySelector('[data-sidebar-right-panel="fullscreen"]'); p.style.setProperty('padding-top', '${INSET}px', 'important'); return true })()`)

@@ -286,6 +286,13 @@ export interface FilesThresholds {
   panelOpen: boolean
   /** Drawer open at lock time. */
   drawerOpen: boolean
+  /**
+   * Distance gate for the drawer-open rightward cell. That cell commits a
+   * DRAWER close, so it rides the drawer's own CLOSE_DISTANCE_RATIO (0.13),
+   * not the files panel's 0.16: one physical stroke must judge the same
+   * wherever it starts. Optional — defaults to `distanceRatio`.
+   */
+  drawerCloseDistanceRatio?: number
 }
 
 /**
@@ -299,8 +306,9 @@ export interface FilesThresholds {
  *   open drawer (z-1100) and be invisible, so the stroke is 'none' (the
  *   2026-09-13 narrowing: a leftward stroke NEVER collapses anything);
  * - rightward-logical strokes close the VISIBLE TOP: drawer open → 'close'
- *   (the animated commitFollowClose path, identical to today's right-zone
- *   close); else panel open → 'files'; else 'none'.
+ *   (the animated commitFollowClose path, gated on the drawer's own
+ *   distance/velocity thresholds so both families judge a stroke alike);
+ *   else panel open → 'files'; else 'none'.
  */
 export function classifyFilesSwipe(
   t: FilesThresholds,
@@ -319,7 +327,19 @@ export function classifyFilesSwipe(
     if (velX > 0 !== dx > 0) return 'none'
     return -velX >= t.velocity ? 'files' : 'none'
   }
-  if (t.drawerOpen) return 'close'
+  if (t.drawerOpen) {
+    // Same gates as the drawer family's close (classifySwipe), including its
+    // CLOSE_DISTANCE_RATIO: this cell IS the drawer-close commit path, so the
+    // two families must judge one physical stroke alike. Without the gate the
+    // files zone's 45% reaches ~66px into the open drawer column at 390px,
+    // where a thumb resting on a row drifts ~8px sideways while scrolling —
+    // that closed the drawer AND consumed the tap. The leftward cell beside the
+    // drawer is already 'none', so this is what makes the families agree.
+    const closeRatio = t.drawerCloseDistanceRatio ?? t.distanceRatio
+    if (dx / t.viewportWidthPx >= closeRatio) return 'close'
+    if (velX <= 0) return 'none'
+    return velX >= t.velocity ? 'close' : 'none'
+  }
   if (t.panelOpen) {
     if (dx / t.viewportWidthPx >= t.distanceRatio) return 'files'
     if (velX > 0 !== dx > 0) return 'none'
@@ -1191,6 +1211,10 @@ function endStroke(
               viewportWidthPx,
               panelOpen: filesOpenAtLock,
               drawerOpen: lockDrawerOpen,
+              // The drawer-open cell commits a drawer close, so it keeps the
+              // drawer's own close distance (the spec's "┍ identical to
+              // today's close").
+              drawerCloseDistanceRatio: CLOSE_DISTANCE_RATIO,
             },
             { dx, dy, velX: vel },
             rtl,

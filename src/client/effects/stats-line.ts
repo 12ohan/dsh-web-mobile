@@ -74,9 +74,11 @@ export function createStatsLineTask(): ReconcilerTask {
     const stack = document.querySelector('[class*="_composerStack"]')
     if (stack === null) return
     for (const root of stack.querySelectorAll('[class*="_root"]')) {
-      // The status row lives inside the composer stack; message-area
-      // blocks can also mention turns/steps and must be skipped.
-      if (!stack.contains(root)) continue
+      // The status row lives inside the composer stack. The query is already
+      // scoped to the stack, so every candidate is inside it by construction —
+      // message-area blocks that mention turns/steps never enter this loop. (A
+      // `stack.contains(root)` guard stood here and its comment claimed to skip
+      // those blocks; it was unreachable.)
       // The todo plan strip also lives in the composer stack and its root
       // ends in _root. Its items may legitimately contain "步"/"steps" in
       // their text, so never mistake it (or any interactive dock panel)

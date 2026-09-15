@@ -303,7 +303,11 @@ async function main() {
         const rows = d === null ? [] : [...d.querySelectorAll('[class*="sessionRow"]')]
         return { wasClosed: ${wasClosed}, openNow: ${openNow}, total: rows.length, visible: rows.filter((r) => r.getBoundingClientRect().width > 0).length, selected: rows.findIndex((r) => r.getAttribute('aria-selected') === 'true') }
       })()`)
-      record(true, '6.row-tap-navigates-and-closes', `SKIP (no unselected second row) diag=${JSON.stringify(diag)}`)
+      // SKIP, not PASS: this item is the only anchor for the 2026-09-13
+      // "row tap navigates AND closes" regression, so an environment without a
+      // second row must not read as a green assertion (the other SKIPs in this
+      // file record false for the same reason).
+      record(false, '6.row-tap-navigates-and-closes', `SKIP (no unselected second row) diag=${JSON.stringify(diag)}`)
     }
 
     // 7 — backdrop tap still dismisses (the third-party path is neutralized, ours must hold).

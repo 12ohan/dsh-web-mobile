@@ -37,16 +37,17 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   [data-phase="hero"] [class*="_card"]:has(textarea:placeholder-shown) [class*="_grow"] {
     height: 28px !important;
   }
-  /* DSH 0.1.2: the input is a Lexical contentEditable (no textarea) and the
-     empty state is signalled by the separate [data-composer-placeholder]
-     node, so mirror the one-line collapse for that shape. */
-  [data-phase="hero"] [class*="_card"]:has([data-composer-placeholder]) [data-composer-input] {
-    height: 28px !important;
-  }
-  [data-phase="hero"] [class*="_card"]:has([data-composer-placeholder]) > [class*="_scroll"],
-  [data-phase="hero"] [class*="_card"]:has([data-composer-placeholder]) [class*="_grow"] {
-    height: 28px !important;
-  }
+  /* The one-line collapse above is deliberately NOT mirrored onto the Lexical
+     generation (0.1.2+), even though it signals its empty state with the
+     separate [data-composer-placeholder] node. That host pins the hero input
+     itself — hero-scoped min-height: 52px, because its hero hint wraps to two
+     lines — and a min-height floor beats an outer height: the 28px wrappers of
+     2026-09-05 only shrank the scrollport under a 52px input, i.e. overflow-y
+     auto with scrollHeight 52 against clientHeight 28 → scrollbar plus a
+     clipped first input line and hint line (phone report 2026-09-14, probe
+     scripts/probes/hero-composer-clip-probe.mjs). The textarea generation this
+     collapse was written for has no such floor — its input is a transparent
+     height:100% layer over the wrappers — so it still collapses there. */
   [data-phase="hero"] [class*="_card"]:has(textarea, [data-composer-input]) > [class*="_row"] {
     padding-top: 2px !important;
   }

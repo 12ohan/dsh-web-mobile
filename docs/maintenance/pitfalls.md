@@ -122,9 +122,15 @@
 
 ---
 
-## 0.1.5 官方窄屏 expanded 已是原生 overlay 抽屉，插件抽屉视觉管理必须让位（z 压制实锤，2026-09-14）
+## 0.1.5 官方窄屏已是原生 overlay 抽屉，但插件不放权——抽屉与遮罩全代都归插件（z 契约实锤 + 2026-09-14 文档修正）
 
-**0.1.5 官方窄屏 expanded 已是原生 overlay 抽屉，插件的抽屉视觉管理必须整体让位**：0.1.5 把窄屏侧栏重做成了原生 overlay——`pI_x6G_sidebarCol` 计算样式 `position:absolute; z-index:1100`（两态恒定），frame grid 变单轨 `390px`（内容不被挤压），collapsed＝52px 官方 rail 且 `pointer-events:none`、expanded＝321px 且 `pe:auto`，另有 `pI_x6G_handle`（276×8）拖宽把手。**官方自己把「抽屉负优化」修好了**。插件旧 col 规则的 `z-index:40!important` 会把官方 1100 压到 40，抽屉随即落到宿主层之下——**有 layout box、computed 全部正常，却既不绘制也不命中**（描边实验：删除插件 CSS 后红 outline 立刻画出；inline z 提到 999 仍不画，只有官方原生值才正常），而插件的全屏 backdrop（官方原生 expanded 没有全屏遮罩）成了唯一可见的暗层、点外关闭判定又因命中异常全落 frame——用户看到的「打开抽屉一片全黑 + 点哪都关」就是这三层叠加。修复＝代际让位：`phone-chrome.ts` 的 frame-marker 任务每 flush 跑 `updateNativeDrawerGen()`，命中时在 `<html>` 挂 `data-mobile-nav-gen="native-drawer"`；layout.css 的 col 视觉规则（absolute/inset/width/z-index/transform/transition/background）、开态 transform:none、prefers-reduced-motion、drag-handles 隐藏块全部用 `:root:not([data-mobile-nav-gen="native-drawer"])` 门控；overlay-backdrop-fab 在该代不创建 backdrop（FAB 保留 hero 态）。**代际检测必须用结构类名（col 类含 `sidebarCol`）＋ computed position，绝不能用 computed z-index**：检测跑在我们 CSS 还在场的时候，读到的 z 是我们自己压出来的 40，用 z 阈值检测会永久 false 形成死锁（2026-09-14 实测：z 阈值版探针 A1/A2 恒 FAIL）。手势层**零改动兼容**——手势 commit 本来就是 `ctx.layout.toggleSidebar()`（开=锁轴即 commit、关=inline 滑出落地后 commit），官方 absolute col 上 inline transform 照常工作；cdp-swipe-failures 16 场景实测 12 场景全过（composer 场景为探针脚本形状漂移，见 runbook）。主探针 7/9 与修复前同基线（mobile.open-control＝鲸鱼盖 toggle 的独立待决项）。升级对账点：`sidebarCol` 类子串（0.1.5 哈希 `pI_x6G_` 会变，升级后按 `docs/upstream/compat-contracts.json` 对账）；官方 expanded 无全屏遮罩＝内容可点语义，抽屉外点击走官方收起按钮（`hHd-Xa_iconButton`），与插件 backdrop 时代的「点遮罩关」语义不同属预期。
+**0.1.5 官方窄屏 expanded 已是原生 overlay 抽屉，插件却继续用自己的抽屉和遮罩**：0.1.5 把窄屏侧栏重做成了原生 overlay——`pI_x6G_sidebarCol` 计算样式 `position:absolute; z-index:1100`（两态恒定），frame grid 变单轨 `390px`（内容不被挤压），collapsed＝52px 官方 rail 且 `pointer-events:none`、expanded＝321px 且 `pe:auto`，另有 `pI_x6G_handle`（276×8）拖宽把手。**官方自己把「抽屉负优化」修好了**，但 2026-09-13 用户拍板不放权：官方 expanded 只有 321px 且**没有任何全屏遮罩**（已实测：抽屉旁的内容仍然可点、可直接操作），用户判断这种「抽屉旁边还能点内容」的形态不可用 → 插件继续用自己的抽屉列（`z-index:1300`）与全屏 backdrop（`z-index:1250`），覆盖所有代际。代码侧的理由写在 `overlay-backdrop-fab.ts` 的 `drawerOpen()` 注释里（原文记录「the host's version measures 321px wide with z-index:1100 and, notably, NO full-screen backdrop at all … which is the behaviour the phone owner rejected as unusable」）。
+
+**曾被压成 z-index:40 的实锤**：插件早期 col 规则写 `z-index:40!important`，把官方 1100 压到 40——抽屉**有 layout box、computed 全部正常，却既不绘制也不命中**（描边实验：删除插件 CSS 后红 outline 立刻画出；inline z 提到 999 仍不画，只有官方原生值才正常），而插件的全屏 backdrop（官方原生 expanded 没有全屏遮罩）成了唯一可见的暗层、点外关闭判定又因命中异常全落 frame——用户看到的「打开抽屉一片全黑 + 点哪都关」就是这三层叠加。**修复不是让位而是抬到 1300**：`layout.css` 把 col 钉死 `z-index:1300!important`（注释里写明与 `base.css` 的 1250 遮罩是契约），抽屉重新可见、遮罩恢复「点遮罩关」语义。
+
+**文档修正（2026-09-14 两阶段审查发现）**：本档与 AGENTS.md 曾写成「代际让位」——声称 `layout.css` 的 col 规则/开态 transform/reduced-motion/drag-handles 用 `:root:not([data-mobile-nav-gen="native-drawer"])` 门控、`overlay-backdrop-fab` 该代不建 backdrop。**这三条全部不成立**：`git log -S':root:not([data-mobile-nav-gen' -- src/` 全历史零命中（该门控从未被写出来），`overlay-backdrop-fab.ts` 也从无代际分支（`drawerOpen()` 一路只读 `data-sidebar-collapsed`），实际行为是 1300 + 全代建 backdrop。`isNativeDrawerGeneration()` / `updateNativeDrawerGen()` 当时仍存在并每 flush 在 `<html>` 写 `data-mobile-nav-gen="native-drawer"`，但**没有任何 CSS/JS 读它**（`grep -rn data-mobile-nav-gen src/ lib/ scripts/ tests/` 只有写入方）——是死标记，**已于 2026-09-14 用户批准后整体删除**（两个函数 + `<html>` 属性写入 + dispose 清理 + `frame-marker` 每帧调用，源码零残留）。教训有两条：①**文档描述一个「机制」时必须 grep 出读方**——只凭 commit message 或写入方的注释就会写出从未落地的机制；②**过时的注释比没有注释更贵**——`phone-chrome.ts` 那句自称 "the stylesheet gates on it" 的 docstring 正是该函数存在的全部理由，还骗过了一轮审计（审计报告据此写成「源码 grep 0 命中」，实际 3 处命中）。
+
+**代际检测仍必须用结构类名（col 类含 `sidebarCol`）＋ computed position，绝不能用 computed z-index**：检测跑在我们 CSS 还在场的时候，读到的 z 是我们自己压出来的值（当年是 40、现在是 1300），用 z 阈值检测会永久 false 形成死锁（2026-09-14 实测：z 阈值版探针 A1/A2 恒 FAIL）。手势层**零改动兼容**——手势 commit 本来就是 `ctx.layout.toggleSidebar()`（开=锁轴即 commit、关=inline 滑出落地后 commit），官方 absolute col 上 inline transform 照常工作；cdp-swipe-failures 16 场景实测 12 场景全过（composer 场景为探针脚本形状漂移，见 runbook）。主探针 7/9 与修复前同基线（mobile.open-control＝鲸鱼盖 toggle 的独立待决项）。升级对账点：`sidebarCol` 类子串（0.1.5 哈希 `pI_x6G_` 会变，升级后按 `docs/upstream/compat-contracts.json` 对账）。
 
 
 ---
@@ -137,7 +143,7 @@
 
 ## Files 面板（宿主 ui-sidebar-right）的顶行压在手机状态栏下（2026-09-14 修复）
 
-**现象**：手机上打开文件列表（右栏 Files 面板）后，面板顶部那一行——tab 标签、`+`（New tab）、Split、退出全屏——被状态栏压住。**机制**：这个面板是宿主自己的全屏 fixed sheet，`[data-sidebar-right-panel=fullscreen]` 的计算样式是 `position: fixed; inset: 0`（z-index 40，背景 `--dsw-alias-bg-base`），而宿主 CSS 里**没有任何 safe-area 处理**（对 `dsh-web-frontend/dist/assets/*.css` grep `safe-area-inset` 零命中）。插件既有的 safe-area 体系是给 frame 加 `padding-top: env(safe-area-inset-top)`（layout.css），但 fixed 元素的包含块是**视口**，不继承 frame 的内边距——面板是唯一漏网的固定全屏层，于是它 y=0…38 的顶行正好落在手机状态栏（实测 24–48px）底下。**修复**：在移动分支给面板本体吃 inset——`@media (max-width: 1023px) and (pointer: coarse)` 内加 `[data-sidebar-right-panel] { padding-top: env(safe-area-inset-top, 0px) !important }`。两个前提缺一不可：①面板自绘 `--dsw-alias-bg-base` 背景（实测 `rgb(255, 255, 255)`），状态栏那一条不露底、没有接缝；②面板是 border-box，padding 只把内容下推，面板本身仍铺满视口。**几何取证**（390×844 + touch emulation，CDP 读 `getBoundingClientRect` 取整；headless 的 `env(safe-area-inset-top)` 恒为 0，inset 用同值 inline `padding-top: 47px !important` 模拟）：inset=0 时面板 [0,0,390,844]、strip y=0、tab 标签 y=15、`+` y=10、Split y=10（右缘 348）、退出全屏 y=10（右缘 384）、paneBody [0,38,390,806]；inset=47 时面板仍 [0,0,390,844]、strip y=47、标签 y=62、`+` y=57、Split 与退出全屏 y=57（右缘仍是 348 / 384）、paneBody [0,85,390,759]。即整行**按 inset 精确下移**（0→47），右侧那组按钮依旧钉在右缘（退出全屏右缘 = 390−6），行内相对对齐不变（strip 与退出全屏的 y 差 −10 两态一致），面板 body 不溢出视口。**为什么不是给 frame 加内边距**：面板是 fixed 全屏层，frame 的内边距与它无关；把面板从 fixed 拉回文档流会与宿主的 fullscreen 形态打架，宿主升级即碎——只加面板自身一条 padding，最小且可逆。**验证**：回归锚点 `scripts/probes/files-panel-safe-area-probe.mjs`（18 断言：规则在场且在移动分支、宿主契约是 `position:fixed; inset:0` 全屏且自绘背景、模拟 inset 后整行下移而右缘不动、paneBody 不溢出），宿主改名或改形态即翻红。桌面零影响：规则在移动 media 块内，1280×720 `pointer: fine` 实测 `matchMedia('(max-width: 1023px) and (pointer: coarse)').matches === false`；Playwright 设备仿真（isMobile + hasTouch、390×844、DPR 2）独立复跑同一组几何断言全过。
+**现象**：手机上打开文件列表（右栏 Files 面板）后，面板顶部那一行——tab 标签、`+`（New tab）、Split、退出全屏——被状态栏压住。**机制**：这个面板是宿主自己的全屏 fixed sheet，`[data-sidebar-right-panel=fullscreen]` 的计算样式是 `position: fixed; inset: 0`（z-index 40，背景 `--dsw-alias-bg-base`），而宿主 CSS 里**没有任何 safe-area 处理**（对 `dsh-web-frontend/dist/assets/*.css` grep `safe-area-inset` 零命中）。插件既有的 safe-area 体系是给 frame 加 `padding-top: env(safe-area-inset-top)`（layout.css），但 fixed 元素的包含块是**视口**，不继承 frame 的内边距——面板是唯一漏网的固定全屏层，于是它 y=0…38 的顶行正好落在手机状态栏（实测 24–48px）底下。**修复**：在移动分支给**全屏形态**的面板本体吃 inset——`@media (max-width: 1023px) and (pointer: coarse)` 内加 `[data-sidebar-right-panel="fullscreen"] { padding-top: env(safe-area-inset-top, 0px) !important }`（形态限定不可省，理由见下节）。两个前提缺一不可：①面板自绘 `--dsw-alias-bg-base` 背景（实测 `rgb(255, 255, 255)`），状态栏那一条不露底、没有接缝；②面板是 border-box，padding 只把内容下推，面板本身仍铺满视口。**几何取证**（390×844 + touch emulation，CDP 读 `getBoundingClientRect` 取整；headless 的 `env(safe-area-inset-top)` 恒为 0，inset 用同值 inline `padding-top: 47px !important` 模拟）：inset=0 时面板 [0,0,390,844]、strip y=0、tab 标签 y=15、`+` y=10、Split y=10（右缘 348）、退出全屏 y=10（右缘 384）、paneBody [0,38,390,806]；inset=47 时面板仍 [0,0,390,844]、strip y=47、标签 y=62、`+` y=57、Split 与退出全屏 y=57（右缘仍是 348 / 384）、paneBody [0,85,390,759]。即整行**按 inset 精确下移**（0→47），右侧那组按钮依旧钉在右缘（退出全屏右缘 = 390−6），行内相对对齐不变（strip 与退出全屏的 y 差 −10 两态一致），面板 body 不溢出视口。**为什么不是给 frame 加内边距**：面板是 fixed 全屏层，frame 的内边距与它无关；把面板从 fixed 拉回文档流会与宿主的 fullscreen 形态打架，宿主升级即碎——只加面板自身一条 padding，最小且可逆。**验证**：回归锚点 `scripts/probes/files-panel-safe-area-probe.mjs`（21 断言：规则在场且在移动分支、**规则选择器确实命中活面板本体**、宿主契约是 `position:fixed; inset:0` 全屏且自绘背景、模拟 inset 后整行下移而右缘不动、paneBody 不溢出、停靠形态不被命中），宿主改名或改形态即翻红。桌面零影响：规则在移动 media 块内，1280×720 `pointer: fine` 实测 `matchMedia('(max-width: 1023px) and (pointer: coarse)').matches === false`；Playwright 设备仿真（isMobile + hasTouch、390×844、DPR 2）独立复跑同一组几何断言全过。
 
 ### 形态限定：只给 fullscreen 吃 inset，停靠形态必须排除（2026-09-14 补测）
 
@@ -326,3 +332,49 @@ hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session heade
 `scripts/probes/drawer-row-actions-probe.mjs`（13 断言）：长按出菜单（4 项含注入的「删除会话」）、**抬手后菜单与抽屉都在**、**菜单中心/两端的命中测试都落在菜单内**（4b——DOM-only 断言曾经在「菜单渲染了但被盖住」时全绿）、⋯ 点击只切菜单不关抽屉、确认卡 body 挂载 + 抽屉带上命中 + 真触摸「取消」可关、行点击仍导航并关抽屉、遮罩点击仍关抽屉。
 
 **遗留**：workspace（项目）行的 ⋯ 同样是 `:hover` 独占，本次只按用户报告修了会话行；项目行的长按是同一处的一行扩展，但项目菜单含「删除 workspace」，留给用户拍板。**上游建议**：给 `dsh-web-all` 的 `installMobileSidebarDismiss` 补上兄弟实现已有的 `_rowActions` 豁免，并把「点击吞掉」限制在真正需要收抽屉的目标上。
+
+## hero 空态输入框被压到宿主下限之下（2026-09-14 真机：滚动条 + 首行被裁）
+
+### ① 症状与实测
+
+新会话页（hero）的输入框「上下被压缩」并出现滚动条。390×844、touch、全新 profile、宿主 `@deepseek-ai/dsh` 0.1.5-rc.1、插件 bundle `d88fcfcdfb85` 实测：
+
+| 量 | 修前 | 修后 |
+|---|---|---|
+| 卡片 rect | `[16,464,356,84]` | `[16,451.9,356,108]` |
+| `_scroll`（`overflow-y:auto`）clientHeight / scrollHeight | 28 / 52 | 52 / 52 |
+| `_scroll` scrollTop | 24（自动聚焦把首行滚出去） | 0 |
+| 输入框高度 / 自身计算 min-height | 52 / 52px | 52 / 52px |
+| 提示 `[data-composer-placeholder]` | 折两行 48px，只露下面 28px | 完整可见 |
+
+输入框 rect `427.4..479.4` 落在 `_scroll` 可视带 `427.4..455.4` 之外 24px——「被压缩」的真身是**滚动窗口比内容矮**。
+
+### ② 根因：min-height 赢过外层 height，规则只压小了窗口
+
+插件移动分支 hero 块里有两条同族规则（`src/client/styles/misc.css.ts`）：①textarea 代（2026-09-05 前）`[data-phase="hero"] textarea:placeholder-shown{height:28px!important}` + `:has(textarea:placeholder-shown)` 命中 `_scroll`/`_grow` 的 `height:28px!important`；②Lexical 代镜像（commit `e1ea61d`，2026-09-05「fork port」）把同一条 collapse 复制到 `:has([data-composer-placeholder])` 形态上。
+
+宿主 0.1.2-rc.1 起换 Lexical 输入面（`[data-composer-input]`），并给 hero 输入框钉了自己的下限：`.uV2eYG_hero .uV2eYG_input { min-height: 52px }`（0.1.2-rc.1 与 0.1.5-rc.2 包内 CSS 都实测存在；hero 提示文案会折两行，宿主刻意留两行高）。**下限长在输入框自己身上，外层的 `height:28px !important` 只压得动容器**——`_scroll` 于是 28px 高、装着 52px 内容，`overflow-y:auto` 出滚动条；输入框自动聚焦又把 `scrollTop` 推到 24，可视带里既看不到提示首行也看不到输入首行。
+
+活页面取证：遍历 `document.styleSheets` 中 `ownerNode.dataset.plugin === 'dsh-web-mobile'` 的规则、按元素 `matches(selectorText)` 过滤——命中 composer `_scroll`/`_grow`/`[data-composer-input]` 的插件规则**只有这两条**，症状与插件规则的因果关系因此闭合（不是宿主自身的回归）。
+
+### ③ 为什么旧代规则是对的、新代镜像却不成立
+
+`@deepseek-ai/dsh-client-ui-conversation` 0.1.1-rc.2 的包内 CSS：`.uV2eYG_input{...width:100%;height:100%;color:#0000;-webkit-text-fill-color:transparent;...}` 且**没有** hero min-height；同版 `data-composer-placeholder` / `data-composer-input` 字符串**零命中**（直接读包内 JS 验证）。即：旧代输入框是铺在 `_scroll`/`_grow` 之上的透明 `height:100%` 层，容器压到 28px 它就跟着 28px——collapse 真的生效，用户当时看到的就是一行 hero。换代之后插件的镜像规则第一次真正落地，而下限把「压小」变成了「裁剪」。合成 fixture 里没有宿主下限，这正是该改动当年 11 断言全绿却漏网的原因。教训：**镜像到新一代的「压小」规则，必须对账宿主是否给该元素钉了自己的下限**。
+
+### ④ 修复
+
+删除 Lexical 代的两条镜像规则（textarea 代保留——那代无下限、规则有效，且随宿主换代自然惰性），原地留注释说明「为何不镜像」。hero 输入框回到宿主自己的两行高度：卡片 84→108px、`_scroll` 52/52 无溢出、`scrollTop` 0、提示与输入完整可见。修前先在活页面做过反事实（追加同特异度 `height:auto!important` 后测量 `_scroll` 52 == scrollHeight 52、`overflow:false`、`scrollTop:0`），确认几何因果再动源码。
+
+**同族检修清单**：任何「把宿主某元素压小」的规则，先确认该元素有没有自己的 `min-height` / `size` 下限；有下限时只能改尺寸以外的属性（padding/gap/字号），否则症状会从「变矮」变成「被裁 + 滚动条」。
+
+### ⑤ 回归锚点
+
+`scripts/probes/hero-composer-clip-probe.mjs`（12 断言，builtin-only 原生 CDP，支持 `DSH_PROBE_COOKIE`）。手机场景（390×844 + touch）：hero 卡片在场、移动分支 armed、`_scroll` 无溢出（clientHeight ≥ scrollHeight）、未滚动（scrollTop 0）、输入框完整落在可视带内、输入框高度不低于自身计算 min-height、提示完整可见、**匹配该链的插件规则没有一条声明 height**（这条直接钉住「不许再镜像 collapse」）；桌面场景（1280×720、关 touch）：同链条零插件规则命中、无溢出。修前 RED：`2.scroll-container-not-overflowing`（28/52）、`3.input-fully-visible`（越界 24px）、`5.no-plugin-rule-pins-the-chain`（点出两条规则）失败；修后 12/12 过。
+
+## 探针运行环境：cookie TTL、headless chromium 与 Playwright MCP（2026-09-14 实测定稿）
+
+**① `dsh-auth-*` cookie TTL 24h**：打需要认证的实例（3080/3098 直接 GET 是 401）时用启动日志里的 token URL 换 cookie（`curl -D -` 抄 `set-cookie`，`.local-tests/grab-cookie.mjs` 是本机做法），传 `DSH_PROBE_COOKIE=name=value`（探针走 `Network.setCookie`）。这份 cookie 与 Playwright MCP profile 里那份都会在 **24 小时后过期**，症状是页面直接 401「dsh web authentication required」——MCP 侧看起来像「页面启不来」，此时别怀疑插件：`node .local-tests/mint-cookie.mjs` 用 `~/.dsh/.credentials.yaml` 里 `client-connection/browser-session` 的持久密钥重签一份（自带自检：复算一个已知 cookie 的签名并打印），或重跑 grab-cookie 换新的。另：`?token=` URL 直接当 `DSH_PROBE_URL` 会让主探针永远 "page load timed out"（服务器 303 剥掉 query 后 `location.href` 是裸地址，而探针判据是 `href.startsWith(DSH_PROBE_URL)`）——正确姿势是 `DSH_PROBE_URL=http://127.0.0.1:<port>/` + 上面的 cookie。
+
+**② Termux 上 headless chromium**：必须给可写的 `TMPDIR` 与 `XDG_RUNTIME_DIR`（spawn env 指到 `~/tmp` 下自建目录），否则 ProcessSingleton 建 socket 失败报「Failed to create a ProcessSingleton」直接退出、CDP 端口永不上线。工具 exec 环境里 `$HOME` 可能为空（`mkdir -p $HOME/x` 会打到 `/tmp`）——env 一律用绝对路径。node 的 `spawn` 无法 exec `chromium-browser` 包装脚本（symlink → `chromium-launcher.sh`，libuv 拿 EACCES，而经 sh 跑同一脚本却正常），探针要用 `DSH_PROBE_CHROME=/data/data/com.termux/files/usr/lib/chromium/chrome` 直指真实 ELF（实测 750ms 就绪）。临时脚本与截图放 `~/tmp/` 用完清理。
+
+**③ Playwright MCP（本机已装，2026-09-14 实测）**：MCP 自带 Chromium（`~/.cache/ms-playwright/chromium-1232`，149.0.7827.155）在本机正常起浏览器并访问 `127.0.0.1` 的 DSH Web，设备仿真优先用它；仓库内脚本化回归仍走原生 CDP。用法：`browser_run_code_unsafe` 里 `browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })` + 从已有 context 复制 cookie + `addInitScript` 写 `localStorage['dsh.sessions.current']` 就是一台手机；被桌面布局隐藏的元素用 `document.querySelector(sel).click()` 而非 `page.click()`（后者要可见性检查，必失败）。两个环境前提：`~/tmp/pw-dsh-tmp` 必须先存在（否则 `mkdtemp ENOENT`），且该 Chromium 协议里没有 `Emulation.setSafeAreaInsets`（回 was not found）——inset 仍只能模拟。仓库内 `playwright-core` 的 registry 在 android 平台抛 `Unsupported platform: android`，所以脚本化回归的可行做法是：spawn 系统 chromium（`--headless=new --no-sandbox --disable-dev-shm-usage --remote-debugging-port=<port> --user-data-dir=<dir>`）+ fetch `/json` 取 `webSocketDebuggerUrl` + 原生 WebSocket 收发 CDP（`Page.navigate` / `Runtime.evaluate(returnByValue)` / `Input.dispatchMouseEvent` / `Page.captureScreenshot` / `Emulation.setDeviceMetricsOverride`），参考 `scripts/cdp-probe.mjs` 的 `createCdpClient`；会话注入在导航前用 `Page.addScriptToEvaluateOnNewDocument` 写 `localStorage['dsh.sessions.current']`。用它独立复跑过 Files 面板 safe-area 几何断言 13/13。

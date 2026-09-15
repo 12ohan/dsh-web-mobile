@@ -180,10 +180,12 @@ export const BASE_CSS = `
    The raise is gated on the open drawer: our backdrop makes that the only
    state in which a menu can be opened from the drawer, so the closed-drawer
    and desktop stacks keep the host's own ordering.
-   The plugin's own confirm card sits in the same band — it is appended to the
-   frame as a SIBLING of the drawer column and carried z 55/56, so the drawer
-   covered its left 272px (measured: elementFromPoint inside that band hit the
-   drawer's own button, and the confirm card is 358px wide starting at x=8). */
+   The plugin's own confirm card sits in the same band: it mounts on
+   document.body (NOT in the frame — see session-menu.ts, which appends the
+   backdrop and the card there so the third-party dismiss shim's capture-phase
+   click chain cannot swallow its buttons) and carried the base z 55/56, so the
+   drawer covered its left 272px (measured: elementFromPoint inside that band hit
+   the drawer's own button, and the confirm card is 358px wide starting at x=8). */
 @media (max-width: 1023px) and (pointer: coarse) {
   body:has([data-mobile-nav="frame"]:not([data-sidebar-collapsed])) [role="menu"] {
     z-index: 1400 !important;

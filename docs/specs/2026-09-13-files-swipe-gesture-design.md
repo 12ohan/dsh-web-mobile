@@ -27,6 +27,7 @@
 - Files 面板开着时，左缘右滑仍是「开抽屉盖到面板上」（现状不变）。
 - 关闭提交按**可见顶层**路由：抽屉开 → 收抽屉；否则 Files 开 → 关 Files 面板。
 - 无动作格子不写 consume、不进入提交，合成 click 正常派发（与抽屉非判定 stroke 同构）。
+- **抽屉开 + 右滑 = 抽屉关闭的门槛**：该格提交的是**抽屉关闭**，故沿用抽屉族的 `CLOSE_DISTANCE_RATIO = 0.13 × viewport` 或 `|velX| ≥ 0.45`（方向须与笔画一致）——两族对同一笔物理笔画判定一致。**不可省**：390px 下 files 区（x ≥ 214）与抽屉列（280px）重叠 66px，抽屉内容上的拇指在滚动时会横向漂 8px，无门槛即误收抽屉并吞掉这次 click（2026-09-14 质检发现，判定函数原本直接 `return 'close'`）。
 - **RTL 镜像**：files 区＝左缘 45%，左滑↔右滑语义整体镜像。
 
 ## 判定参数（全部镜像抽屉现值，标注可调）
@@ -60,7 +61,7 @@
 ## 让位与边界
 
 - 让位清单整链复用：cooldown / modal / takeover（taskboard、ssh、通用 `data-conversation-composer-overlay`）/ 划词选择 / `data-mobile-nav-dragging` / 悬浮窗形状启发式 / 横滚容器（**含 Files 面板内部的横滚条**——`chainFrom` 走真实祖先链，天然覆盖）。
-- Files 面板开态检测：`[data-sidebar-right-panel]` 在场（fullscreen 与停靠形态通吃；移动分支实际为 fullscreen）。
+- Files 面板开态检测：`[data-sidebar-right-panel]` 在场**且可见**——0.1.5 实测面板关闭时仍常驻 DOM（`visibility:hidden`、rect 顶到 `x=视口宽`），只查在场会把「双关+左滑=开面板」误判成无动作，故实现取 `sidebar-swipe.ts` 的 `filesPanelOpen()`：`visibility`/`display`/`rect.left < innerWidth` 三重判定（fullscreen 与停靠形态通吃；移动分支实际为 fullscreen）。
 - 抽屉开 + 右缘左滑＝无动作是刻意的：files 面板会渲染在抽屉（z-1100）之下不可见；用户规则「左滑永不收起」+「只有右滑能收」。
 - 已提交手势写 consume 标记（300ms，链上至 frame），防手势后的合成 click 误触释放点下的控件（发送键、行按钮等）——与抽屉同构。
 - 触摸流：files 模式与抽屉共用既有 `touchmove` preventDefault 守卫（锁轴前防浏览器抢走手势流，锁轴后保持至松手）。
