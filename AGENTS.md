@@ -36,7 +36,7 @@
   │  ├─ build-client.mjs     ← 自研客户端打包器
   │  ├─ cdp-probe.mjs        ← 主探针 32 断言（EXPECTED_FAILURES 基线）
   │  ├─ cdp-swipe-probe/failures · cdp-zoom-probe · cdp-compat-contracts (.mjs)
-  │  └─ probes/              ← 15 个回归锚点（builtin-only，可单跑）
+  │  └─ probes/              ← 17 个回归锚点（builtin-only，可单跑）
   ├─ tests/                  ← 14 个 .test.ts（node --test，type-stripping 直跑）
   ├─ docs/
   │  ├─ specs/               ← 7 篇权威设计文档（入库）
@@ -211,7 +211,7 @@ dsh web
 
 ## 维护入口
 
-- 回归探针：`scripts/probes/`（15 个回归锚点，node:builtin-only，可单跑；主探针 `pnpm smoke:cdp` 与手势门 `cdp-swipe-failures.mjs` 见 Commands）。
+- 回归探针：`scripts/probes/`（17 个回归锚点，node:builtin-only，可单跑；主探针 `pnpm smoke:cdp` 与手势门 `cdp-swipe-failures.mjs` 见 Commands）。
 - 设计 spec：`docs/specs/`（权威设计文档随仓库走）；`.local-tests/` 探针原稿、`docs/superpowers/` 与 `docs/debug/settings-market-debug-map.md` 仍是本地不入库。
 - CI：`.github/workflows/ci.yml`——verify → test:core → build → `git diff --exit-code lib`（lib 新鲜度门）。
 - 引擎底线：`package.json` engines `node >=24.0.0`（tests 依赖 Node 原生 TS type-stripping）。

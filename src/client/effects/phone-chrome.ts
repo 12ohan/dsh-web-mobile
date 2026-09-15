@@ -741,8 +741,17 @@ export function installOverlayInteractions(ctx: ClientContext): void {
           // to closing once the DOM shows a navigation landed when it cannot.
           const tappedId = tappedRowSessionId(row, event)
           if (tappedId === null) {
+            // Exactly one closer at a time: this tap closes through the DOM
+            // observer, so drop the store subscription an earlier resolved tap
+            // armed — its stale id would toggle the drawer again on landing.
+            disarmCloseOnNav()
             armNav()
           } else {
+            // The mirror case: this tap closes through the store, so drop the
+            // observer an earlier fallback tap armed — otherwise both fire on
+            // this one navigation (the observer on the selected-title change,
+            // the subscription on the landing) and race to toggle twice.
+            disarmNav()
             closeOnNavigation(tappedId)
             ctx.sessions.open(tappedId)
           }
