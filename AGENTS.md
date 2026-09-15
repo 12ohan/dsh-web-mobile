@@ -180,12 +180,12 @@ dsh web
 
 - **流式期每帧热点性能契约**：stats-line 快路径 `statsAnchorAlive`（失位先摘旧标记再回落慢路径，scopes 恒 `['*']`）；installed-list 观察者走 `core/raf-scheduler.ts` rAF 合并（flush 重验 mq，dispose cancel）；抽屉会话树 `content-visibility:auto` 为会话数增大后的渐进增强；arm-open 冻结治本在宿主（React 互斥子树同步挂载），插件 CSS 只能消 layout/paint 份额 → `docs/maintenance/pitfalls.md` §性能契约。
 
-- **宿主 Shiki 高亮止血 patch**：`tokenizeTimeLimit:0`（单块不限时）→ `100`ms，消除大 code 块高亮尖刺。文件：`~/../usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/index-ClqxG24t.js`（宿主前端是独立依赖 dsh-web-frontend 的 dist，发布包内无源码）。重放命令（宿主升级后，文件名 hash 可能变化，先 `grep -rl tokenizeTimeLimit` 重新定位）：`cp <file> ~/dsh-web-mobile/.local-tests/<name>.bak-pre-shiki && sed -i "s/tokenizeTimeLimit:0/tokenizeTimeLimit:100/" <file>`。备份在 `~/dsh-web-mobile/.local-tests/index-ClqxG24t.js.bak-pre-shiki`（恢复即还原）。已验证：served 生效 + 真 6.8MB 会话 boot 正常 phase=active；超时降级行为（超预算块变纯文本、内容完整）未在真块上实测——真机若见个别块无语法色即此降级，属预期，可调大数值。
+- **宿主 Shiki 高亮止血 patch**：`tokenizeTimeLimit` 0→100ms 消大块高亮尖刺 → `docs/maintenance/pitfalls.md` §Shiki 高亮止血 patch。
 
 - **npm 包改名边界（2026-08-30：dsh-mobile-nav → dsh-web-mobile）**：包名、patch 行 id/name、client loader id、served 路径 `/plugins/dsh-web-mobile/`、style dataset `data-plugin` 与 CSS 动画名（`dsh-web-mobile-fade/sheet-in/sheet-up`）全部随新名；**刻意不改**：DOM 标记 `data-mobile-nav="frame"` 族与 `?mobile-nav-debug=1` 参数（用户可见契约，保持短且已文档化）。旧 npm 名 dsh-mobile-nav（2.2.0/2.3.0）已整包 unpublish、不可恢复；DSHA 的 vendored 副本仍是 `@dsh-external/dsh-mobile-nav`（2.1.x 代），不影响其 APK 运行，等它 re-vendor 才对齐。仓库目录名保持 `~/dsh-mobile-nav` 不改（AGENTS/Shiki patch 备份路径引用它，改目录名会断链）。本机 profile 换新名需重跑 `dsh plugin --profile web add link:~/dsh-mobile-nav` 并重启 `dsh web`。旧名用户的迁移契约：**必须 rm 旧名 → add 新名，不能并存**——patch 行 id 随包名一起换了，两行 bundle 会让宿主把同一插件加载两份（style/slot/locale 双重注册，locale 重复注册直接抛错）；旧名 unpublish 后死依赖会毒化 profile 的所有后续 install（与 /root 机 dsh-api-dashboard 404 同机制），所以这是强制迁移而非可选更新；README 包名说明里已附迁移命令。
 
-- **消息字号只读长写 `--dsw-font-markdown-base-font-size`（`-base` 是 `font:` 简写）；守卫断源串，勿遍历 DOM 级联（`@keyframes` 处不可判别 → 断言空转仍绿）→ `docs/maintenance/pitfalls.md` §字号轴。
-- **只许一个抽屉 closer 武装**：`armNav()` 与 `closeOnNavigation()` 各自先 disarm 对方；`isTapWithinSlop` 逐轴 max-norm，勿改 `hypot` → `docs/maintenance/pitfalls.md` §两个 closer。
+- **消息字号只读长写 `--dsw-font-markdown-base-font-size`（`-base` 是 `font:` 简写）；守卫断源串，勿遍历 DOM 级联（遍历须先判 `selectorText`，否则容器上抛错）→ `docs/maintenance/pitfalls.md` §字号轴。
+- **只许一个抽屉 closer 武装**：`armNav()` 与 `closeOnNavigation()` 各自先 disarm 对方（disarm 即置 done，排队 `fire` 不再补 toggle）；`isTapWithinSlop` 逐轴 max-norm，勿改 `hypot` → `docs/maintenance/pitfalls.md` §两个 closer。
 
 ## Testing & QA
 

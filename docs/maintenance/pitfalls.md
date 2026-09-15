@@ -387,9 +387,9 @@ hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session heade
 
 **`font:` 复合简写 token 不能当 `font-size` 用**：`--dsw-font-markdown-base` 存的是 `尺寸 / 行高 字族` 三元组（`var(--dsh-content-font-size,14px) / calc(24px + var(--dsh-content-font-delta)) var(--dsw-font-family)`），`font-size: var(--dsw-font-markdown-base)` 是**非法声明**——解析器静默丢弃、级联回退到继承值，不报错也不生效。只有结尾 `-font-size` 的长写 token 可用；两个 token 只差一个后缀，抄错时症状是「写了字号但完全没变化」。
 
-### 守卫别遍历 DOM 级联：`@keyframes` 处没有判别依据
+### 守卫别遍历 DOM 级联：`@keyframes` 容器没有 `selectorText`
 
-「消息文字族不再硬编码 px」这类断言只有两条路能走：断**源模板串**（`LAYOUT_CSS`）配一个纯函数选择器配对器（`src/client/core/css-rules.ts`，零 import，`tests/css-rules.test.ts` 驱动），或真的去递归 `document.styleSheets`。后者在 `@keyframes` 处拿不到判别依据（Chromium 149 `CSSStyleSheet` 实测）：`CSSKeyframesRule` **没有** `selectorText`、**没有** `style`（读 `rule.style.cssText` 直接 `TypeError: Cannot read properties of undefined`），但它**有** `cssRules`；它的子规则 `CSSKeyframeRule` 反过来**有** `style` 却**没有** `selectorText`（只有 `keyText`，`from` → `"0%"`）。于是「按成员判断这是不是样式规则」的遍历只有两种下场：在容器上抛错中断（探针/审计里再套一层 try/catch 就变成**静默截断的规则集**，后面的 `@media` 规则永远不被访问），或把关键帧步骤当规则收进来（实测把 `opacity: 0;` 收成一条"规则"）。两种都让断言**空转且恒绿**。源级解析器有同族的两个反面：不剥整段 `@keyframes` 会把 `from`/`to` 这类非选择器混入块列表（Task 2 实测草稿 `blocks.length = 3`，应为 1）；反过来整块跳过 at-rule 则一条也匹配不到——`tests/css-rules.test.ts` 第一个测试把 `@keyframes` + `@media` 混合输入钉成「只许 1 个块」。**配套铁律**：`fontSizeFor` 返回 `null` 时必须大声失败（`assert.ok(hit !== null)`），否则「守卫什么都没查到」与「守卫通过」在输出上无法区分——草稿里 `:has(p)` 被近似成"元素本身是 p"，真实规则永远 `null`，正是这一类。
+「消息文字族不再硬编码 px」这类断言只有两条路能走：断**源模板串**（`LAYOUT_CSS`）配一个纯函数选择器配对器（`src/client/core/css-rules.ts`，零 import，`tests/css-rules.test.ts` 驱动），或真的去递归 `document.styleSheets`。后者绕不开 `@keyframes` 的容器判定（Chromium 149 `CSSStyleSheet` 实测）：`CSSKeyframesRule` **没有** `selectorText`、**没有** `style`（读 `rule.style.cssText` 直接 `TypeError: Cannot read properties of undefined`），但它**有** `cssRules`；它的子规则 `CSSKeyframeRule` 反过来**有** `style` 却**没有** `selectorText`（只有 `keyText`，`from` → `"0%"`）。于是「按成员判断这是不是样式规则」的遍历分三种形状：读 `.style.cssText` 前不判 `selectorText` → 在容器上抛错（探针/审计里套 try/catch 即变成**静默截断的规则集**，后面的 `@media` 规则永远不被访问）；以 `style` 是否存在收规则 → 把关键帧步骤当规则（实测把 `opacity: 0;` 收成一条"规则"，是**噪音/假阳**而非空转）；**先判 `selectorText`、按 `cssRules` 递归 → 安全**（容器与关键帧子规则都跳过、遍历照常前进；本仓库 `scripts/probes/files-panel-safe-area-probe.mjs` / `hero-composer-clip-probe.mjs` / `header-files-pin-probe.mjs` 就是这形状——`@keyframes` 在拼接表头部（base 先于 layout），它们照样跨过去命中 layout 的规则；`scripts/cdp-compat-contracts.mjs` 不按成员判别、只收 `cssText`，同样不受伤）。源级解析器有同族的两个反面：不剥整段 `@keyframes` 会把 `from`/`to` 这类非选择器混入块列表（Task 2 实测草稿 `blocks.length = 3`，应为 1）；反过来整块跳过 at-rule 则一条也匹配不到——`tests/css-rules.test.ts` 第一个测试把 `@keyframes` + `@media` 混合输入钉成「只许 1 个块」。**配套铁律**：`fontSizeFor` 返回 `null` 时必须大声失败（`assert.ok(hit !== null)`），否则「守卫什么都没查到」与「守卫通过」在输出上无法区分——草稿里 `:has(p)` 被近似成"元素本身是 p"，真实规则永远 `null`，正是这一类。
 
 ### 「守卫什么也没守」的同族第二例：正则对它要抓的字符串恒不匹配
 
@@ -406,3 +406,9 @@ hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session heade
 **`isTapWithinSlop` 是逐轴 max-norm，不是欧氏距离**（`|dx| <= slop && |dy| <= slop`，`TAP_NAV_SLOP_PX = 12`）：这是刻意取 `hypot` 圆盘的**超集**——`hypot` 会让斜向 tap 比轴向 tap 严格更难通过，而抽屉列表本身就是纵向滚动列表，真正要排除的是「纵向漂了一大段还停在行上」的滚动释放（同一次 45° 斜移 9px/9px：逐轴判据两轴都在 12px 内＝照常 tap，`hypot` 半径 12.7px 早已出界＝被当滚动丢掉）。**别把它"修正"成 `hypot`**。
 
 **锚点**：`scripts/probes/row-tap-no-click-probe.mjs`（7 断言、端口 9355、临时 profile `~/tmp/cdp-noclick-*`）。双场景共用同一 tap 几何：A 对照（不吞 click，证明探针几何真的驱动了宿主路径——A 红=整条 tap 路断了，A 绿+B 红=只是新分支坏了）+ B 在 document 捕获阶段对指向会话行的 click 做 `preventDefault + stopImmediatePropagation`（React 18 的事件委托挂在 root container 上，document 捕获早于它 —— 与 WebKit 根本没派发 click 对 React 等价），断言 5 计数「确实吞到了」以防 B 什么都没证明。**它证明不了真机 WebKit**：pointerup 次序、`pointercancel`、整体吞事件的 iOS 壳都在模拟范围之外。
+
+---
+
+## 宿主 Shiki 高亮止血 patch（本机配方：宿主升级后重放）
+
+**宿主 Shiki 高亮止血 patch（本机配方，2026-09-14）**：`tokenizeTimeLimit:0`（单块不限时）→ `100`ms，消除大 code 块高亮尖刺。文件：`~/../usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/index-ClqxG24t.js`（宿主前端是独立依赖 dsh-web-frontend 的 dist，发布包内无源码）。重放命令（宿主升级后，文件名 hash 可能变化，先 `grep -rl tokenizeTimeLimit` 重新定位）：`cp <file> ~/dsh-web-mobile/.local-tests/<name>.bak-pre-shiki && sed -i "s/tokenizeTimeLimit:0/tokenizeTimeLimit:100/" <file>`。备份在 `~/dsh-web-mobile/.local-tests/index-ClqxG24t.js.bak-pre-shiki`（恢复即还原）。已验证：served 生效 + 真 6.8MB 会话 boot 正常 phase=active；超时降级行为（超预算块变纯文本、内容完整）未在真块上实测——真机若见个别块无语法色即此降级，属预期，可调大数值。这是**本机对宿主 dist 的手改**，不是插件不变式：插件源码不含该改动，重装/升级宿主即失效，需按上面命令重做。
