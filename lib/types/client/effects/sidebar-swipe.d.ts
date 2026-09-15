@@ -40,6 +40,13 @@ export interface FilesThresholds {
     panelOpen: boolean;
     /** Drawer open at lock time. */
     drawerOpen: boolean;
+    /**
+     * Distance gate for the drawer-open rightward cell. That cell commits a
+     * DRAWER close, so it rides the drawer's own CLOSE_DISTANCE_RATIO (0.13),
+     * not the files panel's 0.16: one physical stroke must judge the same
+     * wherever it starts. Optional — defaults to `distanceRatio`.
+     */
+    drawerCloseDistanceRatio?: number;
 }
 /**
  * Pure decision for the FILES gesture (right-edge zone), the mirror twin of
@@ -52,8 +59,9 @@ export interface FilesThresholds {
  *   open drawer (z-1100) and be invisible, so the stroke is 'none' (the
  *   2026-09-13 narrowing: a leftward stroke NEVER collapses anything);
  * - rightward-logical strokes close the VISIBLE TOP: drawer open → 'close'
- *   (the animated commitFollowClose path, identical to today's right-zone
- *   close); else panel open → 'files'; else 'none'.
+ *   (the animated commitFollowClose path, gated on the drawer's own
+ *   distance/velocity thresholds so both families judge a stroke alike);
+ *   else panel open → 'files'; else 'none'.
  */
 export declare function classifyFilesSwipe(t: FilesThresholds, m: {
     dx: number;

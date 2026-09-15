@@ -304,12 +304,21 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     [class*="_scroll"]:not([class*="_scrollBody"]):not(:has([data-composer-input])):has(p) {
     padding-left: 20px;
     padding-right: 20px;
-    font-size: 15px !important;
+    /* Message text follows the host's own font-size axis (Settings -> 字号大小)
+       instead of a frozen phone constant. The host writes the user's choice to
+       <body> as --dsh-content-font-size and derives the longhand token
+       --dsw-font-markdown-base-font-size from it; the previous 15px !important
+       cut that chain at the container, so settings 12-17 did nothing for message
+       text while the host's own markdown blocks still moved — two sizes mixed in
+       one column (#52). Read the longhand token only: the other token ending in
+       -base is the font shorthand, an invalid font-size value that the parser
+       drops and the cascade silently falls back on. The fallback chain ends at
+       the host's own default axis value. */
+    font-size: var(--dsw-font-markdown-base-font-size, var(--dsh-content-font-size, 14px)) !important;
   }
-  /* The official markdown styles set an explicit 16px on paragraphs and
-     list items, so the container's inherited 15px is not enough. User
-     messages render their text in a div whose class carries _text_
-     (16px too) — cover it as well. */
+  /* Descendants only inherit: the host already resolves the same token on its
+     own markdown blocks (and its styles pin 16px on paragraphs / list items),
+     so a rule per p / li / user-message text would cut the axis a second time. */
   [data-phase]
     [class*="_scroll"]:not([class*="_scrollBody"]):not(:has([data-composer-input])):has(p) p,
   [data-phase]
@@ -318,7 +327,7 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     [class*="_scroll"]:not([class*="_scrollBody"]):not(:has([data-composer-input])):has(p) [
       class*="_text_"
     ] {
-    font-size: 15px !important;
+    font-size: inherit !important;
   }
 
   /* Markdown tables: the official table uses width:max-content, so on a phone
