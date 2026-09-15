@@ -19,6 +19,9 @@ test('findRuleBlocks descends into at-rules and keeps selector/body pairs', () =
 test('matchesSelectorText handles plain, class-substring and :has() arms', () => {
   assert.equal(matchesSelectorText('[class*="_scroll"]:has(p)', MESSAGE_P), true)
   assert.equal(matchesSelectorText('[class*="_scrollBody"]:has(p)', MESSAGE_P), false)
+  // The wrapped spelling this repo writes for long arms (layout.css.ts:327-329)
+  // must stay readable, or a px rule whose only subject arm is wrapped is invisible.
+  assert.equal(matchesSelectorText('[ class*="abc_scroll" ]', MESSAGE_P), true)
   assert.equal(matchesSelectorText('p', MESSAGE_P), true)
   assert.equal(matchesSelectorText('li', MESSAGE_P), false)
 })
@@ -26,6 +29,6 @@ test('matchesSelectorText handles plain, class-substring and :has() arms', () =>
 test('the message text family carries no hardcoded px font-size', () => {
   const hit = fontSizeFor(LAYOUT_CSS, MESSAGE_P)
   assert.ok(hit !== null, 'expected a message text rule to match the fixture')
-  assert.doesNotMatch(hit.value, /px$/, `hardcoded size in: ${hit.selector}`)
+  assert.doesNotMatch(hit.value, /^\s*[\d.]+px/, `hardcoded size in: ${hit.selector}`)
   assert.match(hit.value, /var\(/)
 })

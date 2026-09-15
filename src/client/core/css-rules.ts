@@ -16,8 +16,13 @@
 //    other arm ([data-…] presence, .dot-classes, :first-child, other attribute
 //    operators) cannot be falsified by a descriptor — as a leading token it is
 //    dropped (assumed satisfied), as an arm's SUBJECT it makes that arm
-//    unavailable. Combinators (>, +, ~) are dropped, so child and descendant
-//    are one relation here;
+//    unavailable. A class-fragment arm is read with or without inner spaces
+//    ([ class*="…" ] is the wrapped spelling this repo uses for long arms).
+//    Combinators (>, +, ~) are dropped, so child and descendant are one
+//    relation here;
+//  - only a `font-size` longhand declaration is read: a px size hidden in a
+//    `font:` shorthand is invisible to this reader, and so is `font-size`
+//    written with whitespace before the colon (`font-size : 15px`);
 //  - a `{` inside a declaration value (custom property, odd string) makes that
 //    one rule unreadable — a bogus prelude is reported instead of its selector
 //    — while the rest of the sheet still parses.
@@ -64,15 +69,17 @@ export function findRuleBlocks(css: string): CssRuleBlock[] {
 const COMBINATOR = new Set(['>', '+', '~'])
 const NOT_GROUP = /:not\((?:[^()]|\([^()]*\))*\)/g
 const HAS_TAG = /:has\(\s*([a-z][a-z0-9]*)\s*\)/g
-const CLASS_FRAGMENT = /\[class\*=\s*["']?([^"'\]\s]+)["']?\s*\]/g
-const HAS_CLASS_FRAGMENT = /\[class\*=/
+const CLASS_FRAGMENT = /\[\s*class\*=\s*["']?([^"'\]\s]+)["']?\s*\]/g
+const HAS_CLASS_FRAGMENT = /\[\s*class\*=/
 const TYPE_SELECTOR = /^[a-z][a-z0-9]*/
 
 /** One compound selector per whitespace-separated token, combinators dropped. */
 function tokensOf(arm: string): string[] {
   return arm
     .replace(NOT_GROUP, '')
-    .split(/\s+(?![^()]*\))/)
+    // Never split inside a `(…)` or `[…]` group: this repo wraps long class
+    // arms as `[ class*="…" ]`, and those inner spaces belong to one token.
+    .split(/\s+(?![^()]*\))(?![^\[]*\])/)
     .filter((token) => token !== '' && !COMBINATOR.has(token))
 }
 
