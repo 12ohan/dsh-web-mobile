@@ -749,7 +749,7 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   /* Running/subagent controls keep their full status text and hit area; they
      do not give up width to the mode label. NOTE: the real subagent lineage
      root has class="ZKlsPq_root " — a TRAILING SPACE from the plugin's
-     template-literal className — so [class*="_root"] never matches it. Use
+     template-literal className — so [class$="_root"] never matches it. Use
      [class*="_root"] and exclude the switcher root ([class*="_switcherRoot"])
      so only the count/job roots get pinned (the switcher must stay shrinkable
      so its own title can ellipsize). */
@@ -918,7 +918,7 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      running and idle descendants, so the guards below key on that root rather
      than the transient running-state dot — otherwise the row would reflow the
      moment agents go idle. Match roots with [class*="_root"] (the real class
-     carries a trailing space; [class*="_root"] matches nothing). */
+     carries a trailing space; [class$="_root"] matches nothing). */
   @media (max-width: 440px) {
     [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] {
       padding-right: 8px;
