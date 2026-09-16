@@ -201,10 +201,14 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
    clustered at the left edge with a large dead zone on the right. Cap and
    center the modal sheets and the aionui bottom sheets instead. */
 @media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
-  /* All modal dialogs: centered, never edge-to-edge. The settings sheet has
-     a higher-specificity full-width rule above, so repeat its selector here
-     to win; the generic export/other-modal rule is covered by the second
-     selector. */
+  /* Centered, never edge-to-edge — for the modal shapes below, not for every
+     modal dialog. Covered: modals that are not sheet-shaped, plus sheet-shaped
+     ones with neither a navigation element nor a directory picker. A modal
+     that is sheet-shaped AND carries the directory picker is left out on
+     purpose — layout.css.ts holds the dedicated rule for it. The settings
+     sheet has a higher-specificity full-width rule above, so repeat its
+     selector here to win; the generic export/other-modal rule is covered by
+     the second selector. */
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])),
   [aria-modal="true"]:not(:has(> :first-child > :last-child > button)) {
     left: 0 !important;

@@ -79,13 +79,14 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      dimmed backdrop already separates drawer from content. */
   /* These legacy column rules stay armed on every host generation: the phone
      owner prefers this drawer over the official overlay one (2026-09-13). The
-     official 0.1.5 drawer measures 321px wide at z-index:1100 and ships NO
-     full-screen backdrop, so the conversation beside it stays hit-testable -
-     the rejection reason. z-index:40 is below the host's 1100, but this rule
-     also forces position/inset/width on the same element, and the backdrop we
-     append is what carries the dimming; measured with the drawer open at 390px:
-     column [0,0,321,844], hit-test inside returns the drawer, and the backdrop
-     covers the rest of the screen. */
+     host's own drawer ships NO full-screen backdrop, so the conversation beside
+     it stays hit-testable - the rejection reason.
+     Layering contract: this column is 1300 and the backdrop 1250 (base.css),
+     both deliberately above the host's native sidebarCol at 1100. The earlier
+     value of 40 sat BELOW that 1100: because this same rule also forces
+     position/inset/width on the element, the column kept a correct-looking box
+     while neither painting nor hit-testing, which is the "all black, click
+     anywhere closes" root cause. The backdrop we append carries the dimming. */
   [data-mobile-nav="frame"] > :first-child {
     position: absolute !important;
     inset: 0 auto 0 0 !important;
@@ -103,7 +104,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        what the owner asked for over the previous 304. Going narrower is a
        one-line change, but it starts eating content. */
     width: min(88vw, 280px) !important;
-    max-width: 92vw;
     /* 1300 is a contract with base.css: the host pins its native sidebarCol at
        z-index:1100 and paints its mid layers up to that band, so the drawer must
        sit above the host stack AND above our own backdrop at 1250 (which dims
@@ -821,8 +821,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     display: none !important;
   }
   [data-mobile-nav="frame"] [data-phase] header [data-mobile-nav="files"] {
-    order: 3;
-    flex: 0 0 28px;
     width: 28px;
   }
   /* Session log download: gone from the header row on mobile (the utilities
@@ -920,9 +918,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      moment agents go idle. Match roots with [class*="_root"] (the real class
      carries a trailing space; [class$="_root"] matches nothing). */
   @media (max-width: 440px) {
-    [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] {
-      padding-right: 8px;
-    }
     /* The job label is the single widest tenant of the actions lane and the
        only one whose text is already carried elsewhere (aria-label + popover).
        Truncating it to a number instead would print the wrong count for a

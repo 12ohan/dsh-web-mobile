@@ -107,7 +107,8 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   /* The open drawer must never sit under a sheet: while the frame is in the
      narrow-expanded state both sheets yield (later in the file than the
      open marker rule, so it wins at equal specificity). The fullscreen
-     toggle has its own drawer-open rule at the end of its section. */
+     toggle is a descendant of this column, so it is hidden with the rest of
+     the column — there is no separate drawer-open rule for it. */
   [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) [data-aionui-explorer-col],
   [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) [data-aionui-preview-col] {
     visibility: hidden !important;
@@ -401,11 +402,6 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
      stays, flush right in the nav row. Desktop untouched (frame scoped). */
   [data-mobile-nav="frame"] [aria-modal="true"] [class*="_header"]:not([class*="_headerActions"]) [class*="_actions"] {
     display: none !important;
-  }
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_header"]:not([class*="_headerActions"]) [class*="_actions"] [class*="_action"]:not([class*="_actions"]) {
-    font-size: 13px !important;
-    padding: 6px 12px !important;
-    min-height: 0 !important;
   }
   /* Setting rows: text on top, control below at full width. Compound
      "_row*" families are excluded: the Models page names its whole card
