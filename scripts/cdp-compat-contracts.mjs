@@ -206,6 +206,11 @@ async function main() {
     signal.addEventListener('abort', () => client.close(signal.reason || new Error('aborted')), { once: true });
     await client.send('Page.enable');
     await client.send('Runtime.enable');
+    if (process.env.DSH_PROBE_COOKIE) {
+      const raw = process.env.DSH_PROBE_COOKIE
+      const eq = raw.indexOf('=')
+      await client.send('Network.setCookie', { name: raw.slice(0, eq), value: raw.slice(eq + 1), url: config.url })
+    }
     await client.send('Page.navigate', { url: config.url });
 
     await waitFor('page load complete', config.timeoutMs, signal, async () => {

@@ -32,12 +32,17 @@ export declare function installMobileEffect(ctx: ClientContext, label: string, i
 export declare function findFrame(): HTMLElement | null;
 /** Resolve the plugin-owned frame marker, falling back to the raw shell frame. */
 export declare function getFrame(): HTMLElement | null;
+export declare function ensureDismissShadow(): void;
 /**
  * Frame marker controller: owns `data-mobile-nav="frame"` and every plugin
  * marker that can survive on the shell-owned frame. Installed once at apply
  * time so effects no longer each need to find/set/clear the frame. Returns a
  * disposer that unregisters the task and resets the installed flag, so a
  * same-environment plugin reload can rebuild the reconciler from scratch.
+ * (The host-generation probe this controller used to call was dead code —
+ * nothing ever read `data-mobile-nav-gen`, and the plugin deliberately does
+ * not yield the drawer to the host's one: see docs/maintenance/pitfalls.md
+ * §0.1.5 抽屉 z 与遮罩.)
  */
 export declare function installFrameController(): () => void;
 /**
@@ -109,6 +114,12 @@ export declare function installPhoneChrome(ctx: ClientContext): void;
  *   ssh takeover entries, search results) closes the drawer so the content
  *   it opened gets the whole screen. Session-row action buttons (kebab) are
  *   excluded — they open a menu that must survive the tap.
+ *
+ * The touch close always rides the synthesized click. Closing a non-row
+ * target from pointerup collapsed the drawer before that click existed, and
+ * a collapsed drawer no longer owns the touch point, so the browser
+ * dispatched no click at all and the target's own onClick never ran (「新会话」
+ * did nothing but retract the drawer, 2026-09-13).
  */
 export declare function installOverlayInteractions(ctx: ClientContext): void;
 /**

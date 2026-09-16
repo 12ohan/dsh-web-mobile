@@ -293,6 +293,12 @@ async function runCoreScenario(client, config, signal, pageErrors) {
       frame: document.querySelector(${JSON.stringify(MOBILE_FRAME_SELECTOR)}) !== null,
     }))()`);
     return state.styleCount === 1 && state.frame ? state : null;
+  }).catch((error) => {
+    // Transient triage aid: dump the page state when boot never lands.
+    return client.evaluate(`(() => ({ phase: document.querySelector('[data-phase]')?.getAttribute('data-phase') ?? null, href: location.href, ready: document.readyState, styleCount: document.querySelectorAll('style').length, ourStyle: document.querySelectorAll('style[data-plugin="dsh-web-mobile"]').length, frame: document.querySelector('[data-mobile-nav="frame"]') !== null }))()`).then((dump) => {
+      console.error('BOOT-TIMEOUT DUMP:', JSON.stringify(dump));
+      throw error;
+    }, () => { throw error; });
   });
   pass('core.plugin-style', `count=${boot.styleCount}`);
   pass('mobile.frame-marker', 'present=true');
@@ -709,6 +715,11 @@ async function main() {
       source: `localStorage.setItem('dsh.sessions.current', ${JSON.stringify(currentSession)})`,
     });
     await setViewport(client, 390, 844, true);
+    if (process.env.DSH_PROBE_COOKIE) {
+      const raw = process.env.DSH_PROBE_COOKIE
+      const eq = raw.indexOf('=')
+      await client.send('Network.setCookie', { name: raw.slice(0, eq), value: raw.slice(eq + 1), url: config.url })
+    }
     await client.send('Page.navigate', { url: config.url });
 
     const waitForPageLoad = (label) => waitFor(label, config.timeoutMs, signal, async () => {

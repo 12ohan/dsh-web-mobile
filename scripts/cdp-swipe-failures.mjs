@@ -83,6 +83,11 @@ async function main() {
   // MOBILE_QUERY gates the mobile shell on (pointer: coarse); headless has no
   // pointer, so touch emulation must arm the mobile branch.
   await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
+  if (process.env.DSH_PROBE_COOKIE) {
+    const raw = process.env.DSH_PROBE_COOKIE
+    const eq = raw.indexOf('=')
+    await send('Network.setCookie', { name: raw.slice(0, eq), value: raw.slice(eq + 1), url: URL })
+  }
   await send('Page.navigate', { url: URL })
   await sleep(6000)
 
@@ -413,41 +418,74 @@ async function main() {
   //     实现会照常开抽屉并把选区拖没。判定改读 document.activeElement 的
   //     selectionStart/End，此处用真实 composer textarea 复现：聚焦 + 程序
   //     化选中前 20 字符，再走标准左缘打开手势。
+  // Composer 两代通吃：0.1.2-rc.1 起是 Lexical contentEditable（标记
+  // [data-composer-input]），更早的宿主才是 <textarea>。text control 的选区
+  // 只在 selectionStart/End 上可见且不出现在 document.getSelection() 里；
+  // contentEditable 走 DOM Range，两代都要复现"聚焦 + 选中前 20 字符"。
   const composerSelection = await evalv(`(() => {
-    const ta = document.querySelector('[data-phase] [class*="_card"]:has(textarea) textarea')
-    if (ta === null) return null
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
-    setter.call(ta, 'probe composer selection text for issue 44')
-    ta.dispatchEvent(new Event('input', { bubbles: true }))
-    ta.focus()
-    ta.setSelectionRange(0, 20)
+    const input = document.querySelector('[data-composer-input]') ||
+      document.querySelector('[data-phase] [class*="_card"]:has(textarea) textarea')
+    if (input === null) return null
+    input.focus()
+    if (input.tagName === 'TEXTAREA') {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
+      setter.call(input, 'probe composer selection text for issue 44')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.setSelectionRange(0, 20)
+    } else {
+      input.textContent = 'probe composer selection text for issue 44'
+      const range = document.createRange()
+      range.setStart(input.firstChild || input, 0)
+      range.setEnd(input.firstChild || input, 20)
+      const sel = document.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    const sel = document.getSelection()
     return {
-      focused: document.activeElement === ta,
-      start: ta.selectionStart,
-      end: ta.selectionEnd,
-      docCollapsed: document.getSelection().isCollapsed,
+      kind: input.tagName,
+      focused: document.activeElement === input,
+      start: input.tagName === 'TEXTAREA' ? input.selectionStart : sel.anchorOffset,
+      end: input.tagName === 'TEXTAREA' ? input.selectionEnd : sel.focusOffset,
+      docCollapsed: sel === null ? true : sel.isCollapsed,
     }
   })()`)
-  if (composerSelection === null) throw new Error('未找到 composer textarea')
+  if (composerSelection === null) {
+    record('E3 composer 内选区+标准打开手势(应让位不开抽屉, #44)', {
+      ok: false,
+      text: 'SKIP-REASON: 本宿主没有可注入选区的 composer 编辑面（既无 [data-composer-input] 也无 textarea）',
+    })
+    throw new Error('未找到 composer 编辑面（[data-composer-input] / textarea 均缺席）')
+  }
   await swipe(12, 400, 130, 400, 150)
   await sleep(700)
   const e3 = await state()
   const e3sel = await evalv(`(() => {
-    const ta = document.activeElement
-    if (ta === null || ta.tagName !== 'TEXTAREA') return { alive: false, start: null, end: null }
-    return { alive: ta.selectionStart !== ta.selectionEnd, start: ta.selectionStart, end: ta.selectionEnd }
+    const el = document.activeElement
+    if (el === null) return { alive: false, start: null, end: null }
+    if (el.tagName === 'TEXTAREA') return { alive: el.selectionStart !== el.selectionEnd, start: el.selectionStart, end: el.selectionEnd }
+    const sel = document.getSelection()
+    if (sel === null || el.isContentEditable !== true) return { alive: false, start: null, end: null }
+    return { alive: sel.isCollapsed === false && sel.rangeCount > 0, start: sel.anchorOffset, end: sel.focusOffset }
   })()`)
-  record('E3 textarea 内选区+标准打开手势(应让位不开抽屉, #44)', {
+  record('E3 composer 内选区+标准打开手势(应让位不开抽屉, #44, ' + composerSelection.kind + ')', {
     ok: e3.open === false && e3sel.alive === true,
     text: `open=${e3.open} (期望 false: activeElement 选区让位) 选区仍存活=${e3sel.alive} [${e3sel.start},${e3sel.end}] (期望 true: 拖手柄不被劫持) docCollapsed=${composerSelection.docCollapsed} (期望 true: 文档选区看不到 text control 选区，正是 #44 的根因)`,
   })
   await evalv(`(() => {
-    const ta = document.querySelector('[data-phase] [class*="_card"]:has(textarea) textarea')
-    if (ta === null) return
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
-    setter.call(ta, '')
-    ta.dispatchEvent(new Event('input', { bubbles: true }))
-    ta.blur()
+    const el = document.querySelector('[data-composer-input]') ||
+      document.querySelector('[data-phase] [class*="_card"]:has(textarea) textarea')
+    if (el === null) return
+    if (el.tagName === 'TEXTAREA') {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
+      setter.call(el, '')
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    } else {
+      el.textContent = ''
+      const sel = document.getSelection()
+      if (sel) sel.removeAllRanges()
+    }
+    el.blur()
   })()`)
   await ensureClosed()
   await sleep(500)
@@ -456,10 +494,12 @@ async function main() {
   //     选区"触发，聚焦输入框本身不能把边缘手势变聋（否则 autoFocus 的
   //     composer 会永久掐死打开手势）。
   await evalv(`(() => {
-    const ta = document.querySelector('[data-phase] [class*="_card"]:has(textarea) textarea')
-    if (ta === null) return
-    ta.focus()
-    ta.setSelectionRange(0, 0)
+    const el = document.querySelector('[data-composer-input]') ||
+      document.querySelector('[data-phase] [class*="_card"]:has(textarea) textarea')
+    if (el === null) return
+    el.focus()
+    if (el.tagName === 'TEXTAREA') el.setSelectionRange(0, 0)
+    else { const sel = document.getSelection(); if (sel) sel.collapse(el, 0) }
   })()`)
   await swipe(12, 400, 130, 400, 150)
   await sleep(700)

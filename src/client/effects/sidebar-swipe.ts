@@ -154,6 +154,26 @@ const COMMIT_ANIM_MS = 280
  * where CLOSED_SLOT_PCT is used verbatim. */
 const OPEN_FOLLOW_BASE_PCT = 101
 
+/**
+ * Files-panel (host right sidebar) gesture constants — the right-edge mirror
+ * of the drawer layer (spec 2026-09-13-files-swipe-gesture-design.md).
+ *
+ * FILES_ZONE_RATIO mirrors the drawer's START_ZONE_RATIO: a narrow strip
+ * cannot be used because Chrome Android's history-nav edge strip (~48dp)
+ * pointercancels strokes starting inside it — the same reason the drawer
+ * zone grew to 45% of the viewport.
+ */
+const FILES_ZONE_RATIO = 0.45
+/**
+ * Distance threshold as a fraction of the viewport width for BOTH files
+ * directions (≈62px on a 390px phone). The drawer's separate close ratio
+ * (0.13) exists because the close stroke follows into its slot; files
+ * strokes have no follow, so one ratio serves both directions.
+ */
+const FILES_DISTANCE_RATIO = 0.16
+/** px/ms velocity threshold for both files directions (drawer parity). */
+const FILES_VELOCITY = 0.45
+
 /** Pointer id we are tracking (multi-touch is ignored). */
 let trackingPointer = 0
 /** True once the stroke is axis-locked (direction bias passed). */
@@ -185,6 +205,23 @@ let openFollowArmed = false
 /** True once an open stroke has decided NOT to arm the follow (aborted arm:
  * a modal/takeover veto, a missing drawer) so it never retries mid-stroke. */
 let openFollowRefused = false
+
+/**
+ * Which gesture family owns the current stroke: 'drawer' = the sidebar
+ * gestures (every pre-existing behavior, untouched); 'files' = the
+ * right-edge files-panel gesture (no follow painting, host-panel commit).
+ * Written by beginStroke only; a fresh beginStroke always routes it.
+ */
+let strokeMode: 'drawer' | 'files' = 'drawer'
+/** Files-panel visibility at lock time (the mirror of lockDrawerOpen). */
+let lockFilesOpen = false
+/**
+ * The files-panel toggle injected at install (openFilesPanel: it toggles by
+ * the host's own control state, so open and close share one function).
+ * Module-level because endStroke is a module-level function; the default is
+ * a no-op so the node:test suite can import the module without a DOM.
+ */
+let filesToggleFn: () => boolean = () => false
 
 export interface SwipeThresholds {
   openDistanceRatio: number
@@ -239,6 +276,78 @@ export function classifySwipe(
   return velX >= t.openVelocity ? 'open' : 'none'
 }
 
+/** Threshold shape for the files classifier (pure, node:testable). */
+export interface FilesThresholds {
+  distanceRatio: number
+  velocity: number
+  lockPx: number
+  viewportWidthPx: number
+  /** Files panel mounted at lock time. */
+  panelOpen: boolean
+  /** Drawer open at lock time. */
+  drawerOpen: boolean
+  /**
+   * Distance gate for the drawer-open rightward cell. That cell commits a
+   * DRAWER close, so it rides the drawer's own CLOSE_DISTANCE_RATIO (0.13),
+   * not the files panel's 0.16: one physical stroke must judge the same
+   * wherever it starts. Optional — defaults to `distanceRatio`.
+   */
+  drawerCloseDistanceRatio?: number
+}
+
+/**
+ * Pure decision for the FILES gesture (right-edge zone), the mirror twin of
+ * classifySwipe. RTL mirrors the X axis exactly like classifySwipe. The
+ * verdict space extends the drawer's with `files` (the files-panel commit:
+ * open the panel on a leftward stroke when everything is closed, close it on
+ * a rightward stroke when it is open):
+ * - leftward-logical strokes only ever mean "open the panel" and fire ONLY
+ *   when panel and drawer are BOTH closed — the panel would mount under the
+ *   open drawer (z-1100) and be invisible, so the stroke is 'none' (the
+ *   2026-09-13 narrowing: a leftward stroke NEVER collapses anything);
+ * - rightward-logical strokes close the VISIBLE TOP: drawer open → 'close'
+ *   (the animated commitFollowClose path, gated on the drawer's own
+ *   distance/velocity thresholds so both families judge a stroke alike);
+ *   else panel open → 'files'; else 'none'.
+ */
+export function classifyFilesSwipe(
+  t: FilesThresholds,
+  m: { dx: number; dy: number; velX: number },
+  rtl: boolean,
+): 'open' | 'close' | 'files' | 'none' {
+  const dx = rtl ? -m.dx : m.dx
+  if (Math.abs(dx) <= t.lockPx) return 'none'
+  if (Math.abs(dx) <= Math.abs(m.dy)) return 'none'
+  const velX = rtl ? -m.velX : m.velX
+  if (dx < 0) {
+    if (t.panelOpen || t.drawerOpen) return 'none'
+    if (-dx / t.viewportWidthPx >= t.distanceRatio) return 'files'
+    // A fling only counts when it agrees with the stroke's own direction
+    // (the same contradiction guard classifySwipe applies).
+    if (velX > 0 !== dx > 0) return 'none'
+    return -velX >= t.velocity ? 'files' : 'none'
+  }
+  if (t.drawerOpen) {
+    // Same gates as the drawer family's close (classifySwipe), including its
+    // CLOSE_DISTANCE_RATIO: this cell IS the drawer-close commit path, so the
+    // two families must judge one physical stroke alike. Without the gate the
+    // files zone's 45% reaches ~66px into the open drawer column at 390px,
+    // where a thumb resting on a row drifts ~8px sideways while scrolling —
+    // that closed the drawer AND consumed the tap. The leftward cell beside the
+    // drawer is already 'none', so this is what makes the families agree.
+    const closeRatio = t.drawerCloseDistanceRatio ?? t.distanceRatio
+    if (dx / t.viewportWidthPx >= closeRatio) return 'close'
+    if (velX <= 0) return 'none'
+    return velX >= t.velocity ? 'close' : 'none'
+  }
+  if (t.panelOpen) {
+    if (dx / t.viewportWidthPx >= t.distanceRatio) return 'files'
+    if (velX > 0 !== dx > 0) return 'none'
+    return velX >= t.velocity ? 'files' : 'none'
+  }
+  return 'none'
+}
+
 /**
  * Recent-window instantaneous velocity (px/ms) from the tail of the last
  * `windowMs` milliseconds of samples, up to `now`. Sliding X per ms between
@@ -275,6 +384,21 @@ export function hitTestStart(
 ): boolean {
   const edge = rtl ? viewportWidthPx - clientX : clientX
   return edge >= 0 && edge <= t.startZonePx
+}
+
+/**
+ * Geometric start-hit test for the FILES gesture: the pointer went down in
+ * the RIGHT edge zone (RTL: LEFT) — the exact mirror of hitTestStart. Pure
+ * and viewport-relative.
+ */
+export function filesZoneHit(
+  clientX: number,
+  viewportWidthPx: number,
+  rtl: boolean,
+  zonePx: number,
+): boolean {
+  const edge = rtl ? clientX : viewportWidthPx - clientX
+  return edge >= 0 && edge <= zonePx
 }
 
 /**
@@ -392,6 +516,24 @@ function findDrawer(): HTMLElement | null {
 function drawerOpen(): boolean {
   const frame = getFrame()
   return frame !== null && !frame.hasAttribute('data-sidebar-collapsed')
+}
+
+/**
+ * True when the host's right sidebar files panel is currently VISIBLE (any
+ * form: fullscreen on phones, docked on tablets). Measured on 0.1.5: the
+ * panel element is persistent — the closed fullscreen form stays in the DOM
+ * at `visibility: hidden` with its rect pushed to x=viewport-width — so
+ * presence alone is not the panel-state read. Detect the open state by the
+ * three ways the host can hide it (visibility / display / pushed-off rect);
+ * a host without this panel keeps returning false and the explorer fallback
+ * applies.
+ */
+function filesPanelOpen(): boolean {
+  const panel = document.querySelector('[data-sidebar-right-panel]')
+  if (panel === null) return false
+  const cs = getComputedStyle(panel)
+  if (cs.visibility === 'hidden' || cs.display === 'none') return false
+  return panel.getBoundingClientRect().left < window.innerWidth
 }
 
 /**
@@ -698,7 +840,7 @@ function armOpenFollow(ctx: ClientContext): void {
  * `element.style.transform`.
  */
 function applyFollow(ctx: ClientContext, dx: number): void {
-  if (!tracking) return
+  if (!tracking || strokeMode !== 'drawer') return
   if (!lockDrawerOpen) {
     // OPEN direction: arm past the twitch threshold, then follow with the
     // percentage baseline (the element's width changes across the mount).
@@ -894,6 +1036,7 @@ function beginStroke(
   // drawer the same "scroller owns horizontal" semantics should hold.
   if (findHorizontalScroller(chainFrom(event.target)) !== null) return false
   const open = drawerOpen()
+  const filesZonePx = startZonePxFor(viewportWidthPx, FILES_ZONE_RATIO)
   if (open) {
     // Close strokes may start ANYWHERE over the frame (2026-08-29 sixth
     // round, user report 「希望打开抽屉之后以外的部分可以进行左滑」). The
@@ -903,6 +1046,17 @@ function beginStroke(
     // leftward verdict being refused, closing felt impossible. Nothing else
     // owns a horizontal stroke while the drawer is open (the conversation is
     // behind the backdrop), so the whole frame is fair game.
+    //
+    // 2026-09-13 narrowing (user decision): the RIGHT zone beside the drawer
+    // now belongs to the files gesture. Its leftward stroke must NOT close
+    // the drawer (the files panel would mount UNDER the drawer — z-1100 —
+    // and be invisible); its rightward stroke keeps the animated close via
+    // classifyFilesSwipe's 'close' verdict. The left zone / drawer content
+    // keeps every pre-existing drawer behavior. Drawer-mode follow painting
+    // only ever maps LEFTWARD (followTranslate's close branch), which is
+    // exactly the direction the narrowing removes from this zone — no close
+    // follow is lost by the routing (probe swipe.close-follow-reaches-slot
+    // was relocated into the drawer family accordingly).
     //
     // Tap-to-close on the backdrop is unaffected: a tap never reaches
     // tryLock, so endStroke returns on !wasTracking without writing a
@@ -915,7 +1069,12 @@ function beginStroke(
     if (event.clientY < rect.top || event.clientY > rect.bottom) return false
     // A session-row action menu (kebab) owns its own tap.
     if (event.target.closest('[class*="sessionRow"] button') !== null) return false
-  } else if (!hitTestStart(event.clientX, viewportWidthPx, rtl, { startZonePx: startZonePxFor(viewportWidthPx) })) {
+    strokeMode = filesZoneHit(event.clientX, viewportWidthPx, rtl, filesZonePx) ? 'files' : 'drawer'
+  } else if (hitTestStart(event.clientX, viewportWidthPx, rtl, { startZonePx: startZonePxFor(viewportWidthPx) })) {
+    strokeMode = 'drawer'
+  } else if (filesZoneHit(event.clientX, viewportWidthPx, rtl, filesZonePx)) {
+    strokeMode = 'files'
+  } else {
     return false
   }
   trackingPointer = event.pointerId
@@ -952,6 +1111,17 @@ function tryLock(event: PointerEvent): boolean {
   }
   tracking = true
   lockDrawerOpen = drawerOpen()
+  if (strokeMode === 'files') {
+    lockFilesOpen = filesPanelOpen()
+    // An OPEN drawer shares this stroke (the right-edge rightward close):
+    // bind the drawer's close follow so the commit animates exactly like
+    // today's right-zone close. applyFollow stays mode-guarded, so no follow
+    // ever paints for files strokes — the LEFTWARD narrowing stroke gets no
+    // painting either, which is the point (it must not drag the drawer).
+    if (lockDrawerOpen) startFollow()
+    markStrokeLocked()
+    return true
+  }
   // Publish the lock to the host handlers (see gesture-guard.ts): they run
   // EARLIER in this release event's capture phase, before endStroke writes
   // any consume mark — the flag is their only ordering-proof yield signal
@@ -998,6 +1168,13 @@ function endStroke(
   const armedOpen = openFollowArmed
   openFollowArmed = false
   openFollowRefused = false
+  // The stroke's mode and panel flag must be captured BEFORE reset(): reset()
+  // rewrites strokeMode to 'drawer' and clears lockFilesOpen, and the verdict
+  // below branches on them. Harmless for drawer strokes (whose mode already
+  // reads 'drawer'), fatal for files strokes — the verdict silently degraded
+  // to the drawer classifier and every files commit turned into 'none'.
+  const filesMode = strokeMode === 'files'
+  const filesOpenAtLock = lockFilesOpen
   // Velocity must be computed before reset() clears the samples.
   const vel = slidingVelocity(samples, VELOCITY_WINDOW_MS, event.timeStamp)
   // Distance is measured from the stroke START (not the axis-lock point):
@@ -1025,22 +1202,39 @@ function endStroke(
   const verdict =
     modal || (!armedOpen && onCooldown())
       ? ('none' as const)
-      : classifySwipe(
-          {
-            openDistanceRatio: OPEN_DISTANCE_RATIO,
-            closeDistanceRatio: CLOSE_DISTANCE_RATIO,
-            velocityWindowMs: VELOCITY_WINDOW_MS,
-            openVelocity: OPEN_VELOCITY,
-            closeVelocity: CLOSE_VELOCITY,
-            lockPx: LOCK_PX,
-            cooldownMs: COOLDOWN_MS,
-            startZonePx: startZonePxFor(viewportWidthPx),
-            viewportWidthPx,
-            drawerOpen: lockDrawerOpen,
-          },
-          { dx, dy, velX: vel },
-          rtl,
-        )
+      : filesMode
+        ? classifyFilesSwipe(
+            {
+              distanceRatio: FILES_DISTANCE_RATIO,
+              velocity: FILES_VELOCITY,
+              lockPx: LOCK_PX,
+              viewportWidthPx,
+              panelOpen: filesOpenAtLock,
+              drawerOpen: lockDrawerOpen,
+              // The drawer-open cell commits a drawer close, so it keeps the
+              // drawer's own close distance (the spec's "┍ identical to
+              // today's close").
+              drawerCloseDistanceRatio: CLOSE_DISTANCE_RATIO,
+            },
+            { dx, dy, velX: vel },
+            rtl,
+          )
+        : classifySwipe(
+            {
+              openDistanceRatio: OPEN_DISTANCE_RATIO,
+              closeDistanceRatio: CLOSE_DISTANCE_RATIO,
+              velocityWindowMs: VELOCITY_WINDOW_MS,
+              openVelocity: OPEN_VELOCITY,
+              closeVelocity: CLOSE_VELOCITY,
+              lockPx: LOCK_PX,
+              cooldownMs: COOLDOWN_MS,
+              startZonePx: startZonePxFor(viewportWidthPx),
+              viewportWidthPx,
+              drawerOpen: lockDrawerOpen,
+            },
+            { dx, dy, velX: vel },
+            rtl,
+          )
   // The mount-frame split must never survive into a terminal state: reveal
   // the contents (no-op unless armed this stroke) before any release or
   // commit animation.
@@ -1089,6 +1283,27 @@ function endStroke(
     ctx.layout.toggleSidebar()
     cooldownUntil = performance.now() + COOLDOWN_MS
   }
+  if (verdict === 'files') {
+    // The files-panel commit: open (both closed + leftward) or close (panel
+    // open + rightward). Toggle FIRST, then mark: the consume mark walks the
+    // stroke-start target's ancestors up to the FRAME, and the frame is also
+    // an ancestor of the host control the toggle clicks programmatically —
+    // marking first matches that very click through the shared upper chain
+    // segments and swallows it, so the panel never opens (0.1.5 live
+    // observation). The mark still covers the browser's own synthetic click,
+    // which is dispatched asynchronously after the release (the send button,
+    // a row button, … sit under the release point).
+    filesToggleFn()
+    markStrokeConsumed(event.target)
+    cooldownUntil = performance.now() + COOLDOWN_MS
+  }
+  if (filesMode && verdict === 'none') {
+    // A 'none' files release is still a gesture (panel open + leftward, or
+    // too short): consume its synthetic click so it cannot flip the panel
+    // through the host toggle under the release point. This must run AFTER
+    // the commit branches above, never before a programmatic toggle click.
+    markStrokeConsumed(event.target)
+  }
 }
 
 /**
@@ -1119,6 +1334,8 @@ function reset(): void {
   trackingPointer = 0
   tracking = false
   samples = []
+  strokeMode = 'drawer'
+  lockFilesOpen = false
   clearStrokeLocked()
 }
 
@@ -1129,8 +1346,9 @@ function frameRtl(): boolean {
 }
 
 /** Install the gesture layer for the current mobile breakpoint. */
-export function installSidebarSwipe(ctx: ClientContext): void {
+export function installSidebarSwipe(ctx: ClientContext, filesToggle: () => boolean): void {
   installMobileEffect(ctx, 'dsh-web-mobile: sidebar swipe gestures', () => {
+    filesToggleFn = filesToggle
     const viewportWidth = (): number =>
       window.innerWidth || document.documentElement.clientWidth || 0
 

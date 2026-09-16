@@ -7,7 +7,11 @@
  * The host menu is React-owned (ui-workspace) with no extension slot, so the
  * item is injected into the portaled `[role="menu"]` list by cloning the
  * host's own item markup (reusing the hashed classes keeps the styling
- * identical), and re-injected whenever React recreates the menu.
+ * identical), and re-injected whenever React recreates the menu. Two menu
+ * shapes are supported: rc.2 nests icon/label spans in the item, while 0.1.5
+ * renders the label directly in the item button (shared `_item_1nxmc_92`
+ * menu component, no child elements) — label reads and the injected text
+ * fall back across both.
  *
  * Row → session id: session rows carry no id in the DOM, so the session is
  * resolved from the client list by display title (the row's rendered title IS
@@ -20,7 +24,7 @@
  * `dsh-mobile-nav-*` names, which silently no-op).
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import { MOBILE_QUERY, TOUCH_QUERY, getFrame, installMobileEffect } from './phone-chrome.ts'
+import { MOBILE_QUERY, TOUCH_QUERY, installMobileEffect } from './phone-chrome.ts'
 
 // Mirrored from src/client/locales.ts: the custom client bundler cannot
 // resolve `../` requires from effects/. Keep in sync.
@@ -124,10 +128,22 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       return sameTitleGroupIds[sameTitleBefore]
     }
 
+    /**
+     * Read one menu item's visible label across host generations: rc.2 nests
+     * the text in an `_itemLabel` span (beside an `_itemIcon`), while 0.1.5
+     * puts it directly in the button (`_item_1nxmc_92`, no child elements).
+     * Falling back to the item's own textContent covers both — svg icons
+     * contribute no text, so rc.2 items read identically either way.
+     */
+    const itemLabel = (item: HTMLElement): string => {
+      const label = item.querySelector<HTMLElement>('[class*="_itemLabel"]')
+      return (label ?? item).textContent?.trim() ?? ''
+    }
+
     /** Whether a menu list is the host's per-session row menu. */
     const isSessionMenu = (menu: HTMLElement): boolean => {
-      const labels = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"] [class*="_itemLabel"]')]
-        .map(element => element.textContent?.trim() ?? '')
+      const labels = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .map(itemLabel)
       const rename = wsT('rename')
       const fork = wsT('menu.fork')
       const archive = wsT('menu.archiveSession')
@@ -146,10 +162,19 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       }
     }
 
-    /** Show the delete confirmation as a bottom card over the frame. */
+    /** Show the delete confirmation as a bottom card over the frame.
+     *  Mounted on <body>, NOT in the frame: the third-party mobile shim
+     *  (@linxin666/dsh-web-all) listens in the CAPTURE phase on the frame and,
+     *  while the drawer is open, answers every click inside the frame but
+     *  outside [data-pane="sidebar"] with preventDefault + stopPropagation.
+     *  A card inside the frame therefore had dead buttons — measured
+     *  2026-09-14: a real touch tap on 「取消」 left the card open, and only
+     *  Escape closed it. Body-level, the shim's listener never sees these
+     *  clicks (its sibling menus are portaled there for the same reason), and
+     *  the card's own band lives in base.css (z 1400/1401, above the drawer). */
     const showDeleteDialog = (sessionId: string, title: string): void => {
       closeDialog()
-      const frame = getFrame() ?? document.body
+      const host = document.body
       const backdrop = document.createElement('div')
       backdrop.dataset.mobileNav = 'delete-dialog-backdrop'
       const card = document.createElement('div')
@@ -232,15 +257,15 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
         if (wasCurrent && window.matchMedia(MOBILE_QUERY).matches) ctx.layout.toggleSidebar()
       })
 
-      frame.appendChild(backdrop)
-      frame.appendChild(card)
+      host.appendChild(backdrop)
+      host.appendChild(card)
       dialogHost = { backdrop, card }
     }
 
     /** Show a non-destructive error card (session could not be resolved). */
     const showError = (message: string): void => {
       closeDialog()
-      const frame = getFrame() ?? document.body
+      const host = document.body
       const backdrop = document.createElement('div')
       backdrop.dataset.mobileNav = 'delete-dialog-backdrop'
       const card = document.createElement('div')
@@ -260,8 +285,8 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       }
       document.addEventListener('keydown', onKey, true)
       closeDialogOnKey = onKey
-      frame.appendChild(backdrop)
-      frame.appendChild(card)
+      host.appendChild(backdrop)
+      host.appendChild(card)
       dialogHost = { backdrop, card }
     }
 
@@ -284,6 +309,14 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       if (label !== null) {
         label.textContent = navT('deleteSession')
         label.style.color = DANGER_COLOR
+      } else if (button.firstElementChild === null) {
+        // 0.1.5 shape: the menuitem button carries its text directly (no
+        // `_itemLabel` span, no icon element). Replace the whole text and let
+        // the danger color ride the button itself. A button WITH element
+        // children but no label span is an unknown future shape — leave its
+        // text alone rather than guess.
+        button.textContent = navT('deleteSession')
+        button.style.color = DANGER_COLOR
       }
       button.setAttribute('data-mobile-nav', 'session-delete')
       button.addEventListener('click', (event) => {

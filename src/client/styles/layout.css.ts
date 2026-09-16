@@ -77,15 +77,44 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      before) left 14px of the drawer plus a long 32px-blur shadow gradient
      visible along the left edge of the main UI. No box-shadow at all: the
      dimmed backdrop already separates drawer from content. */
+  /* These legacy column rules stay armed on every host generation: the phone
+     owner prefers this drawer over the official overlay one (2026-09-13). The
+     official 0.1.5 drawer measures 321px wide at z-index:1100 and ships NO
+     full-screen backdrop, so the conversation beside it stays hit-testable -
+     the rejection reason. z-index:40 is below the host's 1100, but this rule
+     also forces position/inset/width on the same element, and the backdrop we
+     append is what carries the dimming; measured with the drawer open at 390px:
+     column [0,0,321,844], hit-test inside returns the drawer, and the backdrop
+     covers the rest of the screen. */
   [data-mobile-nav="frame"] > :first-child {
     position: absolute !important;
     inset: 0 auto 0 0 !important;
-    width: max-content;
+    /* !important is load-bearing: the host ships
+       [data-dsh-frame] [data-pane="sidebar"] { width: min(88vw, 320px) !important }
+       under (max-width: 768px), which at 390px resolves to a flat 320px and
+       BEATS a plain declaration here - measured: our max-content never applied
+       and the column stayed 320px.
+       280 is the drawer's hard floor, measured by sweeping the column width from
+       304 down to 264: the inner surface is a FIXED 280px box and never
+       reflows, so every pixel below 280 is simply clipped off its right edge
+       (the list stays 270px at every width and its right edge sits at 278, so
+       270 and below cut into the list itself). At exactly 280 the panel is fully
+       intact - only the 12px of its right-hand padding is given up - which is
+       what the owner asked for over the previous 304. Going narrower is a
+       one-line change, but it starts eating content. */
+    width: min(88vw, 280px) !important;
     max-width: 92vw;
-    z-index: 40 !important;
+    /* 1300 is a contract with base.css: the host pins its native sidebarCol at
+       z-index:1100 and paints its mid layers up to that band, so the drawer must
+       sit above the host stack AND above our own backdrop at 1250 (which dims
+       the content area). At 40 the backdrop covered the drawer itself, so
+       opening it showed a full-screen dim with no drawer (measured 2026-09-13
+       at 390px: backdrop [0,0,390,844] z1250 over column [0,0,320,844] z40, and
+       elementFromPoint(40,300) returned the backdrop). Keep in sync with the
+       backdrop z in base.css. */
+    z-index: 1300 !important;
     transform: translateX(-110%);
     transition: transform .28s var(--ds-ease-in-out, ease-in-out);
-    background: var(--dsw-alias-bg-base, #ffffff);
     /* Keep the drawer's own content below the status bar / notch: the drawer
        spans the full frame height (its absolute containing block is the
        frame's padding box, so the frame's own safe-area padding does NOT
@@ -96,6 +125,22 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        reads cleanly, and the settings dialog (width:100% of this box) stays
        pixel-flush with the drawer. */
     border-right: none !important;
+  }
+  /* The drawer's inner surface is 280px wide while the column is 88vw/320px, so
+     the remaining 40px showed our own column background as a vertical strip
+     along the right edge (measured: content right edge 280, column 320; the
+     owner reported a white bar). The inner surface owns that band instead, so
+     the strip is filled by the drawer's real surface colour. */
+  /* The 40px band is a STACKING result, not a colour one: the drawer's inner
+     surface is only 280px wide (host markup), while our column is 320px and
+     carries z-index 1300 - so the column's own background paints OVER the
+     surface's right 40px. Pixel-verified from a screenshot with the drawer open:
+     x=10..270 rgb(249,250,251) (the surface) against x=285..315 rgb(255,255,255)
+     (our white column). Repainting the column with the surface's own value makes
+     the seam invisible whatever the theme does; the surface underneath keeps its
+     own colour for the 280px it does cover. */
+  [data-mobile-nav="frame"] > :first-child {
+    background: var(--dsw-alias-bg-surface, #f9fafb);
   }
 
   /* Expanded state (frame without data-sidebar-collapsed) slides the drawer in.
@@ -125,6 +170,59 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      pan-y here would cancel the root's pinch permission. */
   [data-mobile-nav="frame"] > :first-child {
     touch-action: pan-y pinch-zoom !important;
+  }
+
+  /* The host's own drawer handle. It renders the branded fish glyph (a 24x17
+     path in a 23.16x17.04 viewBox) and the phone owner reads it as a stray
+     "whale" sitting at the very top-left of the header: measured [10,14,44,44]
+     against our own toggle at [8,12,28,28], i.e. the two overlap in the same
+     corner. It also duplicates what our toggle already does, so on the mobile
+     branch it is removed. The selector keys on the host's own label - the
+     element carries no distinguishing class (hHd-Xa_iconButton is shared with
+     every other icon button, and the label flips to "Collapse sidebar" when the
+     drawer is open, which is why the attribute prefix matches both states and
+     both get removed). Nothing in this plugin queries that element; the drawer
+     still opens from our toggle, the edge swipe, and closes by tapping the
+     backdrop or swiping it away. */
+  /* Two selectors and both are needed. The host re-asserts the handle with
+     [data-dsh-frame][data-sidebar-collapsed] [data-pane="sidebar"]
+     [data-dsh-responsive-part="sidebar-toggle"] { display: inline-flex
+     !important } under (max-width: 768px) - a higher-specificity !important
+     than a plain frame-scoped rule, so matching the host's own stable hook AND
+     nesting under the frame is what actually wins. Matching it exactly only
+     TIES on specificity (both 4 attribute selectors) and ties are decided by
+     sheet order, which flips on injection timing - so the first selector mirrors
+     the host's ancestor chain too and simply out-specifies it. The hash class
+     and the label stay as fallbacks for hosts without that hook. */
+  [data-mobile-nav="frame"][data-sidebar-collapsed] [data-pane="sidebar"] [data-dsh-responsive-part="sidebar-toggle"],
+  [data-mobile-nav="frame"] [data-dsh-responsive-part="sidebar-toggle"],
+  [data-mobile-nav="frame"] [class*="hHd-Xa_toggle"]:is([aria-label*="sidebar" i], [aria-label*="侧边栏"]),
+  [data-mobile-nav="frame"] button[aria-label*="sidebar" i],
+  [data-mobile-nav="frame"] button[aria-label*="侧边栏"] {
+    display: none !important;
+  }
+
+  /* The host's own right sidebar IS the Files panel on phones, and the host
+     pins it as a fixed full-bleed sheet: [data-sidebar-right-panel=fullscreen]
+     carries position:fixed; inset:0 and no inset of its own (the host CSS
+     never mentions safe-area at all). Its top row - the tab strip holding the
+     tab label, the + button and the Split / Exit-fullscreen pair at the right
+     edge - therefore sat UNDER the status bar: measured at 390x844 with the
+     panel open, the strip is [0,0,390,38] and the phone's status bar owns the
+     top of the screen. The frame's own safe-area padding cannot reach it: a
+     fixed element's containing block is the viewport, not the frame's padding
+     box. Taking the inset as padding keeps the panel's own --dsw-alias-bg-base
+     covering the whole viewport (no seam behind the status bar) and drops the
+     entire row below it, with the right-hand buttons still on the right edge.
+     ONLY the fullscreen form: the host's docked form (measured at 820x1180 -
+     form=push, position:absolute, 365px right-anchored) has the frame's
+     padding box as its containing block, so it already starts below the
+     status bar; padding it too would add the inset a second time. A host
+     generation that renames the form value should fail the probe loudly
+     instead of silently double-padding. The rule lives in the mobile branch,
+     so desktop keeps the host layout. */
+  [data-sidebar-right-panel="fullscreen"] {
+    padding-top: env(safe-area-inset-top, 0px) !important;
   }
 
   /* prefers-reduced-motion: the drawer's .28s slide is motion; drop it
@@ -206,12 +304,21 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     [class*="_scroll"]:not([class*="_scrollBody"]):not(:has([data-composer-input])):has(p) {
     padding-left: 20px;
     padding-right: 20px;
-    font-size: 15px !important;
+    /* Message text follows the host's own font-size axis (Settings -> 字号大小)
+       instead of a frozen phone constant. The host writes the user's choice to
+       <body> as --dsh-content-font-size and derives the longhand token
+       --dsw-font-markdown-base-font-size from it; the previous 15px !important
+       cut that chain at the container, so settings 12-17 did nothing for message
+       text while the host's own markdown blocks still moved — two sizes mixed in
+       one column (#52). Read the longhand token only: the other token ending in
+       -base is the font shorthand, an invalid font-size value that the parser
+       drops and the cascade silently falls back on. The fallback chain ends at
+       the host's own default axis value. */
+    font-size: var(--dsw-font-markdown-base-font-size, var(--dsh-content-font-size, 14px)) !important;
   }
-  /* The official markdown styles set an explicit 16px on paragraphs and
-     list items, so the container's inherited 15px is not enough. User
-     messages render their text in a div whose class carries _text_
-     (16px too) — cover it as well. */
+  /* Descendants only inherit: the host already resolves the same token on its
+     own markdown blocks (and its styles pin 16px on paragraphs / list items),
+     so a rule per p / li / user-message text would cut the axis a second time. */
   [data-phase]
     [class*="_scroll"]:not([class*="_scrollBody"]):not(:has([data-composer-input])):has(p) p,
   [data-phase]
@@ -220,7 +327,7 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     [class*="_scroll"]:not([class*="_scrollBody"]):not(:has([data-composer-input])):has(p) [
       class*="_text_"
     ] {
-    font-size: 15px !important;
+    font-size: inherit !important;
   }
 
   /* Markdown tables: the official table uses width:max-content, so on a phone
@@ -482,12 +589,62 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
 
   /* --- Session header on mobile ---
      Keep the host-owned metadata in one responsive row. The conversation
-     title and running/subagent status keep their lanes; the mode text is the
-     first to ellipsize when space runs out, while Files keeps its hit area. */
+     title, the mode text and the running/subagent status all keep their
+     words; the one tenant that yields width when a phone runs out of it is
+     the background-job trigger's verbose label ("1 background job running"),
+     while Files keeps its hit area. */
+  /* Both !important flags are load-bearing. The host's session-controller sheet
+     ships [data-dsh-frame] [data-dsh-responsive-part="conversation-header"] with
+     padding-left: 60px !important under (max-width: 768px), so a plain
+     declaration here loses however specific it is: measured 2026-09-13 at
+     390px, the computed padding-left stayed 60px and the title still began at
+     x=100 with our rule present, matching and later in source order. The value
+     is 0 because our own toggle already occupies that left seat (painted at
+     x=8-36), so the host reservation is pure dead space on a phone. */
   [data-mobile-nav="frame"] [data-phase] header {
-    padding-left: 16px;
-    padding-right: 8px;
+    padding-left: 0 !important;
+    padding-right: 8px !important;
   }
+  /* Header popovers resolve against the header, not against their 28px flow
+     box. 0.1.5's background-job chip anchors its menu with
+     position:absolute; top:calc(100% + 5px) inside .QsffPG_root
+     {position:relative} — a 28px-tall chip — so the menu was laid out at
+     x=-16 (our right:8px resolved against that 156px chip root) and then
+     clipped twice: by our own overflow:hidden on the chip root and by the
+     host's [data-dsh-responsive-part="session-title-cluster"]
+     {overflow:hidden}. The chip still reported aria-expanded=true with
+     nothing painted and nothing hit-testable: measured 2026-09-14 at 390px,
+     menu rect [-16,49,336,40], elementFromPoint at its centre returned the
+     view tabs row. A positioned header plus a static chip root puts the same
+     menu at [46,77,336,73] — inside the viewport, its rows hit-testable, and
+     an outside tap still dismisses it (menus 1 -> 0).
+     BOTH halves are load-bearing: forcing the chip root static without
+     positioning the header moves the containing block out to the frame, and
+     the menu lands at x=8 y=849 — past the 844px viewport (A/B 2026-09-13).
+     Scoped to the header actions slot, so the subagent lineage root inside
+     the crumbs keeps its own anchored, fixed-position menu. */
+  [data-mobile-nav="frame"] [data-phase] header {
+    position: relative !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) {
+    position: static !important;
+  }
+  /* The tab strip is a separate grid item from the title row and does not
+     inherit the title row's inset, so after the header padding above went to 0
+     it sat flush against the bezel (measured: tablist x=0, first tab 0..30
+     while the title starts at 40). Give it the same left inset as the toggle so
+     the two rows read as one column. */
+  [data-mobile-nav="frame"] [data-phase] header > [class*="wSkVaW_tabs"] {
+    padding-left: 8px !important;
+  }
+  /* NOTHING extra here on purpose. The header's own padding is already forced
+     to 0 above, and the title row carries padding-left:40px of its own, so the
+     title lands at x=40 - the toggle's right edge (36) plus 4px. A negative
+     margin added on top of that over-corrected and pulled the title off the
+     left edge (measured 2026-09-13: crumb x=20, and the string's first glyph
+     painted partially outside the viewport), so the reclaim lives in exactly
+     one place: the header padding. */
+
   [data-mobile-nav="frame"] [data-phase] header > :first-child {
     display: flex !important;
     align-items: center;
@@ -495,7 +652,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     width: 100%;
     min-width: 0;
     gap: 2px;
-    padding-left: 20px;
+    /* Just enough for the toggle (28px at left:8 -> right edge 36) plus 4px of
+       breathing room; the host's 60px rail reservation is neutralised above. */
+    padding-left: 40px;
   }
   [data-mobile-nav="frame"] [data-phase] header > :first-child > :first-child {
     display: flex !important;
@@ -511,13 +670,25 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     top: 12px !important;
     z-index: 2 !important;
   }
-  /* Files remains in flow and is ordered as the rightmost plugin action. */
+  /* The files opener is pinned to the header's right corner, mirroring the
+     directory toggle on the left (same 8px edge, same 12px seat). In flow it
+     can never reach that corner: the host reserves the last 44px of the title
+     cluster for a utilities seat that is EMPTY on mobile - measured at 390px,
+     headerUtilities sits at x=374 with width 0 while the title cluster carries
+     padding-right: 44px - so the button stopped at x=300..328 and left 62px of
+     bare header to its right (2026-09-14 phone-side report: the opener is not
+     pinned to the top-right corner). Absolute positioning also returns its
+     28px of flow width to the title lane, and the containing block is the same
+     one the toggle resolves against, so both controls shift together with the
+     frame's safe-area padding. The 44px reservation itself is trimmed to the
+     28px band this button actually paints in the compact-rows block below, so
+     the title lane keeps the difference. */
   [data-mobile-nav="files"] {
-    position: static !important;
+    position: absolute !important;
+    right: 8px !important;
     left: auto !important;
-    right: auto !important;
-    top: auto !important;
-    z-index: auto !important;
+    top: 12px !important;
+    z-index: 2 !important;
   }
   [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] {
     display: flex !important;
@@ -532,22 +703,34 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   }
   /* The title takes the remaining width and never paints outside it; the
      metadata lane's mode text is what shrinks first. */
+  /* min-width is a readable floor (2026-09-13 phone report: the title showed a
+     single glyph then an ellipsis). This lane has flex basis 0, so it is the
+     first thing every crowding neighbour eats: measured at 320px with a lineage
+     chip in the row, the crumb client width collapsed to 16px and NOTHING of
+     the title was painted. 30% of the row keeps 2-4 CJK glyphs plus the host's
+     own ellipsis whatever else is pinned next to it. */
   [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] {
     flex: 1 1 0;
-    min-width: 0;
+    min-width: 30%;
     max-width: none;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap !important;
   }
-  /* Mode label: preserve its icon and scale with the viewport — it yields
-     space to the title and subagent status first, but can use more width on
-     wider screens up to 220px before ellipsizing. */
+  /* Mode label: keep the icon AND the words. On a phone this chip is the only
+     mode switcher there is, so its text is not the surplus it was once
+     treated as: the longest preset name measured needs 121px including the
+     18px icon seat, while the old cap min(22vw, 220px) allowed just 85.8px at
+     390px — the text was clipped at every phone width even before the
+     crowding rules below pinned it to the icon alone (2026-09-14 phone
+     report: the mode label showed only its glyph). 38vw keeps the label whole
+     from 320px up and still lets it ellipsize before the title on wider
+     screens. */
   [data-mobile-nav="frame"] [data-phase] header [class*="_label"]:has(> svg) {
     order: 1;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: min(22vw, 220px);
+    max-width: min(38vw, 220px);
     display: block;
     position: relative;
     box-sizing: border-box;
@@ -570,13 +753,36 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      [class*="_root"] and exclude the switcher root ([class*="_switcherRoot"])
      so only the count/job roots get pinned (the switcher must stay shrinkable
      so its own title can ellipsize). */
+  /* Pinned (flex 0 0 auto) with a max-width cap. A shrinkable chip is squeezed
+     below its content and the count reads as clipped or overwritten (the
+     2026-08-22 report), while a bare max-content pin eats the session title,
+     whose flex basis is 0: measured 2026-09-13 at 320px, the crumb went 68px
+     -> 16px and the painted title was EMPTY while the chip kept its full text.
+     Pinned + capped + the crumbs min-width floor above is what holds both —
+     the title ellipsizes, the count keeps its words, and the hit area stays
+     one inline-flex button.
+     NOTE: the popover containment lives with the header rules above, which
+     force this root position:static. That only works together with the
+     positioned header: static on its own moved the containing block out to
+     the frame and the menu landed at x=8 y=849, past the 844px viewport
+     (A/B 2026-09-13). */
   [data-mobile-nav="frame"] [data-phase] header [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) {
     order: 2;
     flex: 0 0 auto;
-    min-width: max-content;
-    max-width: max-content;
+    min-width: 0;
+    max-width: min(40vw, 180px);
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap !important;
-    position: static;
+  }
+  [data-mobile-nav="frame"] [data-phase] header [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) > button {
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-mobile-nav="frame"] [data-phase] header [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) > button > * {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   [data-mobile-nav="frame"] [data-phase] header [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) > button,
   [data-mobile-nav="frame"] [data-phase] header [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) > button * {
@@ -588,6 +794,30 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      between ancestry segments (subagent sessions) is a real separator and
      stays. */
   [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] [class*="_separator"] {
+    display: none !important;
+  }
+  /* The header's right-hand slot clips its own dropdown away (0.1.5 host bug).
+     wSkVaW_headerUtilities is a 44x44 grid cell with overflow:auto, and the host
+     mounts its "More actions" menu INSIDE it: the menu is 218x52, so the cell
+     clipped it to 44x44 and the menu was never painted and never hit-testable
+     (measured: menu rect 156,56 218x52, computed flex/visible/opacity 1, yet
+     elementsFromPoint at the item centre returned the view tabs row and nothing
+     from the menu). Raising the menu z-index cannot help - the cell's own
+     stacking context traps it. Releasing the overflow paints the menu where the
+     host positioned it, and the item then works (verified: a real tap opening
+     the session-log export dialog, menus 1 -> 0 dialogs 1). Scoped to the mobile
+     branch and to this one cell, so desktop keeps the host layout. The section
+     is hidden on mobile anyway - the drawer footer carries the same action - but
+     the release stays for any plugin that registers a header dropdown here. */
+  [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_headerUtilities"] {
+    overflow: visible !important;
+    /* The seat is empty on a phone (its only button is hidden just below) yet
+       still 44px tall, which floors the whole title row — see the compact-rows
+       block after the tab strip. */
+    height: 30px !important;
+    min-height: 0 !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_headerUtilities"] [class*="nL4_yW_moreButton"] {
     display: none !important;
   }
   [data-mobile-nav="frame"] [data-phase] header [data-mobile-nav="files"] {
@@ -635,37 +865,76 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     white-space: nowrap;
     scroll-snap-align: start;
   }
+  /* Compact session header rows (2026-09-14 phone report: the top is very
+     empty). The host's own mobile sheet lays the header out as
+     grid-template-rows: minmax(32px, auto) minmax(44px, auto) with
+     [role="tab"] { min-height: 44px }, and both rows then grow to 44: the
+     title row is floored by the empty utilities seat above, the tab row by the
+     buttons' own floor. Measured at 390px: header 97px = 8 padding + 44 + 44 +
+     1 border, for 36px of painted content. Capping the rows at 36/32 and the
+     tabs at their own content height gives 77px, with nothing else degraded —
+     title, mode text, status chips, chevrons and both pinned corner buttons
+     keep their measured geometry, and the tab strip keeps its #41 contract
+     (horizontal scroll, 16px gap, whole labels, pan-x).
+     The host's 8px padding-top is deliberately kept: the title row's 28px
+     content then centres at y=26, exactly the centre of the pinned corner
+     controls (toggle and Files opener both sit at top:12, 28px tall). Trimming
+     that padding to 4 shaved 4 more px but left the text row visibly riding
+     above both buttons (2026-09-14 phone report: the text row sits too high
+     against the drawer and Files controls), so the row height is what pays for
+     the compaction, not the alignment.
+     :has(> *) guards the hero header: it is an EMPTY, host-hidden grid that
+     still occupies 85px while the composer is laid out under it. In the hero
+     the header has 0 element children, so the guard leaves it at its official
+     height — measured, the hero composer rect [0,349,388,231] is identical
+     with and without this block. */
+  [data-mobile-nav="frame"] [data-phase] header:has(> *) {
+    min-height: 0 !important;
+    grid-template-rows: minmax(36px, auto) minmax(32px, auto) !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header [role="tab"] {
+    min-height: 32px !important;
+  }
+  /* The title cluster reserves its last 44px for that empty utilities seat,
+     while our Files opener only paints a 28px band at right:8 — so 18px of the
+     reservation is dead space the title lane can have. Trimming it to 26px
+     hands the title 18px back (measured at 390px with a lineage chip present:
+     crumb 64 -> 82px) and still clears the opener by 8px (actions right edge
+     346 against button left edge 354, with the button keeping its hit test). */
+  [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_titleCluster"] {
+    padding-right: 26px !important;
+  }
   /* Header crowding on narrow phones.
-     A background-job trigger in the header actions, or the subagent lineage
-     count ("N 个子代理") living inside the crumbs nav, consumes the width the
-     mode label would otherwise use. This squeezes the crumbs nav so hard that
-     the subagent count is clipped by the nav's overflow:hidden — the text
-     looks overwritten and the trigger's right edge stops being reliably
-     tappable. Mode text is the lowest-priority item, so it is compressed
-     first. The lineage root (dsh-client-ui-subagent) sits in the crumbs for
-     BOTH running and idle descendants, so we key the guards on that root
-     rather than the transient running-state dot — otherwise the count gets
-     clipped again the moment agents go idle. Match roots with
-     [class*="_root"] (the real class carries a trailing space; [class*="_root"]
-     matches nothing). */
+     Three tenants want the same row: the session title, the mode chip and the
+     status chips. The status chips are the only ones whose words are
+     redundant — the background-job chip keeps its state dot, its chevron and
+     its aria-label, and the popover above now lists the jobs — so the job
+     trigger's verbose label ("1 background job running") is what yields. The
+     mode chip is the only mode switcher a phone has and the title is the only
+     session identity, so both keep their words and the title ellipsizes
+     instead (measured 2026-09-14 at 390px with a lineage chip present: after
+     this the mode label keeps 101px of text and the crumb 135px).
+     The lineage root (dsh-client-ui-subagent) sits in the crumbs for BOTH
+     running and idle descendants, so the guards below key on that root rather
+     than the transient running-state dot — otherwise the row would reflow the
+     moment agents go idle. Match roots with [class*="_root"] (the real class
+     carries a trailing space; [class*="_root"] matches nothing). */
   @media (max-width: 440px) {
     [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] {
       padding-right: 8px;
     }
-    [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"]:has([class*="_root"]) [class*="_label"]:has(> svg),
-    [data-mobile-nav="frame"] [data-phase] header:has([class*="_crumbs"] [class*="_root"]) [class*="_label"]:has(> svg) {
-      max-width: 18px;
-      min-width: 18px;
-      padding-left: 18px;
-      padding-right: 0 !important;
+    /* The job label is the single widest tenant of the actions lane and the
+       only one whose text is already carried elsewhere (aria-label + popover).
+       Truncating it to a number instead would print the wrong count for a
+       double-digit job list, so it is dropped whole — dot, chevron and tap
+       target stay. */
+    [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) [class*="_count"] {
+      display: none !important;
     }
   }
-  /* When the subagent lineage (any state) AND a background job are present
-     together, even the mode icon is not enough room by itself. Keep the full
-     subagent count (the reported-overwritten text) by compacting the job
-     trigger to its dot/chevron, and keep mode icon-only so the crumbs nav can
-     also hold a small right-hand gap — the subagent text should never sit
-     flush against the mode component. */
+  /* With the subagent lineage (any state) AND a background job present
+     together, 390px cannot hold the title, the mode words, the lineage count
+     and the job label at once; the job label goes first, above 440px too. */
   @media (max-width: 559px) {
     [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] {
       padding-right: 8px;
@@ -673,13 +942,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     [data-mobile-nav="frame"] [data-phase] header:has([class*="_crumbs"] [class*="_root"]) [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) [class*="_count"] {
       display: none !important;
     }
-    [data-mobile-nav="frame"] [data-phase] header:has([class*="_crumbs"] [class*="_root"]):has([class*="_headerActions"] [class*="_root"]) [class*="_label"]:has(> svg) {
-      max-width: 18px;
-      min-width: 18px;
-      padding-left: 18px;
-      padding-right: 0 !important;
-    }
   }
+  /* Last resort on 320px-class screens: the title and both status chips cannot
+     share the row with the mode words, so the mode chip keeps only its icon. */
   @media (max-width: 359px) {
     [data-mobile-nav="frame"] [data-phase] header:has([class*="_crumbs"] [class*="_root"]):has([class*="_headerActions"] [class*="_root"]) [class*="_label"]:has(> svg) {
       display: none !important;
@@ -687,11 +952,18 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   }
 
   /* --- Header popovers on mobile (dsh-client-ui-jobs / dsh-client-ui-subagent) --- */
-  /* The official entries sit in the session header actions. Their popovers
-     are anchored to the trigger's left edge, so clamp them to the viewport. */
+  /* Both entries sit in the session header and both anchor their panel to the
+     trigger's left edge (left:0 inside their own root), so clamp them to the
+     viewport. The background-job menu resolves against the header (see the
+     containment rules at the top of this section) and the subagent lineage
+     menu is position:fixed, so right:8px pins either panel 8px from the
+     phone's right edge: measured [46,77,336,73] for the job menu and
+     [38,41,336,58] for the lineage menu at 390px, both fully inside the
+     viewport. Do NOT clamp with left:8px: measured, that put the panel at
+     x=350..686 (off-screen) against a right-anchored x=30..366. */
   [data-mobile-nav="frame"] [data-phase] header [class*="_menu"] {
-    left: 8px !important;
-    right: auto !important;
+    left: auto !important;
+    right: 8px !important;
     width: min(336px, calc(100vw - 16px));
     max-width: none;
     max-height: min(420px, calc(100dvh - 120px));

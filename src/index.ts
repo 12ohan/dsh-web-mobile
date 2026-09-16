@@ -71,6 +71,14 @@ function respond(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload)
 }
 
+/**
+ * Plugin name, per the official minimal plugin shape (name + apply). The patch
+ * row in cordis.patch.yml carries the same id, so nothing resolves through this
+ * value in this repo; it labels the runtime record and is what the documented
+ * form declares. Kept in sync with package.json name.
+ */
+export const name = 'dsh-web-mobile'
+
 export function apply(ctx: HostContext): void {
   // Transparent gzip/brotli for large JSON responses (long-session history
   // is megabytes on a phone). Patches http.ServerResponse.prototype; the

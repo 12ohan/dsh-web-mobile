@@ -112,6 +112,11 @@ async function main() {
     await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 3, mobile: touch })
     // maxTouchPoints 必须 >=1，关触摸时也不能传 0（CDP 直接报错）。
     await send('Emulation.setTouchEmulationEnabled', { enabled: touch, maxTouchPoints: touch ? 5 : 1 })
+    if (process.env.DSH_PROBE_COOKIE) {
+      const raw = process.env.DSH_PROBE_COOKIE
+      const eq = raw.indexOf('=')
+      await send('Network.setCookie', { name: raw.slice(0, eq), value: raw.slice(eq + 1), url: URL })
+    }
     await send('Page.navigate', { url: URL })
     for (let i = 0; i < 60; i++) {
       const ready = await evalv('document.readyState === "complete" && !!document.querySelector("[data-phase]")')

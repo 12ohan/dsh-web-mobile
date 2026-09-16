@@ -1,5 +1,6 @@
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { consumeIfGestured, isStrokeLocked } from './gesture-guard.ts'
+import { findSessionIdInFiber, isTapWithinSlop, reactFiberOf } from './session-row-fiber.ts'
 import { createReconcilerCore } from '../core/reconciler-core.ts'
 import type { ReconcilerTask } from '../core/reconciler-core.ts'
 import { createPreviewCloseTask, createSheetRiseTask } from './aionui-compat.ts'
@@ -36,6 +37,33 @@ export const DESKTOP_QUERY = '(min-width: 1024px)'
  *  layout but still gets the 「删除会话」 item. Mouse-driven or pointer-less
  *  windows never arm it, at any width. */
 export const TOUCH_QUERY = '(pointer: coarse)'
+
+/** Long press on a session row opens its ⋯ menu — the phone equivalent of the
+ *  desktop hover that reveals the row actions (the host renders them with
+ *  `display: none` until `:hover` or `menuOpen`, neither of which touch ever
+ *  reaches). Long enough to be deliberate, short enough to read as a context
+ *  menu. */
+const LONG_PRESS_MS = 500
+/** Pointer travel that cancels a long press (the swipe layer locks at 8px). */
+const LONG_PRESS_MOVE_PX = 10
+/** How long the lift may not close the menu the press opened: the host menu
+ *  closes on pointerleave, and the finger lift itself fires one. */
+const LONG_PRESS_MENU_GUARD_MS = 1200
+/** Window in which the press's own synthesized click is swallowed, so the lift
+ *  neither navigates the row nor collapses the drawer. */
+const LONG_PRESS_CLICK_SWALLOW_MS = 800
+/** Finger-down to finger-up travel that still counts as a tap on a session row
+ *  (#49). Per-axis (`isTapWithinSlop` is max-norm, not Euclidean): the drawer
+ *  list scrolls vertically, so a 60px vertical drift must not navigate while a
+ *  diagonal wobble still reads as a tap. */
+const TAP_NAV_SLOP_PX = 12
+
+/** Where the current touch started (null for a mouse, and between touches).
+ *  The no-click row-tap fallback resolves the row's session id at pointerup and
+ *  only when the finger stayed put, so every touch pointerdown records this
+ *  BEFORE any early return — a missed record silently disables the whole
+ *  fallback. Cleared by the effect's disposer. */
+let touchDownAt: { x: number; y: number } | null = null
 
 /**
  * Re-arm a mobile-only DOM effect on every query change. Replaces the
@@ -76,12 +104,55 @@ export function getFrame(): HTMLElement | null {
   return document.querySelector('[data-mobile-nav="frame"]') ?? findFrame()
 }
 
+/** The third-party mobile compat shim shipped inside `@linxin666/dsh-web-all`
+ *  collapses the drawer on ANY click inside `[role="treeitem"]` at ≤768px by
+ *  clicking the host's logo-row toggle — with no `_rowActions` exemption, so a
+ *  tap on a row's ⋯ closed the drawer instead of opening its menu (2026-09-14;
+ *  its sibling implementation inside `@linxin666/dsh-remote-web-ui` does exempt
+ *  the row actions). It resolves that toggle with
+ *  `frame.querySelector('[data-dsh-responsive-part="sidebar-toggle"]')`, so an
+ *  inert element carrying the same stamp EARLIER in tree order turns every one
+ *  of its dismiss calls into a no-op and leaves dismiss ownership to us (row
+ *  taps close through the navigation observer, backdrop taps through the
+ *  capture click path). Gated on the shim's own stamp: hosts without it stay
+ *  untouched. */
+const HOST_TOGGLE_SELECTOR = '[data-dsh-responsive-part="sidebar-toggle"]:not([data-mobile-nav])'
+const DISMISS_SHADOW_SELECTOR = '[data-mobile-nav="dismiss-shadow"]'
+
+export function ensureDismissShadow(): void {
+  if (typeof document === 'undefined') return
+  const shadow = document.querySelector<HTMLElement>(DISMISS_SHADOW_SELECTOR)
+  const real = document.querySelector<HTMLElement>(HOST_TOGGLE_SELECTOR)
+  const pane = real?.closest<HTMLElement>('[data-pane="sidebar"]') ?? null
+  if (real === null || pane === null) {
+    shadow?.remove()
+    return
+  }
+  // Must stay a no-op once in place: the reconciler observes the whole tree and
+  // a task that mutates on every flush would re-trigger itself forever.
+  if (shadow !== null && shadow.parentElement === pane && pane.firstElementChild === shadow) return
+  const element = shadow ?? document.createElement('span')
+  if (shadow === null) {
+    element.setAttribute('data-mobile-nav', 'dismiss-shadow')
+    element.setAttribute('data-dsh-responsive-part', 'sidebar-toggle')
+    element.setAttribute('aria-hidden', 'true')
+    // The shim's collapsed-rail rule forces `display: inline-flex !important`
+    // on anything carrying the stamp; only an inline !important outranks it.
+    element.style.setProperty('display', 'none', 'important')
+  }
+  pane.insertBefore(element, pane.firstElementChild)
+}
+
 /**
  * Frame marker controller: owns `data-mobile-nav="frame"` and every plugin
  * marker that can survive on the shell-owned frame. Installed once at apply
  * time so effects no longer each need to find/set/clear the frame. Returns a
  * disposer that unregisters the task and resets the installed flag, so a
  * same-environment plugin reload can rebuild the reconciler from scratch.
+ * (The host-generation probe this controller used to call was dead code —
+ * nothing ever read `data-mobile-nav-gen`, and the plugin deliberately does
+ * not yield the drawer to the host's one: see docs/maintenance/pitfalls.md
+ * §0.1.5 抽屉 z 与遮罩.)
  */
 export function installFrameController(): () => void {
   if (frameControllerInstalled) return () => {}
@@ -95,6 +166,7 @@ export function installFrameController(): () => void {
       if (frame !== null && !frame.hasAttribute('data-mobile-nav')) {
         frame.setAttribute('data-mobile-nav', 'frame')
       }
+      ensureDismissShadow()
     },
     dispose: () => {
       if (frame !== null) {
@@ -102,6 +174,9 @@ export function installFrameController(): () => void {
         frame.removeAttribute('data-mobile-preview-full')
         frame.removeAttribute('data-aionui-explorer-open')
         frame.removeAttribute('data-aionui-preview-open')
+      }
+      if (typeof document !== 'undefined') {
+        document.querySelector(DISMISS_SHADOW_SELECTOR)?.remove()
       }
       frame = null
     },
@@ -349,6 +424,12 @@ export function installPhoneChrome(ctx: ClientContext): void {
  *   ssh takeover entries, search results) closes the drawer so the content
  *   it opened gets the whole screen. Session-row action buttons (kebab) are
  *   excluded — they open a menu that must survive the tap.
+ *
+ * The touch close always rides the synthesized click. Closing a non-row
+ * target from pointerup collapsed the drawer before that click existed, and
+ * a collapsed drawer no longer owns the touch point, so the browser
+ * dispatched no click at all and the target's own onClick never ran (「新会话」
+ * did nothing but retract the drawer, 2026-09-13).
  */
 export function installOverlayInteractions(ctx: ClientContext): void {
   installMobileEffect(ctx, 'dsh-web-mobile: drawer close (Escape + navigate)', () => {
@@ -389,6 +470,38 @@ export function installOverlayInteractions(ctx: ClientContext): void {
     let navObserver: MutationObserver | null = null
     let navTimer: number | null = null
 
+    // Touch has no hover, so the host's `_rowActions` — the ⋯ menu anchor —
+    // never shows up: only `:hover` and `menuOpen` reveal it. Long press is the
+    // phone gesture for "row actions", so we drive the host's own ⋯ button and
+    // hold the drawer open around it. The host menu closes on pointerleave,
+    // which the finger lift itself fires, and that lift still synthesizes a
+    // click on the row: both need guarding.
+    let pressTimer: number | null = null
+    let pressOrigin: { x: number; y: number } | null = null
+    let pressRow: HTMLElement | null = null
+    let pressFired = false
+    let menuGuardUntil = 0
+    let swallowClickUntil = 0
+    let swallowClickRow: HTMLElement | null = null
+
+    const clearPress = (): void => {
+      if (pressTimer !== null) window.clearTimeout(pressTimer)
+      pressTimer = null
+      pressOrigin = null
+      pressRow = null
+      pressFired = false
+    }
+
+    const openRowMenu = (row: HTMLElement): void => {
+      // A menu already on screen owns the gesture (host touch path, another
+      // plugin's long press); clicking the anchor again would close it.
+      if (document.querySelector('[role="menu"]') !== null) return
+      const button = row.querySelector<HTMLButtonElement>('[class*="_rowActions"] button')
+      if (button === null) return
+      menuGuardUntil = performance.now() + LONG_PRESS_MENU_GUARD_MS
+      button.click()
+    }
+
     const selectedRowSignature = (): string | null => {
       const selected = drawerRoot()?.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]')
       const title = selected?.querySelector<HTMLElement>('[class*="_title"]')
@@ -428,17 +541,139 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       navTimer = window.setTimeout(disarmNav, 2000)
     }
 
+    /** Whether the session list really knows an id. The fiber walk has no
+     *  shape heuristic on purpose: hop 32 of a row's chain is a ScopeProvider
+     *  whose `props.scope` is the literal 'session-maybe', and
+     *  `ctx.sessions.open` fails loud on unknown ids — membership is the only
+     *  filter that can never hand the host a guess. */
+    const isKnownSessionId = (id: string): boolean => {
+      const snapshot = ctx.sessions.list.getSnapshot()
+      return snapshot.byId[id] !== undefined
+    }
+
+    /** The session a finished tap on `row` should open, or null to fall back to
+     *  the DOM observer: no finger-down record, a release that travelled (a
+     *  scroll or a swipe, not a tap), a fiber chain offering no known id, or a
+     *  row that is already the current session. */
+    const tappedRowSessionId = (row: Element, event: PointerEvent): string | null => {
+      if (touchDownAt === null) return null
+      if (!isTapWithinSlop(touchDownAt, { x: event.clientX, y: event.clientY }, TAP_NAV_SLOP_PX)) return null
+      const id = findSessionIdInFiber(reactFiberOf(row), isKnownSessionId)
+      if (id === null) return null
+      return ctx.sessions.list.getSnapshot().current === id ? null : id
+    }
+
+    // Close the drawer once the navigation we started ourselves lands (#49).
+    // `armNav` watched the drawer's *selected row* change, but when WebKit drops
+    // the tap's click the row's own onClick never runs, so that signal never
+    // arrives — the store is the honest source of "navigation happened".
+    let closeOnNavUnsub: (() => void) | null = null
+    let closeOnNavDone = false
+
+    /** Disarming means spent: mark the close done before dropping the
+     *  subscription, so a `fire` a subscription tick already queued cannot
+     *  toggle the drawer after the close was handed to the other closer. */
+    const disarmCloseOnNav = (): void => {
+      closeOnNavDone = true
+      closeOnNavUnsub?.()
+      closeOnNavUnsub = null
+    }
+
+    const closeOnNavigation = (id: string): void => {
+      disarmCloseOnNav()
+      closeOnNavDone = false
+      const fire = (): void => {
+        if (closeOnNavDone) return
+        disarmCloseOnNav()
+        if (drawerOpen()) toggleSidebar()
+      }
+      closeOnNavUnsub = ctx.sessions.list.subscribe(() => {
+        if (ctx.sessions.list.getSnapshot().current !== id) return
+        window.setTimeout(fire, 0)
+      })
+    }
+
+    const onDrawerPointerDown = (event: PointerEvent): void => {
+      touchDownAt = event.pointerType === 'touch' || event.pointerType === 'pen'
+        ? { x: event.clientX, y: event.clientY }
+        : null
+      clearPress()
+      if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return
+      if (isStrokeLocked()) return
+      const target = event.target
+      // shouldCloseOnTapInsideDrawer already means "inside the drawer, on a row
+      // navigation target, and not on one of its buttons".
+      if (!shouldCloseOnTapInsideDrawer(target) || !(target instanceof Element)) return
+      const row = target.closest<HTMLElement>('[class*="_sessionRow"]')
+      if (row === null || target.closest('[class*="_rowActions"]') !== null) return
+      pressOrigin = { x: event.clientX, y: event.clientY }
+      pressRow = row
+      pressTimer = window.setTimeout(() => {
+        pressTimer = null
+        if (pressRow === null) return
+        pressFired = true
+        openRowMenu(pressRow)
+      }, LONG_PRESS_MS)
+    }
+
+    const onDrawerPointerMove = (event: PointerEvent): void => {
+      if (pressOrigin === null) return
+      if (isStrokeLocked()) {
+        clearPress()
+        return
+      }
+      if (
+        Math.abs(event.clientX - pressOrigin.x) > LONG_PRESS_MOVE_PX
+        || Math.abs(event.clientY - pressOrigin.y) > LONG_PRESS_MOVE_PX
+      ) {
+        clearPress()
+      }
+    }
+
+    // The host menu closes on pointerleave of its anchor; the finger lift fires
+    // one right after the press opened the menu, so stay out of the way until
+    // the finger is long gone.
+    const onDrawerPointerLeave = (event: PointerEvent): void => {
+      if (performance.now() > menuGuardUntil) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('[class*="_rowActions"]') === null
+        && target.closest('[class*="_sessionRow"]') === null) return
+      event.stopPropagation()
+    }
+
     const onDrawerClick = (event: MouseEvent): void => {
+      // The long press's own synthesized click is the one click that must not
+      // act: the row was not tapped, and the menu it opened must survive. One
+      // click only — a later tap on the ⋯ reaches React normally.
+      const target = event.target
+      if (swallowClickRow !== null && performance.now() <= swallowClickUntil) {
+        if (target instanceof Element && (target === swallowClickRow || swallowClickRow.contains(target))) {
+          swallowClickUntil = 0
+          swallowClickRow = null
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+      }
       // A classified swipe already toggled the drawer; never let its
       // synthetic tap also close it / navigate a row (gesture-guard).
       // isStrokeLocked: a stroke axis-locked mid-swipe (audit S0) — the
       // consume marks do not exist until the gesture layer's own pointerup,
       // which runs AFTER this handler on the same release event.
       if (isStrokeLocked() || consumeIfGestured(event)) return
+      // The backdrop keeps its own listener, but the third-party mobile shim
+      // stops click propagation at the frame for anything outside the drawer
+      // (its own dismiss path), so that listener never sees the tap. Decide
+      // here instead — before both the shim and the element handler.
+      if (target instanceof Element && target.closest('[data-mobile-nav="backdrop"]') !== null) {
+        if (drawerOpen()) toggleSidebar()
+        return
+      }
       // A touch row-tap owns the close (pointerup or the navigation observer);
       // let the row's click reach React without toggling the drawer twice.
       if (performance.now() - lastTouchNavAt < 500) return
-      if (shouldCloseOnTapInsideDrawer(event.target)) toggleSidebar()
+      if (shouldCloseOnTapInsideDrawer(target)) toggleSidebar()
     }
 
     const onDrawerPointerUp = (event: PointerEvent): void => {
@@ -450,6 +685,16 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       // it the host toggled first and the gesture toggled back, net zero).
       if (isStrokeLocked() || consumeIfGestured(event)) return
       if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return
+      const pressed = pressFired
+      const pressedRow = pressRow
+      clearPress()
+      if (pressed && pressedRow !== null) {
+        // The press already opened the menu: the lift must not also navigate
+        // or close the drawer.
+        swallowClickUntil = performance.now() + LONG_PRESS_CLICK_SWALLOW_MS
+        swallowClickRow = pressedRow
+        return
+      }
       const target = event.target
       if (!(target instanceof Element)) return
       if (!shouldCloseOnTapInsideDrawer(target)) return
@@ -461,24 +706,53 @@ export function installOverlayInteractions(ctx: ClientContext): void {
           // Already-selected row will not navigate; closing immediately is safe.
           toggleSidebar()
         } else {
-          // Unselected row: let navigation land, then close via the observer.
-          armNav()
+          // Unselected row: navigate from the id we resolved at the touch point
+          // when this tap can supply one — on WebKit the row's own click may
+          // never come, and then nothing else would open the session. Fall back
+          // to closing once the DOM shows a navigation landed when it cannot.
+          const tappedId = tappedRowSessionId(row, event)
+          if (tappedId === null) {
+            // Exactly one closer at a time: this tap closes through the DOM
+            // observer, so drop the store subscription an earlier resolved tap
+            // armed — its stale id would toggle the drawer again on landing.
+            disarmCloseOnNav()
+            armNav()
+          } else {
+            // The mirror case: this tap closes through the store, so drop the
+            // observer an earlier fallback tap armed — otherwise both fire on
+            // this one navigation (the observer on the selected-title change,
+            // the subscription on the landing) and race to toggle twice.
+            disarmNav()
+            closeOnNavigation(tappedId)
+            ctx.sessions.open(tappedId)
+          }
         }
         return
       }
 
       // Non-row nav targets (newSession / taskboard / ssh / search rows that
-      // are not treeitems): the pointerup close path is still correct.
-      toggleSidebar()
+      // are not treeitems) are closed by the capture click handler below:
+      // closing here would retract the drawer before the browser dispatches
+      // the tap's click, and the target's onClick would never run.
     }
 
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('click', onDrawerClick, true)
+    document.addEventListener('pointerdown', onDrawerPointerDown, true)
+    document.addEventListener('pointermove', onDrawerPointerMove, true)
+    document.addEventListener('pointerleave', onDrawerPointerLeave, true)
     document.addEventListener('pointerup', onDrawerPointerUp, true)
     return () => {
       disarmNav()
+      // Also marks the close spent, so a queued `fire` cannot outlive the effect.
+      disarmCloseOnNav()
+      touchDownAt = null
+      clearPress()
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('click', onDrawerClick, true)
+      document.removeEventListener('pointerdown', onDrawerPointerDown, true)
+      document.removeEventListener('pointermove', onDrawerPointerMove, true)
+      document.removeEventListener('pointerleave', onDrawerPointerLeave, true)
       document.removeEventListener('pointerup', onDrawerPointerUp, true)
     }
   })
