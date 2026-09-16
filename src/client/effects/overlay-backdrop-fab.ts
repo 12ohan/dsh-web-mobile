@@ -42,16 +42,21 @@ export function createOverlayTask(
   }
   const heroPhase = (): boolean =>
     document.querySelector('[data-phase="active"]') === null
-  fadeHook = (): void => {
-    if (backdrop === null) return
-    faded = true
-    backdrop.style.pointerEvents = 'none'
-    backdrop.style.opacity = '0'
-  }
   return {
     name: 'overlay-backdrop-fab',
     scopes: ['*', 'data-sidebar-collapsed', 'data-phase'],
     ensure: () => {
+      // Re-armed on every ensure, not once in the factory: core.deactivate()
+      // runs dispose() on every MOBILE_QUERY flip (reconciler-core.ts), and
+      // reactivation only re-runs ensure() - a hook assigned in the factory
+      // body stayed null from the first breakpoint flip onwards, silently
+      // killing the backdrop fade.
+      fadeHook = (): void => {
+        if (backdrop === null) return
+        faded = true
+        backdrop.style.pointerEvents = 'none'
+        backdrop.style.opacity = '0'
+      }
       const frame = getFrame()
       if (frame === null) return
       if (drawerOpen()) {
