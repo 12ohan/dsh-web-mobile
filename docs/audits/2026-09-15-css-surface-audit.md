@@ -238,13 +238,14 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 
 ### Global Constraints（每个任务都隐含遵守）
 
-- **AGENTS.md 预算**：≤ **65536 B**，当前 **65009 B → 只剩 527 B**（`tests/docs-consistency.test.ts` 强制）。加指针时若超，先把叙述性内容搬进 `docs/maintenance/pitfalls.md`。
+- **AGENTS.md 预算**：测试强制 ≤ **65536 B**；**但运行时注入截断更早**（实测 65501 B 时尾部整条不加载），安全线按 **≤64800 B** 走。2026-09-16 压缩后为 **64535 B**。加指针时若超，先把叙述性内容搬进 `docs/maintenance/pitfalls.md`。
 - **AGENTS.md 只能引用存在的路径**，且必须匹配 `scripts/probes/*.mjs` / `scripts/cdp-*.mjs` / `docs/specs/*.md` / `docs/audits/*.md` / `docs/upstream/*.{md,json}` / `docs/maintenance/*.md`；引用数 ≥10。
 - **`pitfalls.md` 需 ≥15 个 `## ` 小节；AGENTS.md 需 ≥15 个指向它的 `docs/maintenance/pitfalls.md\` §` 指针。**
 - **每个 CSS 模块反引号恰好 2 个**（模板定界符）；**CSS 注释里写反引号会提前终止模板**（TS1005）。
 - 三个 CSS 模块中**不得出现裸 `.hash_ {` 选择器行**；`wSkVaW_` 规则必须带 `[data-mobile-nav="frame"]`（同测试文件）。
 - **`lib/` 必须随源码重建**：CI 有 `git diff --exit-code lib` 新鲜度门。改完源码不 rebuild = 任务未完成。
-- 门禁顺序：`pnpm verify` → `pnpm test:core` → `pnpm build` → `git diff --exit-code lib`。
+- 门禁顺序：`pnpm verify` → `pnpm test:core` → `pnpm build` → lib 新鲜度。
+- **lib 新鲜度这条命令有陷阱（2026-09-16 实证，两个坏提交就是这样溜过去的）**：`git diff --exit-code lib` 比的是**工作区 ↔ index**，只要你之前 `git add lib` 过，它**恒绿**，无论源码有没有一起提交。CI 里 index==HEAD 所以有意义，本地不是。本地等价写法＝提交后**再 build 一次**，然后 `git diff --exit-code HEAD -- lib`（比 HEAD，不比 index）；源码与 `lib/` 必须进**同一个提交**。
 - 动任何文件前先跑 §0.2 命令 1；指纹不符则该文件的行号作废。
 
 ---
@@ -256,7 +257,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 **Files:** Create `scripts/css-structure-check.mjs`（源码见**附录 A**，本审查已实测）
 
 - [ ] **Step 1**：把附录 A 的源码原样复制为 `scripts/css-structure-check.mjs`（该脚本在 `scripts/` 下会自动把仓库根解析为 `../`，无需环境变量）。
-- [ ] **Step 2**：`sha1sum scripts/css-structure-check.mjs` → 期望 `74cc61c42523ced62ab2e49c4fb9f12b9c68e1ed`（与实测文件逐字节相同）。
+- [ ] **Step 2**：`sha1sum scripts/css-structure-check.mjs` → 期望 `b2fd5b9141914e9350ab8e79e72ad2a991b03f73`（与实测文件逐字节相同）。
 - [ ] **Step 3**：`node scripts/css-structure-check.mjs` → 期望 **16 fatal + 5 info**，且 16 条 fatal 全部落在 `compat.css.ts` L743–817。
 - [ ] **Step 4**：`node --test tests/docs-consistency.test.ts` → PASS（新脚本不进任何测试，只作人工门）。
 - [ ] **Step 5**：提交 `chore: add css structure checker`。
@@ -287,7 +288,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 - [ ] **Step 2**：把两处散文改回后缀记号的正确说法：后缀测试对整个 class 属性串生效，因此带尾随空格或多 token 的值（如 `ZKlsPq_root `）会整体失配。
 - [ ] **Step 3**：`grep -rn 'class\$\=' src/client/styles/` → 只应命中这两条注释；`grep -c 'class\*=' src/client/styles/layout.css.ts` 不变（选择器一个没动）。
 - [ ] **Step 4**：`node --test tests/docs-consistency.test.ts` → PASS（反引号恰好 2 个；注释词不引入反引号）。
-- [ ] **Step 5**：`pnpm build && git add lib && git diff --exit-code lib`。
+- [ ] **Step 5**：`pnpm build && git add src lib && git commit && pnpm build && git diff --exit-code HEAD -- lib`。
 - [ ] **Step 6**：提交 `docs(css): restore the suffix-matching prose mangled by the hash migration`。
 
 ---
@@ -302,7 +303,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 - [ ] **Step 4（A3 验证）**：`grep -n '_actions"\] \[class\*="_action"\]' src/client/styles/compat.css.ts` → 0 命中。
 - [ ] **Step 5**：`node scripts/css-structure-check.mjs` → 仍 0 fatal（若 T1 未做则为 16，注意别把新问题算进基线）。
 - [ ] **Step 6**：`node scripts/probes/header-files-pin-probe.mjs`（若本机有活跃 3080 实例；它守的正是那个被钉在右上角的按钮，11 断言）——A2 只删死声明，期望结果不变。
-- [ ] **Step 7**：`pnpm verify && pnpm test:core && pnpm build && git add lib && git diff --exit-code lib`。
+- [ ] **Step 7**：`pnpm verify && pnpm test:core && pnpm build && git add src lib && git commit && pnpm build && git diff --exit-code HEAD -- lib`。
 - [ ] **Step 8**：提交 `refactor(css): drop declarations and a rule that can never apply`。
 
 ---
@@ -316,7 +317,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 - [ ] **Step 3（C3）**：合并三处被拆分的同选择器规则（`grow` / `:first-child` / `header`）——**先 `node scripts/css-structure-check.mjs` 看 info 列表确认位置**，合并时保持声明顺序，因为同一条规则内后写的同属性才生效。
 - [ ] **Step 4（C4）**：删掉「has its own drawer-open rule at the end of its section」这句失实注释，改成 toggle 作为列的子孙被同一块隐藏。
 - [ ] **Step 5**：`node scripts/css-structure-check.mjs` → fatal 数不增加；info 从 5 降到 2（C3 三处消失，dvh 与 E2 保留）。
-- [ ] **Step 6**：`pnpm verify && pnpm test:core && pnpm build && git add lib && git diff --exit-code lib`。
+- [ ] **Step 6**：`pnpm verify && pnpm test:core && pnpm build && git add src lib && git commit && pnpm build && git diff --exit-code HEAD -- lib`。
 - [ ] **Step 7**：提交 `refactor(css): remove redundant rules and a stale comment`。
 
 ---
@@ -328,7 +329,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 - [ ] **Step 1**：把 layout L82–88 改写成当前事实（列 1300 / 遮罩 1250 的层级契约；为什么 40 会致命——压过宿主 1100 后「有 box 却不绘制不命中」）。删掉 321px 等旧测量值。
 - [ ] **Step 2**：`grep -n 'below the host' src/client/styles/layout.css.ts` → 0 命中。
 - [ ] **Step 3**：把 misc L204 的「All modal dialogs」改成实际覆盖（sheet 形态 ∧ ¬nav ∧ ¬ZuhsRW，加上 ¬sheet 形态），并注明目录选择器由 `layout.css.ts` 的专条接管。
-- [ ] **Step 4**：`pnpm verify && pnpm test:core && pnpm build && git add lib && git diff --exit-code lib`。
+- [ ] **Step 4**：`pnpm verify && pnpm test:core && pnpm build && git add src lib && git commit && pnpm build && git diff --exit-code HEAD -- lib`。
 - [ ] **Step 5**：提交 `docs(css): align comments with the shipped behaviour`。
 
 ---
@@ -342,7 +343,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 - [ ] **Step 3**：`grep -rn 'data-mobile-nav-gen\|NativeDrawerGen' src/ | wc -l` → **0**。
 - [ ] **Step 4**：`pnpm verify && pnpm test:core`（`pnpm verify` 会抓出遗漏的导出引用）。
 - [ ] **Step 5**：`pnpm build`，然后 `grep -c 'data-mobile-nav-gen' lib/client.js` → **0**（lib 里的 3 处旧命中随之消失）。
-- [ ] **Step 6**：`git add lib && git diff --exit-code lib`。
+- [ ] **Step 6**：`git add src lib && git commit && pnpm build && git diff --exit-code HEAD -- lib`。
 - [ ] **Step 7**：更正三处「已删除」陈述，使其与**这一次真的提交了**的事实一致（AGENTS.md §Pitfalls 那句、`docs/maintenance/pitfalls.md:131`、`docs/audits/2026-09-13-0.1.5-region-audit.md:233`），并追加一句溯源：上次删除未提交、在分支切换中丢失，本次以提交固化。
 - [ ] **Step 8**：提交 `fix(client): actually remove the dead drawer-generation probe`。
 
@@ -428,7 +429,43 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 
 ---
 
-## 附录 A：`scripts/css-structure-check.mjs`（已实测，sha1 `74cc61c42523ced62ab2e49c4fb9f12b9c68e1ed`）
+## §6 追加审查：2026-09-16 六向并行只读审查
+
+起因：§1 的 A–F 是**静态可得**的那一类，§G 当时诚实登记为「未审」。2026-09-16 用六个互不重叠的只读 agent 补审，每个带同一份上下文包（`docs/audits/2026-09-16-parallel-review/00-context-brief.md`），硬约束＝**不改仓库、不跑 build、不起 chromium、不派子代理**，报告先写 `~/tmp` 再落库。落库报告见同目录。
+
+| 报告 | 方向 |
+|---|---|
+| `B-effects.md` | `src/client/` 运行时 JS/DOM：marker 写读差集、disposer/observer/timer 配对、pointerup/click 时序、异常吞没 |
+| `D-coverage-gaps.md` | 测试与探针的覆盖盲区：「改了会静默坏」清单 + 「断言断在 bug 本身」实证 |
+
+（文档-实现漂移、宿主契约、生成物一致性与静态 CSS 残余四路由另派，报告落同一目录。）
+
+### §6.1 新发现与处置
+
+| 编号 | 发现 | 处置 |
+|---|---|---|
+| J1 | `overlay-backdrop-fab.ts`：`fadeHook` 只在**工厂体**里赋值一次，而 `core.deactivate()` 每次 MOBILE_QUERY 翻转都对每个 task 跑 `dispose()`（`reconciler-core.ts:146-158`），重新激活只跑 `ensure()`（`:139-143`），而 `registerReconcileTasks` 只被 `index.tsx:169` 调一次 → **第一次跨 1023px 之后遮罩渐隐永久失效**（收抽屉时遮罩直接消失）。全仓无测试/探针覆盖 `fadeOverlayOut` | **已修**（`4e6a45e`）：改为在 `ensure()` 里重新武装，并在注释里写明为什么不能在工厂体 |
+| J2 | `base.css.ts:70` 的 `[data-mobile-nav="delete-confirm"]` **没有任何写方**（bundle 内该字面量计数 = 1，即选择器本身）→ 删除确认卡的红色描边/淡红底**从未生效过**（从 fork 摘进来就是死的） | **待拍板**：删掉该规则，或给写入方补上这个包裹属性（视觉决策，同 §3 体例） |
+| J3 | reconciler 的 `MutationObserver` 未开 `characterData`，与 AGENTS.md「stats-line 因 TPS 是 characterData 文本变更而保持 `scopes:['*']`」相矛盾 | **未复现**：流式期大概率有别的 mutation 陪伴而掩盖。报告里写了构造验证法；**不改代码**（改了没有可证收益） |
+| J4 | `gesture-guard` 的 `consumed` Map 对 DOM 节点持强引用、只在节点再次进入某次 click 祖先链时才删过期项 → 长会话单调增长并保留已卸载子树 | 低危（无功能错误）。可换 `WeakMap`；**未做** |
+| J5 | `settings-toolbar-reparent.ts:12` 用**裸后代** `[class*="_header"]` 找锚点——正是仓库禁止的那条子串（CSS 侧已锚定到 `> [class*="_nav"] > …`）。当前安全只靠**文档顺序**（工具栏头在卡头之前） | 线索：活页面一条 `compareDocumentPosition` 即可判定；`plugin-card-header-bleed` 探针抓不到这个退化 |
+| J6 | `stats-line.ts` 的 TPS 归还循环**以 marker 为索引**，marker 被自身 stale 分支摘掉后（慢路径又没重新标记）归还整体跳过 | 线索：需构造时序。最坏＝桌面态少一行 TPS |
+| J7 | C3 的那三处「同选择器拆成两条规则」**未合并**：计划称「纯整洁、零行为变化」，但合并只有在证明两条之间的规则不会插队后才成立（同选择器拆分正是靠中间规则插队才成为经典陷阱） | **留作待办**，不当作已完成。检测器仍把它们列为 3 条 info（5 info 而非计划预期的 2） |
+
+### §6.2 覆盖面：D 报告的结论
+
+**最高危的一条**：`MOBILE_QUERY` 的 `(pointer: coarse)` 臂与 `misc.css.ts` 隐藏块的 `(pointer: fine), (pointer: none)` 臂**没有任何场景覆盖**——全部 CDP「桌面」场景都是 ≥1024px，宽度臂自己就能全隐藏，所以**删掉任一侧指针臂，全套门仍然绿**。根因是 `scripts/cdp-probe.mjs:159` 的 `setViewport(w,h,mobile)` 把 mobile 同时喂给 deviceMetrics 与 touchEmulation，**结构上无法表达「窄视口 + 鼠标」**——这正是 2026-08-30 已经泄漏过一次的 PC 泄漏形态。可跑判据：`D-pointer-guard-gap.mjs`（P1 绿＝守卫本身是精确补集；P2/P3 红＝scenes=33 而 narrow-mouse=0）。
+
+其余缺口（aionui 整条集成零门、`subagent-chip-touch.ts` 零门、预览全屏按钮零门、`data-mobile-nav="stats"` 标记与 TPS 折叠零门、theme-color meta 零门、`dismiss-shadow` 零门、git-chip 被 `EXPECTED_FAILURES` 基线豁免、backdrop 渐隐零门、隐藏块清单无机械门、检测器未接进 `test:core`、debug 徽章与 `/diag` beacon 零门）逐条见 `D-coverage-gaps.md`。
+
+### §6.3 对 §5「诚实清单」的修订
+
+- G 类（同特异度踩踏）**仍未定性**；T8 的运行时探针是本轮才立项的。在它跑出结论之前，A–F 依然是「静态可得」的全集，**不是**「隐性 bug」的全集。
+- 新增一条基础教训：**本地那条 `git add lib && git diff --exit-code lib` 是假门**——它比的是 index ↔ 工作区，`git add` 之后恒绿，源码没提交也能过。2026-09-15 的两个提交就是这样只装了 `lib/`（源码留在工作区，等价于 HEAD 在干净检出下过不了自己的 CI），已由 `232cc26` 补上源码。正确写法见 §2 Global Constraints。
+
+---
+
+## 附录 A：`scripts/css-structure-check.mjs`（已实测，sha1 `b2fd5b9141914e9350ab8e79e72ad2a991b03f73`）
 
 设计要点：单趟解析模板字面量→记录每个块的嵌套深度与选择器首行行号（**多行选择器按首行判定**，这是 layout 那两处合规写法的前提）；行号已按模板起始行做了偏移，输出**就是 `.css.ts` 的真实行号**；fatal 决定退出码，info 只提示。刻意不做的事：不判定语义冗余、不比对注释——那三类留给人工与探针。
 
@@ -596,7 +633,7 @@ process.exit(fatal.length ? 1 : 0)
 ```sh
 cd ~/dsh-mobile-nav
 sha1sum src/client/styles/*.css.ts                        # §0.1 指纹
-node scripts/css-structure-check.mjs                      # A1（16 fatal）+ C3/E2/dvh（5 info）
+node scripts/css-structure-check.mjs                      # 0 fatal + 5 info（A1 已清；info = C3 三处 + dvh 兜底 + E2）
 grep -rn 'class\$\=' src/client/styles/                   # B1（修完后仅注释命中）
 grep -n 'order:3' src/client/styles/layout.css.ts         # A2（应 0）
 grep -n '_actions"\] \[class\*="_action"\]' src/client/styles/compat.css.ts   # A3（应 0）
@@ -612,16 +649,16 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 
 | 条目 | 任务 | 状态 | 备注 |
 |---|---|---|---|
-| A1 | T1 | READY | |
-| B1 | T2 | READY | |
-| A2 / A3 | T3 | READY | |
-| C1–C4 | T4 | READY | |
-| D1 / D2 | T5 | READY | |
+| A1 | T1 | **DONE**（`26ca8e9`） | `git diff -w` 只剩「重复 media + 配对 `}`」两行删除；检测器 16 → **0 fatal** |
+| B1 | T2 | **DONE**（`acc26ec`） | 两行散文，纯 `$`↔`*`；选择器未动 |
+| A2 / A3 | T3 | **DONE**（`e2fa5a1`） | 复核命令 0 命中；A3 是零行为变化的那条 |
+| C1–C4 | T4 | **DONE 除 C3**（`e2fa5a1`） | C1/C2/C4 已做；**C3 未做**——「合并拆分规则＝零行为变化」未被证明，合并前需查两条之间的规则，见 §6.1 J7 |
+| D1 / D2 | T5 | **DONE**（`e2fa5a1`） | 注释按当前事实重写（1300/1250 契约、模态覆盖实际范围） |
 | F1 | T6 | **DONE**（`6111603`） | 再检查式改用写入方锚，见 §0.1b |
 | A4 | D-2 | 待拍板 | |
 | D3 | D-1 | 待拍板 | |
 | E1 / E2 | — | 建议加注释 / 可不动 | |
 | F2 | — | 流程约定已写进 §0.2 |
-| G（同特异度踩踏） | T8 | **未审**，仅线索级（静态 (a)=0 / (b)=63 候选） | 需运行时 `CSS.getMatchedStylesForNode` |
+| G（同特异度踩踏） | T8 | **探针立项中** | `scripts/probes/cascade-conflict-probe.mjs`（原生 CDP，8 状态矩阵）；静态仍是 (a)=0 / (b)=63 候选 |
 | G（状态矩阵/:has 过匹配/env 兜底） | T8 | **未审** | 同上 |
 | H（第三方上游 CSS / lib 一致性 / 动效时序） | — | **未审** | | |
