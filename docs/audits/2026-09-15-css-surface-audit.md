@@ -245,7 +245,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 - 三个 CSS 模块中**不得出现裸 `.hash_ {` 选择器行**；`wSkVaW_` 规则必须带 `[data-mobile-nav="frame"]`（同测试文件）。
 - **`lib/` 必须随源码重建**：CI 有 `git diff --exit-code lib` 新鲜度门。改完源码不 rebuild = 任务未完成。
 - 门禁顺序：`pnpm verify` → `pnpm test:core` → `pnpm build` → lib 新鲜度。
-- **lib 新鲜度这条命令有陷阱（2026-09-16 实证，两个坏提交就是这样溜过去的）**：`git diff --exit-code lib` 比的是**工作区 ↔ index**，只要你之前 `git add lib` 过，它**恒绿**，无论源码有没有一起提交。CI 里 index==HEAD 所以有意义，本地不是。本地等价写法＝提交后**再 build 一次**，然后 `git diff --exit-code HEAD -- lib`（比 HEAD，不比 index）；源码与 `lib/` 必须进**同一个提交**。
+- **门禁还要看得见未跟踪文件**：`git diff` 系列都不报 `lib/` 下的孤儿产物，而 `tsc` 从不清理 outDir——删源码后旧产物会永久留下。补一条 `git status --porcelain --ignored lib` 必须为空。\n- **lib 新鲜度这条命令有陷阱（2026-09-16 实证，两个坏提交就是这样溜过去的）**：`git diff --exit-code lib` 比的是**工作区 ↔ index**，只要你之前 `git add lib` 过，它**恒绿**，无论源码有没有一起提交。CI 里 index==HEAD 所以有意义，本地不是。本地等价写法＝提交后**再 build 一次**，然后 `git diff --exit-code HEAD -- lib`（比 HEAD，不比 index）；源码与 `lib/` 必须进**同一个提交**。
 - 动任何文件前先跑 §0.2 命令 1；指纹不符则该文件的行号作废。
 
 ---
@@ -465,6 +465,55 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 
 ---
 
+### §6.4 A 向：静态 CSS 残余（`A-static-cascade.md`）
+
+A 先修掉了上一轮脚本的两处系统性误差——分组选择器没拆臂、特异度用正则估（`:has()` 实参被多算）——并用 17 条 W3C 参考例自检了解析器，所以口径从「63 组候选」修正为：**候选对 386 → 按（属性,特异度）归并 31 组 → 两模块同在移动分支且只靠顺序分胜负 41 对 → `!important` vs 普通声明 26 对**。
+
+**选择器文本逐字相同**的跨模块重复只有 3 对，全部可静态定性：
+
+| 对 | 结论 |
+|---|---|
+| `[data-mobile-nav="drawer-actions"]`（base L35 / compat L471） | 属性不相交，非冲突 |
+| `[aria-modal="true"] [class*="_cubeRow"] > *`（layout / compat） | 属性不相交，非冲突 |
+| `[data-aionui-explorer-col], [data-aionui-preview-col]`（compat / misc） | **载荷承重**：两者同 (0,1,0) 且都 `!important`，平板档「居中不铺满」100% 靠 misc 排在 compat 之后。A 写了 `order-flip.mjs`：把顺序翻过来就退回铺满 |
+
+第三条是「拼接顺序是行为契约」的第一个**可复现**证据（此前只有 2026-09-06 那条 hero 净空的间接教训）。它值得一条回归门，但**没有现成的门**——检测器不看顺序语义，测试也不看。**未做，登记为待办**。
+
+另三条已验证的注释漂移（与 §1 D-2 同类）：`base.css.ts` 的 delete-confirm 死规则（**已删**，见 §6.1 J2）；`misc.css.ts:204` 注释自称 "higher-specificity full-width rule"，实测与 layout 同为 (0,5,1)、靠顺序赢；`compat.css.ts:34–37` 注释「The per-column rules below override the geometry」在平板档是**反的**（正是上面第三对）。
+
+死声明与兜底：同规则内被后写覆盖**恰好 1 条**（layout 的 vh→dvh 有意兜底对）；8 对 `!important`/普通声明反转**全部**是有意的 reduced-motion/状态覆盖；`env()` 12 处真实调用**全部**带 `0px` 兜底。**未验证线索**：全套只处理 top inset，bottom 只在 FAB 与 dsfv 状态栏出现，composer seat 在真有 home indicator 的机器上会不会被压住从没测过（headless inset 恒 0）。
+
+### §6.5 C 向：文档与实现漂移（`C-doc-drift.md`）
+
+16 条，7 条 P1。**已修 8 条**（`7de13fb`）：手势识别区 `START_ZONE_PX = 48px` / `96px` 三处（两处 CSS 注释 + spec 的「终值」行）、AGENTS 与 pitfalls 的 `touch-action: pan-y` 缺 `pinch-zoom`（**按它改就会复现 #45**）、检测器基线仍写 16 fatal、task 模块归属、components 树漏 `open-files-panel.ts`、悬空 `§探针环境参数（旧）`、实装版本清单 4 项、runbook 的 rev 食谱。
+
+**未修**（登记）：`scripts/cdp-probe.mjs:544` 的活选择器 `[class$="_card"]`——仓库自己禁止后缀式，且该断言没有 `includes`，失败会被 `EXPECTED_FAILURES` 吸收成 BASE 不报警；修它会改变探针语义，须单独一轮。`layout.css.ts:938-942`（≤359px 对 `[class*="_label"]:has(> svg)` 施加 `display:none`）与 README/AGENTS「模式名保留文字」矛盾——**渲染后果需浏览器复核**，C 自己也标了未验证。`README.md:151` 的 `maximum-scale` 承诺、调试地图的 `[class$=]` 副本（本地不入库）、`subagent-chip-touch` 的 2000ms/500ms 归属，均待下一轮。
+
+### §6.6 E 向：宿主契约与第三方（`E-host-contracts.md`）
+
+27 条。**最有行动价值的三条**：
+
+1. **26 条哈希契约里 8 条上游已 0 命中**（`qDHVXG_` / `gdEzaW_` / `bpnj3G_` / `jmhvDG_` / `_dialog_15u5s_22` / `eGUBIq_` / `-NprXq_`）；其中 **5 条非 lazy ⇒ `node scripts/cdp-compat-contracts.mjs` 今天应 miss=5 / exit 1**。有替代物（`_dialog_15u5s_22` → `_dialog_w1urq_22` 同一 Dialog 原语 rehash；`qDHVXG_headerActions` → `wSkVaW_headerActions`；`gdEzaW_bubble` → `Sixlwa_bubble`）。（E 的语料是宿主 bundle + profile，**按 realpath 排除了本仓库**——第一版没排导致假 HIT。）
+2. **契约探针的 hash 判据可自满足**：它做文本扫描，而 `document.styleSheets` 含插件自己的 `<style data-plugin>`。**判据必须先把 CSS 注释剥掉**（`cssText` 不含注释）；不剥得 16 条假自满足，剥后只剩 2 条。
+3. **死规则 7 处 + 活着的过匹配 4 处**：`[aria-modal="true"] [class*="_tabs"]` 完全没有 owner 限定，上游 8 族连同宿主自己的 tabs 一起被强制 wrap+8px；`irow` 族后代片段（`spec`/`nm`/`grow`/`switch`/`owner`）**无 owner 限定**，复活后误伤不受控。
+
+**未做**：E 建议「跑一次 `cdp-compat-contracts.mjs` 以真实 hit/skip/miss 推翻或确认整张表」——需要活浏览器，与 T8 探针冲突，**排在 T8 之后**。
+
+### §6.7 F 向：lib ↔ src 一致性与脆弱点（`F-lib-parity.md`）
+
+**结论：当前一致，且是三条独立路径（从 src 重算闭包 / 真 tsc 编译 / 回放 build-client 逻辑）互证的**——27/27 模块集合相等、CSS 四条腿逐字节一致（两侧 `new Function` 求值后比字符串，避开转义假阳性）、31 d.ts + 31 map 文件集精确相等、`npm pack --dry-run` 108 项含 `lib/client.js`、`import('./lib/index.js')` 通过。F 还纠正了一个陷阱：`lib/types/**/*.css.d.ts` 把非 ASCII 转成 `\uXXXX` 而 bundle 是字面 UTF-8，**直接字节比对会假报漂移**。
+
+四条结构性洞（前两条已进 Global Constraints）：
+
+- **F-6 门禁看不见 `lib/` 下的未跟踪文件**：干净 clone 里植入孤儿产物后 `git diff --exit-code lib` 仍 exit 0，`git add lib` 之后也是 0；而 **tsc 从不清理 outDir**，删源码会留下永久孤儿。补法：`git status --porcelain --ignored lib` 必须为空。
+- **F-7/F-8** 见 Global Constraints 与 §6.3。
+- **F-10** `lib/client.js` **没有 sourcemap**（build-client.mjs 显式删），而 host 半区 3 个 `.js.map` 全发货——最大的出货文件不可回溯。
+- **F-11** CSS 占 bundle **37.0%**（130812/353082 B），src 里已有的 CSS 被整份复制一遍；顺带修正了本文件与 AGENTS 的「client.js≈2 万行」旧读数（实测 7003 行 / 353082 B / 27 模块）。
+
+**F 主动声明未取证的一条**：served bundle 的字节前缀判据它没做成（cookie 过期 → 组合 URL 返回空 body，正是 `da39a3ee5e6b` 那个别误判形态）。这条链路 **F 不下结论**，本文件也不据此改动。
+
+---
+
 ## 附录 A：`scripts/css-structure-check.mjs`（已实测，sha1 `b2fd5b9141914e9350ab8e79e72ad2a991b03f73`）
 
 设计要点：单趟解析模板字面量→记录每个块的嵌套深度与选择器首行行号（**多行选择器按首行判定**，这是 layout 那两处合规写法的前提）；行号已按模板起始行做了偏移，输出**就是 `.css.ts` 的真实行号**；fatal 决定退出码，info 只提示。刻意不做的事：不判定语义冗余、不比对注释——那三类留给人工与探针。
@@ -652,13 +701,13 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 | A1 | T1 | **DONE**（`26ca8e9`） | `git diff -w` 只剩「重复 media + 配对 `}`」两行删除；检测器 16 → **0 fatal** |
 | B1 | T2 | **DONE**（`acc26ec`） | 两行散文，纯 `$`↔`*`；选择器未动 |
 | A2 / A3 | T3 | **DONE**（`e2fa5a1`） | 复核命令 0 命中；A3 是零行为变化的那条 |
-| C1–C4 | T4 | **DONE 除 C3**（`e2fa5a1`） | C1/C2/C4 已做；**C3 未做**——「合并拆分规则＝零行为变化」未被证明，合并前需查两条之间的规则，见 §6.1 J7 |
+| C1–C4 | T4 | **DONE**（`e2fa5a1` + `f1738f1`） | C1/C2/C4 在 `e2fa5a1`；C3 的**两对**在 `f1738f1`（合并前逐对验过中间无同属性规则）；第三对（compat 的 `grow`/`owner`）**故意不并**，见 §6.1 J7 |
 | D1 / D2 | T5 | **DONE**（`e2fa5a1`） | 注释按当前事实重写（1300/1250 契约、模态覆盖实际范围） |
 | F1 | T6 | **DONE**（`6111603`） | 再检查式改用写入方锚，见 §0.1b |
 | A4 | D-2 | 待拍板 | |
 | D3 | D-1 | 待拍板 | |
 | E1 / E2 | — | 建议加注释 / 可不动 | |
 | F2 | — | 流程约定已写进 §0.2 |
-| G（同特异度踩踏） | T8 | **探针立项中** | `scripts/probes/cascade-conflict-probe.mjs`（原生 CDP，8 状态矩阵）；静态仍是 (a)=0 / (b)=63 候选 |
+| G（同特异度踩踏） | T8 | **探针进行中** | `scripts/probes/cascade-conflict-probe.mjs`（原生 CDP，8 状态矩阵）；静态侧已由 A 重算：逐字相同的跨模块重复 3 对（2 对属性不相交、1 对载荷承重，见 §6.4） |
 | G（状态矩阵/:has 过匹配/env 兜底） | T8 | **未审** | 同上 |
 | H（第三方上游 CSS / lib 一致性 / 动效时序） | — | **未审** | | |
