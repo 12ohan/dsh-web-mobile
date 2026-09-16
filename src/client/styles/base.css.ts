@@ -64,20 +64,6 @@ export const BASE_CSS = `
   cursor: default;
 }
 
-/* Session-delete confirm / error cards (shown as a bottom overlay, see the
-   delete-dialog wrapper below). Danger-tinted card with a description and
-   two actions. */
-[data-mobile-nav="delete-confirm"] {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border: 1px solid var(--dsw-alias-state-error-secondary, rgba(220, 38, 38, .35));
-  border-radius: 12px;
-  background: var(--dsw-alias-interactive-bg-hover-danger, rgba(220, 38, 38, .06));
-}
 [data-mobile-nav="delete-confirm-title"] {
   font-size: 13px;
   font-weight: 600;

@@ -30,8 +30,8 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        html/body count for this (Chromium issue 41483088: inner containers
        are ignored by the navigation path). iOS Safari's edge back-swipe has
        no CSS opt-out (WebKit bug 240183) — there the widened gesture start
-       zone (96px, beyond every browser's edge-claim strip) is the
-       mitigation.
+       zone (START_ZONE_RATIO 0.45 of the viewport width, ~176px at 390px,
+       past every browser's edge-claim strip) is the mitigation.
      - With the client's viewport-fit=cover, env(safe-area-inset-top) is the
        status bar / notch height; the rules below push the app content below
        it so the status bar never covers anything. Off notched phones (or in
@@ -147,8 +147,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      WITHOUT it the browser treats a horizontal stroke as a pan, fires
      pointercancel and the gesture never classifies (vertical panning stays
      intact). Start-hit is decided purely by geometry on the document
-     capture listener (START_ZONE_PX = 48px); there is no hotspot element
-     (removed per audit C2, 2026-08-27). pinch-zoom rides along with the
+     capture listener (START_ZONE_RATIO = 0.45 of the viewport width, ~176px
+     at 390px); there is no hotspot element (removed per audit C2,
+     2026-08-27). pinch-zoom rides along with the
      root value so a browser-applied zoom stays undoable inside the drawer
      too (#45); touch-action intersects down the ancestor chain, so a bare
      pan-y here would cancel the root's pinch permission. */
