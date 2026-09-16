@@ -60,6 +60,8 @@ grep -rn 'isNativeDrawerGeneration\|updateNativeDrawerGen' src/ lib/ | wc -l  # 
 
 **邻座新增的守卫面（别重复造）**：`src/client/core/css-rules.ts` + `tests/css-rules.test.ts` 是**源码级级联读取器**（回答「哪条 font-size 会落到这个元素上」，跑在 `test:core` 里）；它**刻意丢弃 at-rule 条件**，所以答不了嵌套深度/缩进这类问题——那正是本文件 T0 那个检测器的结构半边。两者互补，不合并。
 
+**运行时就绪度（下一轮跑真页面前的硬前置）**：3080 在跑（无 cookie 401 → 有 cookie 200）；**served bundle 就是当前代码**（四个当前源码独有标记 `nothing ever read` / `dsw-font-markdown-base-font-size`×2 / `session-row-fiber`×3 / `data-mobile-nav-gen`×1 与本地 lib 1:1 命中），所以运行时审查看到的是被审的代码，不是旧 bundle。读它的正确姿势见 §0.1b 的 `rev` 修正（组合端点 `??dsh-web-mobile/client.js`；`rev` 与 sha1 无关，别用它判代）。零残留 headless chrom、`~/tmp/pw-dsh-tmp` 就位、chromium ELF 就位。
+
 ### §0.2 再审查：三条锚定命令
 
 ```sh
