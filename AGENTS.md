@@ -215,6 +215,7 @@ dsh web
 ## 维护入口
 
 - 回归探针：`scripts/probes/`（17 个回归锚点，node:builtin-only，可单跑；主探针 `pnpm smoke:cdp` 与手势门 `cdp-swipe-failures.mjs` 见 Commands）。
+- CSS 表面审查（发现清单 + 施工任务 + 再审查协议）：`docs/audits/2026-09-15-css-surface-audit.md`；结构检测器 `node scripts/css-structure-check.mjs`（当前基线 16 fatal＝A1 的债，T1 清零）。
 - 设计 spec：`docs/specs/`（权威设计文档随仓库走）；`.local-tests/` 探针原稿、`docs/superpowers/` 与 `docs/debug/settings-market-debug-map.md` 仍是本地不入库。
 - CI：`.github/workflows/ci.yml`——verify → test:core → build → `git diff --exit-code lib`（lib 新鲜度门）。
 - 引擎底线：`package.json` engines `node >=24.0.0`（tests 依赖 Node 原生 TS type-stripping）。

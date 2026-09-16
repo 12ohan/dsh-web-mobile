@@ -36,6 +36,30 @@
 
 （`compat.css.ts` 的 A1/A3/C3/C4 与 `misc.css.ts` 的 D2/D3 行号不受影响；F1 在 `phone-chrome.ts`，按 §0.2 命令 3 检查。）
 
+### §0.1b 奠基结果（隔壁会话收工、树静止之后）
+
+| 项 | 结果 |
+|---|---|
+| 工作树 | `git status` **0 条**；最近 10 分钟无文件被改 → 静止 |
+| 分支 / HEAD | `fix/50-52-49-verified`，头部 `e24687c docs(audits): add the 2026-09-15 CSS surface and structure audit`（本文件已被邻座提交入库） |
+| 门禁 | `pnpm verify` ✅ · `pnpm test:core` **120/120** ✅ · `pnpm build` ✅ · `git diff --exit-code lib` **干净** ✅ |
+| 指纹 | 与 §0.1 一致：只有 layout 是 `ef22d818…` / 1126 行（字体轴 #52），另三份与冻结值**逐字节相同** |
+| **F1** | **已修**：`6111603 refactor(client): delete the dead host-generation probe`（源码 −43/+11，bundle 354267→352613 B），函数 docstring 留了墓碑注释 |
+| **T0** | **已完成**：`scripts/css-structure-check.mjs` 入库（sha1 `b2fd5b9141914e9350ab8e79e72ad2a991b03f73`） |
+| A–E 各条 | **全部存活**：A1 仍 16 fatal；A2/A4/B1/C1/C2/D1/E1/E2/C3/C4 的内容锚逐一命中（行号见上表） |
+| 本文件登记 | 已写入 `AGENTS.md` 维护入口（并受 `tests/docs-consistency.test.ts` 的「引用必须存在」门约束） |
+
+**F1 的再检查式必须改（否则假阳性）**：现在 `grep -rn 'data-mobile-nav-gen' src/ lib/` 会命中**墓碑注释**（3 处）。要锚在写入方/符号上：
+
+```sh
+grep -rnE "(set|remove)Attribute\('data-mobile-nav-gen'" src/ lib/ | wc -l   # 期望 0
+grep -rn 'isNativeDrawerGeneration\|updateNativeDrawerGen' src/ lib/ | wc -l  # 期望 0
+```
+
+**教训（写进同类守卫）**：字符串式守卫会被「解释这条已删除」的注释打成假阳性——删死代码时留墓碑是对的，但守卫要锚在符号或写入方上。
+
+**邻座新增的守卫面（别重复造）**：`src/client/core/css-rules.ts` + `tests/css-rules.test.ts` 是**源码级级联读取器**（回答「哪条 font-size 会落到这个元素上」，跑在 `test:core` 里）；它**刻意丢弃 at-rule 条件**，所以答不了嵌套深度/缩进这类问题——那正是本文件 T0 那个检测器的结构半边。两者互补，不合并。
+
 ### §0.2 再审查：三条锚定命令
 
 ```sh
@@ -154,7 +178,9 @@ grep -rn 'data-mobile-nav-gen\|updateNativeDrawerGen' src/ lib/   # 3. F1 死代
 
 #### F1 · phone-chrome.ts L118/L166/L170/L171/L186/L197 · P1 · 已被批准删除的死代码回来了，而三份文档都写着「源码零残留」
 
-**现象**：`isNativeDrawerGeneration()` / `updateNativeDrawerGen()` 仍在源码里，每次 `frame-marker` flush 在 `<html>` 写 `data-mobile-nav-gen="native-drawer"`——**全仓库没有任何读者**（CSS 四模块 0 命中、JS 0 命中，只有 3 处写/清）。而 `AGENTS.md` §Pitfalls、`docs/maintenance/pitfalls.md:131`、`docs/audits/2026-09-13-0.1.5-region-audit.md:233` 三处都写着「已于 2026-09-14 用户批准后整体删除（源码零残留）」。
+> **状态：已修（2026-09-15，`6111603`）**——邻座按本条删除并留墓碑注释；下面的现象描述保留为原始取证。**再检查式见 §0.1b**（不要用裸字符串，墓碑会假阳性）。
+
+**现象（原）**：`isNativeDrawerGeneration()` / `updateNativeDrawerGen()` 仍在源码里，每次 `frame-marker` flush 在 `<html>` 写 `data-mobile-nav-gen="native-drawer"`——**全仓库没有任何读者**（CSS 四模块 0 命中、JS 0 命中，只有 3 处写/清）。而 `AGENTS.md` §Pitfalls、`docs/maintenance/pitfalls.md:131`、`docs/audits/2026-09-13-0.1.5-region-audit.md:233` 三处都写着「已于 2026-09-14 用户批准后整体删除（源码零残留）」。
 
 **根因（可复现）**：`git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone-chrome.ts` **只返回一个提交 `6e80661`（加入的那次）**——**删除从未被提交**，它只存在于当时的working tree，随后在某次分支切换/还原中丢失。这与本次会话 21:44 记录的其它丢失同源（见 §4）。
 
@@ -221,7 +247,9 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 
 ---
 
-### Task 0：把结构检测器落库
+### Task 0：把结构检测器落库 —— **已完成（2026-09-15）**
+
+> 已落在 `scripts/css-structure-check.mjs`（sha1 `b2fd5b9141914e9350ab8e79e72ad2a991b03f73`），跑当前树输出 **16 fatal + 5 info**（＝A1 的债，T1 清零）。脚本头已注明与 `src/client/core/css-rules.ts` 的分工。**暂不接进 `test:core`**：接入即在 16 fatal 上变红，等 T1 之后再说。
 
 **Files:** Create `scripts/css-structure-check.mjs`（源码见**附录 A**，本审查已实测）
 
@@ -587,7 +615,7 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 | A2 / A3 | T3 | READY | |
 | C1–C4 | T4 | READY | |
 | D1 / D2 | T5 | READY | |
-| F1 | T6 | 待 D-3 | |
+| F1 | T6 | **DONE**（`6111603`） | 再检查式改用写入方锚，见 §0.1b |
 | A4 | D-2 | 待拍板 | |
 | D3 | D-1 | 待拍板 | |
 | E1 / E2 | — | 建议加注释 / 可不动 | |
