@@ -422,9 +422,9 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 - **选项 A（推荐）**：重新删除（2026-09-14 用户已批准过一次，删除理由仍成立：3 处写、0 处读，每帧 flush 白跑一次 `getComputedStyle`），并在同一次提交里重建 lib —— 即 Task 6。
 - **选项 B**：保留代码，把三处「已删除」改口为「仍存在且无读者」。**不推荐**：留着每帧的无效计算，且下次还会有人上当。
 
-### D-4（新，2026-09-16）· 把结构检测器接进 `test:core` 吗？
+### D-4（新，2026-09-16）· 把结构检测器接进 `test:core` 吗？—— **已执行（选项 A，2026-09-16，`bcd8167`）**
 
-Task 0 落库时写的是「暂不接进 `test:core`：接入即在 16 fatal 上变红，等 T1 之后再说」。**T1 已完成，检测器今天 0 fatal / 2 info、退出码 0**（2 条 info 是计划预期的 dvh 兜底对与 E2），这个「再说」到期了，需要你拍板：
+Task 0 落库时写的是「暂不接进 `test:core`：接入即在 16 fatal 上变红，等 T1 之后再说」。**T1 已完成，检测器今天 0 fatal / 2 info、退出码 0**（2 条 info 是计划预期的 dvh 兜底对与 E2），这个「再说」到期了。**已按选项 A 落地**（`tests/css-structure.test.ts`，提交 `bcd8167`）：断言 `4 modules` + `0 fatal`（模块数断言防「找不到文件却报 0 fatal」的空转）；反空转红队＝把 MODULES 塞一个不存在的模块得到 exit 1，随后逐字节还原；`test:core` 121/121。以下为当时的选项记录：
 
 - **选项 A（推荐）**：`tests/` 加一个小测试——spawn `node scripts/css-structure-check.mjs`、断言退出码 0——把「0 fatal」变成回归门。代价：测试文件 17 → 18，README 与 AGENTS 的计数条目两处同步（AGENTS 自己那条「计数条目必须两处同步」的教训就是这么来的）。
 - **选项 B**：不接，检测器保持手动跑（AGENTS「维护入口」与本文件都已列它）。代价：T1 修的 16 条 fatal 将来无人守——缩进错位、重复媒体查询、同选择器拆分可以无声回归，而这正是本轮开头那 16 条 fatal 的成因。
@@ -766,3 +766,52 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 | G（同特异度踩踏） | T8 | **有门（2026-09-16）** | `scripts/probes/cascade-conflict-probe.mjs`（原生 CDP `CSS.getMatchedStylesForNode`，390×844 coarse，4 场景 + 正对照，640 行，builtin-only）。独立验收运行（本会话亲跑）EXIT=0：`candidates=0 plugin-involved=0 whitelisted=2 host-only=10 importance-ties=6 model-errors=0 module-lines=exact sampled=271`。2 条白名单＝与本插件与第三方 `@linxin666/dsh-web-all` 注入表的**跨插件顺序依赖**（frame 三轨 grid、dismiss-shadow 的 display:none），处置见 §3 D-5。**白名单自失效已实测**（2026-09-16 红队：把第 1 条的 `winnerWhere` 改到不匹配 → 该候选复现为 `CANDIDATE`、`whitelisted` 2→1、`candidates=1`、EXIT=1；随后逐字节还原）。**注意运行环境**：`DSH_PROBE_SESSION_ID` 必须是完整 UUID（`session-<36 位>`，前缀写法会一直停在 `frame+active timed out`）|
 | G（状态矩阵/:has 过匹配/env 兜底） | T8 | **部分审（覆盖缺口已登记）** | 探针只覆盖 390×844 coarse 的四场景（default / drawer-open / files-open / ios-attr）。**未覆盖**：`[role=menu]` 打开态、宿主设置与市场对话框、aionui 探索器·预览 sheet、hero 空态、流式期、子代理 running/idle、第三方插件自身态、tablet 与桌面档、inset≠0。**机制盲区**：inline style 不入模型（手势层 `setProperty(...,'important')` 正在此列）、未激活伪类 CDP 不返回、`@supports`/`@layer` 不区分、24px 网格 ∪ 标记采样会漏极小或被覆盖元素。采样量 run 间浮动（host-only 10↔11），故「某次跑绿」≠穷尽 |
 | H（第三方上游 CSS / lib 一致性 / 动效时序） | — | **未审** | | |
+
+---
+
+## §7 完整修复链（2026-09-16 立项 · 一条链，按依赖排序）
+
+**为什么是这个顺序**：这一轮反复撞到的根因不是「有 bug 没修」，而是**结论没有门**——修好的东西可以无声回归，没修的东西没人知道谁在守。所以链的顺序是「先把门弄可靠 → 再用门兜着改行为 → 最后清理低危项」，而不是按严重度排。
+
+每一环都带：根因 → 改法 → 验证（含**反空转**：故意破坏必须变红）→ 回滚 → 交付。**未完成的环不写「已完成」**，只写状态。
+
+### L1 · 把结构检测器接进门 —— ✅ 完成（`bcd8167`）
+- **根因**：检测器写好了、判据齐全、退出码语义正确，`package.json`/CI/所有测试文件**都不调用它** → 它存在的意义（缩进错位、重复媒体查询、选择器拆分）可无声回归。
+- **改法**：`tests/css-structure.test.ts` spawn 检测器，断言 `4 modules` + `0 fatal`；AGENTS 两处计数 17→18（字节数不变）。
+- **验证**：反空转红队＝把 `MODULES` 塞一个不存在的模块 → exit 1；还原后逐字节一致。`test:core` 121/121、`verify`、`build`、lib 与 HEAD 一致。
+- **回滚**：删该测试文件即可（无源码依赖）。
+
+### L2 · 门的地基：把锚点换代（需浏览器）
+- **根因**：`scripts/cdp-probe.mjs:544` 的两个锚点都已换代——`[class$="_card"]` 在宿主里是**两态 class**（`workspaceTrigger` 为真时拼成 `…_card …_cardWorkspaceTrigger`，后缀必失配），同行的 `querySelector('textarea')` 在 0.1.5 Lexical composer 上**零命中**；`cdp-compat-contracts.mjs` 的自证也来自「文本扫描把插件自己的样式表算进去」。
+- **改法**：换 `[data-composer-card]`（稳定 marker，仓库已在用）+ Lexical 编辑面 marker；`SCAN_TEXT_EXPRESSION` 排除本插件注入的表；`layout.css.ts:938-942`（≤359px 隐藏 `_label`）与 README「模式名保留文字」的矛盾用浏览器判定后择一改。
+- **验证**：主探针 `SUMMARY base/new` 中 `new` 不得上升（基线条目 detail 变化仍归 BASE 是有意的）；契约探针改判据前后跑一次，比较命中/漏判差值；`≤359px` 那条以 359px/360px 两档截图或几何断言定论。
+- **回滚**：探针改动只影响探针文件，单提交可撤。
+
+### L3 · 补最高危的零覆盖：指针臂场景（需浏览器）
+- **根因**：`cdp-probe.mjs:159 setViewport(w,h,mobile)` 把**宽度与指针耦合**在同一参数上，结构上无法表达「窄视口 + 鼠标」——于是 `MOBILE_QUERY` 的 `(pointer: coarse)` 臂与 misc 隐藏块的 `(pointer: fine)/(pointer: none)` 臂**没有任何场景覆盖**：删掉任一侧指针臂，全套门仍然绿（2026-08-30 已泄漏过一次的形态）。
+- **改法**：把两个维度拆开（`setViewport(w,h)` + 独立的 `setPointer(client,'coarse'|'fine')`，后者走 `Emulation.setTouchEmulationEnabled`——`setEmulatedMedia` 对 pointer 特征无效）；新增「390×844 + pointer:fine」场景，断言插件零干预（frame 不出现、注入控件不在、移动规则 `matches=false`）；反向「≥1024px + coarse」可仿 session-delete 的 16a–16d。
+- **验证**：反空转红队＝**故意删掉 JS 的 coarse 臂或 CSS 的 pointer 臂，新场景必须变红**；再跑一遍全场景确认没有回归。
+- **回滚**：新场景独立于既有场景；`setPointer` 拆维度后旧调用点补默认值即可退回。
+
+### L4 · 行为改动 A：两条跨插件顺序依赖（**等你一句话**：D-5 选项 A 或 B）
+- **根因**：与第三方 `@linxin666/dsh-web-all` 的注入表**同特异度、同 `!important`** → 只靠样式表顺序分胜负；`display` 那条翻转的症状是 dismiss-shadow 变回可见盒。
+- **改法（A）**：给 `layout.css.ts:63` 与 `:199` 加前导元素选择器（如 `html `）→ (0,1,1)/(0,4,1)，与顺序无关；随之**清空探针白名单**，它变成零白名单的纯回归门。**改法（B）**：维持现状，白名单 2 条（理由已在探针源码里）。
+- **验证**：`scripts/probes/cascade-conflict-probe.mjs` 重跑——A 完成后期望这两条不再出现为 order-tie（或转为「靠特异度赢」的 normal 声明），`whitelisted` 归 0；另跑 `order-flip.mjs` 确认顺序翻转不再改变结果。
+- **回滚**：去掉前缀 + 还原白名单（同一提交内可逆）。
+
+### L5 · 行为改动 B：Android 16px 门控（**等你一句话**：D-1 选项 A 或 B）
+- **根因**：`misc.css.ts:113-116`、`:125-129` 无 iOS 门控地抬到 16px，与同文件 `:146-148`「Android 与桌面保持紧凑 13px」自相矛盾。
+- **改法（A）**：加 `html[data-mobile-nav-ios]` 前缀 → Android 回落 13px（iOS 不变，那两条在 iOS 上本来冗余）；**（B）**：改 `:146-148` 的说法承认 Android 也是 16px。
+- **验证**：`scripts/cdp-zoom-probe.mjs`（21 断言）必须仍全绿；A 需要**新增一条 Android 断言**（把「第三方 13px 输入框不变」同场景扩到这两个输入框），否则这次像素变更自身也没有门。
+- **回滚**：去掉前缀即回 16px。
+
+### L6 · 低危清理（不需要决定，逐个带判定法）
+- **J5** `settings-toolbar-reparent.ts:12` 用裸 `[class*="_header"]`（仓库禁止的子串，CSS 侧已锚定）：活页面一条 `compareDocumentPosition` 判「工具栏头是否在卡头之前」；是则改结构锚，否则记录为「当前靠文档顺序安全」。
+- **J6** `stats-line.ts` 的 TPS 归还循环以 marker 为索引，marker 被自身 stale 分支摘掉后归还整体跳过（最坏＝桌面态少一行 TPS）：构造时序（摘 marker → 触发归还）后断言 TPS 仍归还。
+- **J7** C3 剩 1 处「同选择器拆两条」（irow 那处，checker 仍列 info）：合并前先列出两条**之间**的规则，证明不会插队；能证明才并。
+- **J4** `gesture-guard` 的 `consumed` Map 持强引用：可换 `WeakMap`（低危，无功能错误）。
+- **验证**：J5/J6 各自一条 live 断言；J7 有 `css-structure.test.ts` 兜底；J4 无行为断言，属有意的延后。
+
+### 链的边界（不在这条链里的事）
+- 覆盖率缺口的**其余**部分（aionui 整条、subagent-chip-touch、预览全屏、stats 标记、theme-color、dismiss-shadow、debug 徽章）——它们是「新增门」的独立课题，不在修复链上。
+- `gitgraph` 芯片 reparent（被 `EXPECTED_FAILURES` 基线豁免）——独立课题，修好后必须从基线移除。
