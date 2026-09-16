@@ -32,34 +32,18 @@ export declare function installMobileEffect(ctx: ClientContext, label: string, i
 export declare function findFrame(): HTMLElement | null;
 /** Resolve the plugin-owned frame marker, falling back to the raw shell frame. */
 export declare function getFrame(): HTMLElement | null;
+export declare function ensureDismissShadow(): void;
 /**
  * Frame marker controller: owns `data-mobile-nav="frame"` and every plugin
  * marker that can survive on the shell-owned frame. Installed once at apply
  * time so effects no longer each need to find/set/clear the frame. Returns a
  * disposer that unregisters the task and resets the installed flag, so a
  * same-environment plugin reload can rebuild the reconciler from scratch.
+ * (The host-generation probe this controller used to call was dead code —
+ * nothing ever read `data-mobile-nav-gen`, and the plugin deliberately does
+ * not yield the drawer to the host's one: see docs/maintenance/pitfalls.md
+ * §0.1.5 抽屉 z 与遮罩.)
  */
-/**
- * Host generation probe for the sidebar drawer.
- *
- * 0.1.5 turned the official expanded sidebar into an overlay drawer of its
- * own: `pI_x6G_sidebarCol` carries `position:absolute; z-index:1100` while
- * expanded and a drag handle to resize itself. Our legacy column rules
- * (`z-index:40 !important` plus a full-screen backdrop) then paint OVER it:
- * the official drawer still has a box and healthy computed styles, but it is
- * ordered below and stops being painted and hit-testable - the user sees a
- * full-screen dim with no drawer ("全屏都是阴影"). Newer hosts therefore need
- * the legacy rules to yield.
- *
- * The signal must be structural, NOT computed `z-index`: this probe runs while
- * our own stylesheet is present, so a computed z-index read would return the 40
- * we ourselves forced and the check would latch false forever (measured
- * deadlock). We read `position` on the un-collapsed column instead.
- */
-export declare function isNativeDrawerGeneration(frame: HTMLElement | null): boolean;
-export declare function ensureDismissShadow(): void;
-/** Mirror the probe onto the root element, where the stylesheet gates on it. */
-export declare function updateNativeDrawerGen(): void;
 export declare function installFrameController(): () => void;
 /**
  * One unit of DOM reconciliation driven by the shared full-tree observer.

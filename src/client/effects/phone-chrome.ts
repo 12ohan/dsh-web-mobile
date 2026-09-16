@@ -104,38 +104,6 @@ export function getFrame(): HTMLElement | null {
   return document.querySelector('[data-mobile-nav="frame"]') ?? findFrame()
 }
 
-/**
- * Frame marker controller: owns `data-mobile-nav="frame"` and every plugin
- * marker that can survive on the shell-owned frame. Installed once at apply
- * time so effects no longer each need to find/set/clear the frame. Returns a
- * disposer that unregisters the task and resets the installed flag, so a
- * same-environment plugin reload can rebuild the reconciler from scratch.
- */
-/**
- * Host generation probe for the sidebar drawer.
- *
- * 0.1.5 turned the official expanded sidebar into an overlay drawer of its
- * own: `pI_x6G_sidebarCol` carries `position:absolute; z-index:1100` while
- * expanded and a drag handle to resize itself. Our legacy column rules
- * (`z-index:40 !important` plus a full-screen backdrop) then paint OVER it:
- * the official drawer still has a box and healthy computed styles, but it is
- * ordered below and stops being painted and hit-testable - the user sees a
- * full-screen dim with no drawer ("全屏都是阴影"). Newer hosts therefore need
- * the legacy rules to yield.
- *
- * The signal must be structural, NOT computed `z-index`: this probe runs while
- * our own stylesheet is present, so a computed z-index read would return the 40
- * we ourselves forced and the check would latch false forever (measured
- * deadlock). We read `position` on the un-collapsed column instead.
- */
-export function isNativeDrawerGeneration(frame: HTMLElement | null): boolean {
-  if (frame === null) return false
-  const col = frame.firstElementChild
-  if (!(col instanceof HTMLElement)) return false
-  if (frame.hasAttribute('data-sidebar-collapsed')) return false
-  return getComputedStyle(col).position === 'absolute'
-}
-
 /** The third-party mobile compat shim shipped inside `@linxin666/dsh-web-all`
  *  collapses the drawer on ANY click inside `[role="treeitem"]` at ≤768px by
  *  clicking the host's logo-row toggle — with no `_rowActions` exemption, so a
@@ -175,15 +143,17 @@ export function ensureDismissShadow(): void {
   pane.insertBefore(element, pane.firstElementChild)
 }
 
-/** Mirror the probe onto the root element, where the stylesheet gates on it. */
-export function updateNativeDrawerGen(): void {
-  if (typeof document === 'undefined') return
-  const frame = findFrame()
-  const root = document.documentElement
-  if (isNativeDrawerGeneration(frame)) root.setAttribute('data-mobile-nav-gen', 'native-drawer')
-  else root.removeAttribute('data-mobile-nav-gen')
-}
-
+/**
+ * Frame marker controller: owns `data-mobile-nav="frame"` and every plugin
+ * marker that can survive on the shell-owned frame. Installed once at apply
+ * time so effects no longer each need to find/set/clear the frame. Returns a
+ * disposer that unregisters the task and resets the installed flag, so a
+ * same-environment plugin reload can rebuild the reconciler from scratch.
+ * (The host-generation probe this controller used to call was dead code —
+ * nothing ever read `data-mobile-nav-gen`, and the plugin deliberately does
+ * not yield the drawer to the host's one: see docs/maintenance/pitfalls.md
+ * §0.1.5 抽屉 z 与遮罩.)
+ */
 export function installFrameController(): () => void {
   if (frameControllerInstalled) return () => {}
   frameControllerInstalled = true
@@ -196,7 +166,6 @@ export function installFrameController(): () => void {
       if (frame !== null && !frame.hasAttribute('data-mobile-nav')) {
         frame.setAttribute('data-mobile-nav', 'frame')
       }
-      updateNativeDrawerGen()
       ensureDismissShadow()
     },
     dispose: () => {
@@ -207,7 +176,6 @@ export function installFrameController(): () => void {
         frame.removeAttribute('data-aionui-preview-open')
       }
       if (typeof document !== 'undefined') {
-        document.documentElement.removeAttribute('data-mobile-nav-gen')
         document.querySelector(DISMISS_SHADOW_SELECTOR)?.remove()
       }
       frame = null
