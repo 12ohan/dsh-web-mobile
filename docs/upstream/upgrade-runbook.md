@@ -7,7 +7,7 @@
 ```sh
 dsh --version                            # 宿主版本
 git -C ~/dsh-mobile-nav status --short   # 必须干净
-sha1sum ~/dsh-mobile-nav/lib/client.js   # rev = 前 12 位
+sha1sum ~/dsh-mobile-nav/lib/client.js   # 不要用它的前 12 位当 rev（见下方 bundle 端点条）
 ```
 
 另记录当前安装的 client-ui 子包版本与 §2 哈希清单，升级后逐项比对。
@@ -49,7 +49,7 @@ CSS module 哈希是包版本的函数；下列前缀是本插件选择器/探�
 
 - composer 编辑面：`[data-composer-input]` 是 0.1.2-rc.1 Lexical marker；0.1.1-rc.2 只有 `data-composer-card`/`data-composer-seat`（guard/marker 逻辑按各文件头注释对账）。
 - `[data-input-mirror]`/`[data-input-backdrop]` 自 0.1.2 被删（保留为旧宿主兜底，新宿主空转）。
-- client bundle 端点：0.1.2-rc.1 起走合并式 `/plugins/??a/client.js,b/client.js&rev=<12位>`；rev = `sha1sum lib/client.js` 前 12 位（服务端 no-cache，rev 仅缓存 bust；路径猜错拿到 404 空 body，其 sha1 恒 `da39a3ee5e6b`）。
+- client bundle 端点：0.1.2-rc.1 起走合并式 `/plugins/??a/client.js,b/client.js&rev=<12位>`；**rev 既不是 `sha1sum lib/client.js` 也不是 served body 的 sha1**（0.1.5 实测 rev `6d6b8afda63c` vs sha1(lib) `70e6f5deeb99`）——别拿 rev 对账。单包组合 URL 一律 404（空 body，sha1 恒 `da39a3ee5e6b`），只有 `__DSH_BOOT__` 里那条完整 URL 才 200；权威判据＝served body 是 `lib/client.js` 的**逐字节前缀 + 80 字节 `//# sourceMappingURL=…` 尾巴**（AGENTS.md「页面状态/bundle 校验」有完整命令）。
 - `data-conversation-composer-overlay` 渲染在每个活跃 conversation.view 根上（轨迹 tab 同款）；marker 判定只认 `.dsfv-panel`。
 - viewport meta：宿主各版都不带 `maximum-scale`；插件武装期接管并重申 `width=device-width, initial-scale=1, viewport-fit=cover`。
 

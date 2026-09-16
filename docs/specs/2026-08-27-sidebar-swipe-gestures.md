@@ -99,8 +99,8 @@
 | `cooldownMs` | **350** | 覆盖 .28s transition，防动画中反向手势双翻 |
 | 判定组合 | `ratio ≥ X \|\| velocity ≥ V` | OR 非 AND（慢速长拖 / 快速短滑都有效） |
 | 边缘触摸优先 | document 捕获 `touchmove`（passive:false）`preventDefault` | 起点在识别区内 stroke 完全不被浏览器滚动抢占（iOS 合成器会抢边缘横滑/斜滑；防滚后事件流完整，iOS UIScreenEdgePanGestureRecognizer 语义）；纵向主导 reset 后恢复滚动 |
-| 横向滚动容器让位（第四轮） | `findHorizontalScroller`（纯函数，node:test）+ `chainFrom`（运行时快照） | 起指在 overflow-x:auto/scroll 且真实溢出的容器内（stats 条、消息代码块）→ beginStroke 拒绝：不 preventDefault（保原生 pan）、不判开抽屉。96px 区覆盖这些容器的左段，无此守卫则横滑 stats 条误开抽屉（失败场景 C1） |
-| 浏览器手势抑制（第四轮） | 根元素 `overscroll-behavior-x: none !important`（layout.css.ts，mobile media query 内） | Android Chrome 边缘返回（历史导航）由此抑制——仅 html/body 有效（Chromium issue 41483088），headless CDP 只能断言 computed style，真机手感需人工验证；iOS Safari/壳无 CSS 手段（WebKit bug 240183），靠 96px 区避让其 ~20-40px 边缘条 |
+| 横向滚动容器让位（第四轮） | `findHorizontalScroller`（纯函数，node:test）+ `chainFrom`（运行时快照） | 起指在 overflow-x:auto/scroll 且真实溢出的容器内（stats 条、消息代码块）→ beginStroke 拒绝：不 preventDefault（保原生 pan）、不判开抽屉。识别区（0.45×视口宽）覆盖这些容器的左段，无此守卫则横滑 stats 条误开抽屉（失败场景 C1） |
+| 浏览器手势抑制（第四轮） | 根元素 `overscroll-behavior-x: none !important`（layout.css.ts，mobile media query 内） | Android Chrome 边缘返回（历史导航）由此抑制——仅 html/body 有效（Chromium issue 41483088），headless CDP 只能断言 computed style，真机手感需人工验证；iOS Safari/壳无 CSS 手段（WebKit bug 240183），靠识别区（0.45×视口宽）避让其 ~20-40px 边缘条 |
 
 ## 文件级设计
 
@@ -250,7 +250,7 @@ RELEASE ──classifySwipe──▶ 'open'|'close' → markGestureConsumed + ct
 - 打开/关闭手势间须等待 cooldown 350ms 过期（探针每步后 `sleep(500)`）
 - 偶发边缘滑出超时（run 1）为 headless 触摸合成抖动，重跑即稳定
 
-**合并期修正（2026-08-27，维护者）**：consume 标记窗 1000→300ms + 手势层 consumedEl 门控每次 pointerdown 清空——WebKit 壳会整体抑制手势后的合成 click，长窗不清空会把用户下一次真实 tap 吞成死点击（upTo 不在链上时标记延伸到 document 根，短窗过期即兜底）。共存机制现基于 #32 nav-arm 方案（上文「自愈重发」为 v2.1.5 基线的历史方案）；终值参数见上文「本方案参数（实装值，第三轮调优 2026-08-27）」表：START_ZONE 48 / lock 8 / open 0.16 / close 0.13 / vel 0.45/0.45。
+**合并期修正（2026-08-27，维护者）**：consume 标记窗 1000→300ms + 手势层 consumedEl 门控每次 pointerdown 清空——WebKit 壳会整体抑制手势后的合成 click，长窗不清空会把用户下一次真实 tap 吞成死点击（upTo 不在链上时标记延伸到 document 根，短窗过期即兜底）。共存机制现基于 #32 nav-arm 方案（上文「自愈重发」为 v2.1.5 基线的历史方案）；终值参数见上文「本方案参数（实装值，第三轮调优 2026-08-27）」表：START_ZONE `round(0.45×视口宽)` / lock 8 / open 0.16 / close 0.13 / vel 0.45/0.45。
 
 **维护期修正（2026-08-29，依据 docs/audits/2026-08-27-sidebar-swipe-latent-defects.md）**：① 宿主 `onDrawerClick`/`onDrawerPointerUp` 首行谓词升级为 `isStrokeLocked() || consumeIfGestured(event)`（S0/S1：宿主 capture pointerup 注册序先于手势层，consume 事后标记在同一 release 事件上尚未写入，唯有序型前移的轴锁定标志能防抢跑/双翻抵消——`isStrokeLocked` 在 `tryLock`（pointermove 阶段）置位、`reset` 清除，严格早于任何 pointerup，无时序竞态）；② 热区 DOM 元素已删除（C1–C3：判定纯几何，探针改行为断言）。上文历史段落残留的「24px 热区」「1.5× 偏置」「自愈重发」字样为历史记录，以「本方案参数」表、状态机与本文共存的机制描述为准。
 
