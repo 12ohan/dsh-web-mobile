@@ -252,9 +252,27 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 
 ---
 
+> **执行状态总表（2026-09-16 复核，逐条以命令实测而非提交信息为准）**
+>
+> | 任务 | 状态 | 实测核对（命令 → 观察值） |
+> |---|---|---|
+> | Task 0 结构检测器 | ✅ 落库 | `sha1sum scripts/css-structure-check.mjs` → `b2fd5b9141914e9350ab8e79e72ad2a991b03f73`，与下方 Step 2 期望**逐字节相同** |
+> | Task 1 A1 缩进／重复 media | ✅ | `grep -c '@media (max-width: 1023px) and (pointer: coarse)' src/client/styles/compat.css.ts` → **1**（去重后）；checker 16 fatal → 0 |
+> | Task 2 B1 后缀匹配注释 | ✅ | `grep -rn 'class\$=' src/client/styles/` → **2 命中，都是注释**（无选择器） |
+> | Task 3 A2/A3 死 order 与死规则 | ✅ | `grep -c 'order: 3' …/layout.css.ts` → **0**；`grep -c 'flex: 0 0 28px' …` → **0** |
+> | Task 4 C 类冗余 | ✅ | 合并两对分割选择器（`f1738f1`）；**第三对刻意不并**，作为 checker 的 info 留在基线里（不是漏做） |
+> | Task 5 D 类注释订正 | ✅ | 手势旧值 `96px` 在 `src/client/styles/` **0 命中** |
+> | Task 6 F1 死代码 | ✅ | `isNativeDrawerGeneration` 在 `src/` **0 命中**（`6111603` 删除；源码只剩一条解释它已消失的注释） |
+> | Task 7 收口 | ✅ | 计数两处同步（AGENTS 两处「18 个回归锚点」+ README「十八个锚点」）；`node --test tests/docs-consistency.test.ts` → 6/6 |
+> | Task 8 G 类运行时门 | ✅ | 见 §状态表 G 行（独立验收 EXIT=0 + 白名单自失效红队实测） |
+>
+> 各任务下的 `- [ ]` **Step 勾选框保留为原始计划文本，未逐条回填**——执行中的偏差（删改行数、合并取舍、实测数字变化）以本表和 §6 修订记录为准，回填勾选框只会产生第二份可能过时的真相。
+
+---
+
 ### Task 0：把结构检测器落库 —— **已完成（2026-09-15）**
 
-> 已落在 `scripts/css-structure-check.mjs`（sha1 `b2fd5b9141914e9350ab8e79e72ad2a991b03f73`），跑当前树输出 **16 fatal + 5 info**（＝A1 的债，T1 清零）。脚本头已注明与 `src/client/core/css-rules.ts` 的分工。**暂不接进 `test:core`**：接入即在 16 fatal 上变红，等 T1 之后再说。
+> 已落在 `scripts/css-structure-check.mjs`（sha1 `b2fd5b9141914e9350ab8e79e72ad2a991b03f73`），跑当前树输出 **16 fatal + 5 info**（＝A1 的债，T1 清零）。脚本头已注明与 `src/client/core/css-rules.ts` 的分工。**是否接进 `test:core` 见 §3 D-4**（T1 已落地，16 fatal 已清零，现在是可接的时点）。
 
 **Files:** Create `scripts/css-structure-check.mjs`（源码见**附录 A**，本审查已实测）
 
