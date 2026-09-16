@@ -422,7 +422,7 @@ T8 的探针实测出 2 条 plugin-involved 的 order-tie（双方**同特异度
 | `display` | `layout.css.ts:199` (0,4,0) `none` | dismiss-shadow 变回 `inline-flex` + `pointer-events:auto` 的**可见盒** |
 
 - **选项 A（我的建议）**：结构化修掉——给这两条规则加前导元素选择器（如 `html `），特异度升到 (0,1,1)/(0,4,1)，从此与顺序无关；随之**白名单清空**，探针变成零白名单的纯回归门。代价：这两条规则内**所有**声明一起提权（理论上只会让更多同特异度的对手让位，但仍须重跑探针 + 相关回归，约一轮）。
-- **选项 B（本轮现状）**：登记为有意顺序依赖（白名单 2 条，理由已写进探针源码）。代价：`dsh-web-all` 是 `^` 版本范围且会重新注入样式，顺序一旦翻转，症状是「影子变成可见盒」，而探针只在有人手动跑时才报 CANDIDATE。
+- **选项 B（本轮现状）**：登记为有意顺序依赖（白名单 2 条，理由已写进探针源码）。代价：`dsh-web-all` 是 `^` 版本范围且会重新注入样式，顺序一旦翻转，症状是「影子变成可见盒」；探针**会**把它报成 CANDIDATE（自失效已实测，见状态表 G 行），但它只在有人手动跑探针时才说话——没有 CI 兜底（`fix/*` 分支不触发 CI，见「维护入口」）。
 - **不做的事**：不要把 `data-plugin` 当来源过滤器去改探针（宿主加载器会给所有尚无该属性的 `<style>` 盖章，见 §6.6）。
 
 ---
@@ -745,6 +745,6 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 | D3 | D-1 | 待拍板 | |
 | E1 / E2 | — | 建议加注释 / 可不动 | |
 | F2 | — | 流程约定已写进 §0.2 |
-| G（同特异度踩踏） | T8 | **有门（2026-09-16）** | `scripts/probes/cascade-conflict-probe.mjs`（原生 CDP `CSS.getMatchedStylesForNode`，390×844 coarse，4 场景 + 正对照，640 行，builtin-only）。独立验收运行（本会话亲跑）EXIT=0：`candidates=0 plugin-involved=0 whitelisted=2 host-only=10 importance-ties=6 model-errors=0 module-lines=exact sampled=271`。2 条白名单＝与本插件与第三方 `@linxin666/dsh-web-all` 注入表的**跨插件顺序依赖**（frame 三轨 grid、dismiss-shadow 的 display:none），处置见 §3 D-5 |
+| G（同特异度踩踏） | T8 | **有门（2026-09-16）** | `scripts/probes/cascade-conflict-probe.mjs`（原生 CDP `CSS.getMatchedStylesForNode`，390×844 coarse，4 场景 + 正对照，640 行，builtin-only）。独立验收运行（本会话亲跑）EXIT=0：`candidates=0 plugin-involved=0 whitelisted=2 host-only=10 importance-ties=6 model-errors=0 module-lines=exact sampled=271`。2 条白名单＝与本插件与第三方 `@linxin666/dsh-web-all` 注入表的**跨插件顺序依赖**（frame 三轨 grid、dismiss-shadow 的 display:none），处置见 §3 D-5。**白名单自失效已实测**（2026-09-16 红队：把第 1 条的 `winnerWhere` 改到不匹配 → 该候选复现为 `CANDIDATE`、`whitelisted` 2→1、`candidates=1`、EXIT=1；随后逐字节还原）。**注意运行环境**：`DSH_PROBE_SESSION_ID` 必须是完整 UUID（`session-<36 位>`，前缀写法会一直停在 `frame+active timed out`）|
 | G（状态矩阵/:has 过匹配/env 兜底） | T8 | **部分审（覆盖缺口已登记）** | 探针只覆盖 390×844 coarse 的四场景（default / drawer-open / files-open / ios-attr）。**未覆盖**：`[role=menu]` 打开态、宿主设置与市场对话框、aionui 探索器·预览 sheet、hero 空态、流式期、子代理 running/idle、第三方插件自身态、tablet 与桌面档、inset≠0。**机制盲区**：inline style 不入模型（手势层 `setProperty(...,'important')` 正在此列）、未激活伪类 CDP 不返回、`@supports`/`@layer` 不区分、24px 网格 ∪ 标记采样会漏极小或被覆盖元素。采样量 run 间浮动（host-only 10↔11），故「某次跑绿」≠穷尽 |
 | H（第三方上游 CSS / lib 一致性 / 动效时序） | — | **未审** | | |
