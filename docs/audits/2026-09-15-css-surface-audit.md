@@ -510,7 +510,12 @@ A 先修掉了上一轮脚本的两处系统性误差——分组选择器没拆
 27 条。**最有行动价值的三条**：
 
 1. **26 条哈希契约里 8 条上游已 0 命中**（`qDHVXG_` / `gdEzaW_` / `bpnj3G_` / `jmhvDG_` / `_dialog_15u5s_22` / `eGUBIq_` / `-NprXq_`）；其中 **5 条非 lazy ⇒ `node scripts/cdp-compat-contracts.mjs` 今天应 miss=5 / exit 1**。有替代物（`_dialog_15u5s_22` → `_dialog_w1urq_22` 同一 Dialog 原语 rehash；`qDHVXG_headerActions` → `wSkVaW_headerActions`；`gdEzaW_bubble` → `Sixlwa_bubble`）。（E 的语料是宿主 bundle + profile，**按 realpath 排除了本仓库**——第一版没排导致假 HIT。）
-2. **契约探针的 hash 判据可自满足**：它做文本扫描，而 `document.styleSheets` 含插件自己的 `<style data-plugin>`。**判据必须先把 CSS 注释剥掉**（`cssText` 不含注释）；不剥得 16 条假自满足，剥后只剩 2 条。
+2. **契约探针的 hash 判据可自满足**：它做文本扫描，而 `document.styleSheets` 含插件自己注入的样式表。**2026-09-16 复核后这条要改写对策**（E 的原理对、给的修法对不上现行代码）：
+
+   - 现行 `scripts/cdp-compat-contracts.mjs` 的 `SCAN_TEXT_EXPRESSION`（:128–141）是 `collect(document.styleSheets)` **无条件全收**，没有任何来源过滤；判据 `scanText.includes(contract.needle)`（:252）。所以**自满足向量是「我们自己的 compat 选择器里写着目标哈希」**（`[class*="qDHVXG_"]` 这类字面量就活在注入样式表里）——上游把该 class 删了，探针照样报 hit。
+   - E 提的「先把 CSS 注释剥掉」对现行判据是**空转**：它扫的是 `rule.cssText`，而 cssText 本来就不含注释（注释只在源串/`textContent` 里）。剥注释只对「按源码文本扫描」的写法有意义。
+   - **不要用 `data-plugin` 当「插件注入」的过滤器**：宿主加载器会给*所有*尚无该属性的 `<style>` 盖章——见 `@deepseek-ai/dsh-client-modules/lib/client.js` 的 `for (const el of document.querySelectorAll("style:not([data-plugin])")) el.setAttribute("data-plugin", id)`。宿主 UI 模块走同一注册路径（id 形如 `@deepseek-ai/dsh-client-ui-*`），所以宿主样式表**也带 `data-plugin`**；按它过滤会把宿主证据一起丢掉，门从「恒真」翻成「恒假」。
+   - 可行的收窄（待 T8 释放浏览器后 A/B 验证）：只排除**本插件 id**（`data-plugin="dsh-web-mobile"`）的样式表，或把 CSS 文本一路降级为辅助信号、以 DOM className 为主判据（触发条件性 UI lazy 的条目仍走 `lazy`/`skip`）。**判据要先量 hit/miss 变化再定**：改完必须回答「26 条里有几条从 hit 翻成 miss、翻的是否正是 E 那 8 条 0 命中的」，否则等于换了个方向的门。
 3. **死规则 7 处 + 活着的过匹配 4 处**：`[aria-modal="true"] [class*="_tabs"]` 完全没有 owner 限定，上游 8 族连同宿主自己的 tabs 一起被强制 wrap+8px；`irow` 族后代片段（`spec`/`nm`/`grow`/`switch`/`owner`）**无 owner 限定**，复活后误伤不受控。
 
 **未做**：E 建议「跑一次 `cdp-compat-contracts.mjs` 以真实 hit/skip/miss 推翻或确认整张表」——需要活浏览器，与 T8 探针冲突，**排在 T8 之后**。
