@@ -486,7 +486,7 @@ T8 的探针实测出 2 条 plugin-involved 的 order-tie（双方**同特异度
 | 编号 | 发现 | 处置 |
 |---|---|---|
 | J1 | `overlay-backdrop-fab.ts`：`fadeHook` 只在**工厂体**里赋值一次，而 `core.deactivate()` 每次 MOBILE_QUERY 翻转都对每个 task 跑 `dispose()`（`reconciler-core.ts:146-158`），重新激活只跑 `ensure()`（`:139-143`），而 `registerReconcileTasks` 只被 `index.tsx:169` 调一次 → **第一次跨 1023px 之后遮罩渐隐永久失效**（收抽屉时遮罩直接消失）。全仓无测试/探针覆盖 `fadeOverlayOut` | **已修**（`4e6a45e`）：改为在 `ensure()` 里重新武装，并在注释里写明为什么不能在工厂体 |
-| J2 | `base.css.ts:70` 的 `[data-mobile-nav="delete-confirm"]` **没有任何写方**（bundle 内该字面量计数 = 1，即选择器本身）→ 删除确认卡的红色描边/淡红底**从未生效过**（从 fork 摘进来就是死的） | **待拍板**：删掉该规则，或给写入方补上这个包裹属性（视觉决策，同 §3 体例） |
+| J2 | ~~`base.css.ts:70` 的 `[data-mobile-nav="delete-confirm"]` 没有任何写方~~ → **2026-09-16 复核：此发现不成立，撤回** | **已证伪（无 bug）**。证据：①裸字面量 `data-mobile-nav="delete-confirm"` 在 `src/` 与 `lib/client.js` 里各出现 **0 次**——它既不是选择器也不是写方，不存在「死规则」；②`base.css.ts:70` 实为 `[data-mobile-nav="delete-confirm-title"]`，有写方（`session-menu.ts:185`）；③把四个 CSS 模块里全部 18 个 `data-mobile-nav` 选择器与全部 20 个 JS 写方做集合差：**有选择器无写方 = 0**。卡片本体是白底底部弹层（`base.css.ts:123`），红色只在标题文字色（`:67`，活的）。**教训**：审查结论也要过「选择器真的存在吗」这一关，否则会有人照它去删一条活规则 |
 | J3 | reconciler 的 `MutationObserver` 未开 `characterData`，与 AGENTS.md「stats-line 因 TPS 是 characterData 文本变更而保持 `scopes:['*']`」相矛盾 | **未复现**：流式期大概率有别的 mutation 陪伴而掩盖。报告里写了构造验证法；**不改代码**（改了没有可证收益） |
 | J4 | `gesture-guard` 的 `consumed` Map 对 DOM 节点持强引用、只在节点再次进入某次 click 祖先链时才删过期项 → 长会话单调增长并保留已卸载子树 | 低危（无功能错误）。可换 `WeakMap`；**未做** |
 | J5 | `settings-toolbar-reparent.ts:12` 用**裸后代** `[class*="_header"]` 找锚点——正是仓库禁止的那条子串（CSS 侧已锚定到 `> [class*="_nav"] > …`）。当前安全只靠**文档顺序**（工具栏头在卡头之前） | 线索：活页面一条 `compareDocumentPosition` 即可判定；`plugin-card-header-bleed` 探针抓不到这个退化 |
