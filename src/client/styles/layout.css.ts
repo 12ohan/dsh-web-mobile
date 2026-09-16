@@ -125,13 +125,13 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        reads cleanly, and the settings dialog (width:100% of this box) stays
        pixel-flush with the drawer. */
     border-right: none !important;
-  }
-  /* The drawer's inner surface is 280px wide while the column is 88vw/320px, so
+
+    /* The drawer's inner surface is 280px wide while the column is 88vw/320px, so
      the remaining 40px showed our own column background as a vertical strip
      along the right edge (measured: content right edge 280, column 320; the
      owner reported a white bar). The inner surface owns that band instead, so
      the strip is filled by the drawer's real surface colour. */
-  /* The 40px band is a STACKING result, not a colour one: the drawer's inner
+    /* The 40px band is a STACKING result, not a colour one: the drawer's inner
      surface is only 280px wide (host markup), while our column is 320px and
      carries z-index 1300 - so the column's own background paints OVER the
      surface's right 40px. Pixel-verified from a screenshot with the drawer open:
@@ -139,8 +139,20 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      (our white column). Repainting the column with the surface's own value makes
      the seam invisible whatever the theme does; the surface underneath keeps its
      own colour for the 280px it does cover. */
-  [data-mobile-nav="frame"] > :first-child {
     background: var(--dsw-alias-bg-surface, #f9fafb);
+    /* Drawer swipe gestures (edge swipe-in / content swipe-out, see
+     docs/specs/2026-08-27-sidebar-swipe-gestures.md).
+     One rule is load-bearing for the gesture layer: dropping pan-x on the
+     drawer lets horizontal pointermove events reach the gesture code —
+     WITHOUT it the browser treats a horizontal stroke as a pan, fires
+     pointercancel and the gesture never classifies (vertical panning stays
+     intact). Start-hit is decided purely by geometry on the document
+     capture listener (START_ZONE_PX = 48px); there is no hotspot element
+     (removed per audit C2, 2026-08-27). pinch-zoom rides along with the
+     root value so a browser-applied zoom stays undoable inside the drawer
+     too (#45); touch-action intersects down the ancestor chain, so a bare
+     pan-y here would cancel the root's pinch permission. */
+    touch-action: pan-y pinch-zoom !important;
   }
 
   /* Expanded state (frame without data-sidebar-collapsed) slides the drawer in.
@@ -156,21 +168,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     transform: none !important;
   }
 
-  /* Drawer swipe gestures (edge swipe-in / content swipe-out, see
-     docs/specs/2026-08-27-sidebar-swipe-gestures.md).
-     One rule is load-bearing for the gesture layer: dropping pan-x on the
-     drawer lets horizontal pointermove events reach the gesture code —
-     WITHOUT it the browser treats a horizontal stroke as a pan, fires
-     pointercancel and the gesture never classifies (vertical panning stays
-     intact). Start-hit is decided purely by geometry on the document
-     capture listener (START_ZONE_PX = 48px); there is no hotspot element
-     (removed per audit C2, 2026-08-27). pinch-zoom rides along with the
-     root value so a browser-applied zoom stays undoable inside the drawer
-     too (#45); touch-action intersects down the ancestor chain, so a bare
-     pan-y here would cancel the root's pinch permission. */
-  [data-mobile-nav="frame"] > :first-child {
-    touch-action: pan-y pinch-zoom !important;
-  }
 
   /* The host's own drawer handle. It renders the branded fish glyph (a 24x17
      path in a 23.16x17.04 viewBox) and the phone owner reads it as a stray
@@ -604,6 +601,7 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-mobile-nav="frame"] [data-phase] header {
     padding-left: 0 !important;
     padding-right: 8px !important;
+    position: relative !important;
   }
   /* Header popovers resolve against the header, not against their 28px flow
      box. 0.1.5's background-job chip anchors its menu with
@@ -623,9 +621,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      the menu lands at x=8 y=849 — past the 844px viewport (A/B 2026-09-13).
      Scoped to the header actions slot, so the subagent lineage root inside
      the crumbs keeps its own anchored, fixed-position menu. */
-  [data-mobile-nav="frame"] [data-phase] header {
-    position: relative !important;
-  }
   [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) {
     position: static !important;
   }
