@@ -238,14 +238,16 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 
 ### Global Constraints（每个任务都隐含遵守）
 
-- **AGENTS.md 预算**：测试强制 ≤ **65536 B**；**但运行时注入截断更早**（实测 65501 B 时尾部整条不加载），安全线按 **≤64800 B** 走。2026-09-16 压缩后为 **64535 B**。加指针时若超，先把叙述性内容搬进 `docs/maintenance/pitfalls.md`。
+- **AGENTS.md 预算**：测试强制 ≤ **65536 B**；**但运行时注入截断更早**（实测 65501 B 时尾部整条不加载），安全线按 **≤64800 B** 走。2026-09-16 压缩后为 **64714 B**（本轮又落了三条契约，同轮压缩了会话删除与市场两条旧条目腾出空间）。加指针时若超，先把叙述性内容搬进 `docs/maintenance/pitfalls.md`。
 - **AGENTS.md 只能引用存在的路径**，且必须匹配 `scripts/probes/*.mjs` / `scripts/cdp-*.mjs` / `docs/specs/*.md` / `docs/audits/*.md` / `docs/upstream/*.{md,json}` / `docs/maintenance/*.md`；引用数 ≥10。
 - **`pitfalls.md` 需 ≥15 个 `## ` 小节；AGENTS.md 需 ≥15 个指向它的 `docs/maintenance/pitfalls.md\` §` 指针。**
 - **每个 CSS 模块反引号恰好 2 个**（模板定界符）；**CSS 注释里写反引号会提前终止模板**（TS1005）。
 - 三个 CSS 模块中**不得出现裸 `.hash_ {` 选择器行**；`wSkVaW_` 规则必须带 `[data-mobile-nav="frame"]`（同测试文件）。
 - **`lib/` 必须随源码重建**：CI 有 `git diff --exit-code lib` 新鲜度门。改完源码不 rebuild = 任务未完成。
 - 门禁顺序：`pnpm verify` → `pnpm test:core` → `pnpm build` → lib 新鲜度。
-- **门禁还要看得见未跟踪文件**：`git diff` 系列都不报 `lib/` 下的孤儿产物，而 `tsc` 从不清理 outDir——删源码后旧产物会永久留下。补一条 `git status --porcelain --ignored lib` 必须为空。\n- **lib 新鲜度这条命令有陷阱（2026-09-16 实证，两个坏提交就是这样溜过去的）**：`git diff --exit-code lib` 比的是**工作区 ↔ index**，只要你之前 `git add lib` 过，它**恒绿**，无论源码有没有一起提交。CI 里 index==HEAD 所以有意义，本地不是。本地等价写法＝提交后**再 build 一次**，然后 `git diff --exit-code HEAD -- lib`（比 HEAD，不比 index）；源码与 `lib/` 必须进**同一个提交**。
+- **门禁还要看得见未跟踪文件**：`git diff` 系列都不报 `lib/` 下的孤儿产物，而 `tsc` 从不清理 outDir——删源码后旧产物会永久留下。补一条 `git status --porcelain --ignored lib` 必须为空。
+- **lib 新鲜度这条命令有陷阱（2026-09-16 实证，两个坏提交就是这样溜过去的）**：`git diff --exit-code lib` 比的是**工作区 ↔ index**，只要你之前 `git add lib` 过，它**恒绿**，无论源码有没有一起提交。CI 里 index==HEAD 所以有意义，本地不是。本地等价写法＝提交后**再 build 一次**，然后 `git diff --exit-code HEAD -- lib`（比 HEAD，不比 index）；源码与 `lib/` 必须进**同一个提交**。
+- **HEAD 已实测为绿（2026-09-16）**：`git archive HEAD` 导出到 `~/tmp` 干净目录 → 接上仓库 `node_modules` → `pnpm build`，再逐字节比对：**69 个入库 `lib` 文件全部一致、0 个未跟踪孤儿**。所以修正后的门禁在分支尖端会通过；历史上有两处「`lib/` 领先源码一个提交」的配对（`acc26ec`/`26ca8e9` 由 `232cc26` 补源），只影响逐提交的历史形状，不影响 HEAD 与将来的 PR。这条检查**不必等浏览器**，任何时候可重复。
 - 动任何文件前先跑 §0.2 命令 1；指纹不符则该文件的行号作废。
 
 ---
