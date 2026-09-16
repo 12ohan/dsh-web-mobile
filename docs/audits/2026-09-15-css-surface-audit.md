@@ -489,7 +489,13 @@ A 先修掉了上一轮脚本的两处系统性误差——分组选择器没拆
 
 16 条，7 条 P1。**已修 8 条**（`7de13fb`）：手势识别区 `START_ZONE_PX = 48px` / `96px` 三处（两处 CSS 注释 + spec 的「终值」行）、AGENTS 与 pitfalls 的 `touch-action: pan-y` 缺 `pinch-zoom`（**按它改就会复现 #45**）、检测器基线仍写 16 fatal、task 模块归属、components 树漏 `open-files-panel.ts`、悬空 `§探针环境参数（旧）`、实装版本清单 4 项、runbook 的 rev 食谱。
 
-**未修**（登记）：`scripts/cdp-probe.mjs:544` 的活选择器 `[class$="_card"]`——仓库自己禁止后缀式，且该断言没有 `includes`，失败会被 `EXPECTED_FAILURES` 吸收成 BASE 不报警；修它会改变探针语义，须单独一轮。`layout.css.ts:938-942`（≤359px 对 `[class*="_label"]:has(> svg)` 施加 `display:none`）与 README/AGENTS「模式名保留文字」矛盾——**渲染后果需浏览器复核**，C 自己也标了未验证。`README.md:151` 的 `maximum-scale` 承诺、调试地图的 `[class$=]` 副本（本地不入库）、`subagent-chip-touch` 的 2000ms/500ms 归属，均待下一轮。
+**未修 → 2026-09-16 逐条取证后的处置**（只读取证；四项逐字对源码与实装宿主 bundle）：
+
+- ✅ **已修**（`0d2c308`）`subagent-chip-touch` 的 2000ms/500ms 归属：两个数字实测在 `phone-chrome.ts`——`navObserver` 与 `setTimeout(disarmNav, 2000)` 同处 `armNav()`，`:675` 的 `lastTouchNavAt < 500` 在 document 捕获 click；芯片模块无 MutationObserver，自身窗口是 800/1000ms。已移进「只许一个抽屉 closer 武装」条。
+- ✅ **已修**（`0d2c308`）`README.md:151` 的 `maximum-scale` 承诺：它在 `### v2.1.1` 段内，作为该版本历史条目当年为真（`7f39ac0`），但已被 `cb16329` 取代（现写死 `VIEWPORT_CONTENT`、写入永不带缩放锁）——**标注取代而非改写历史**。附带更正：viewport 所有权由 `scripts/cdp-zoom-probe.mjs` 的 A8–A10 守；`tests/ios-zoom-guard.test.ts` 的 5 个 test 全是引擎判定 / 16px 下限 / touch-action，**不断言 viewport**。
+- ✅ **已修** 调试地图（本地不入库，126→134 行）：基线包名换代（`dsh-web-all` 0.3.20 / `dsh-client-ui-market` 0.3.20）、三条哈希归属更正（`VOzbGW_`→官方 settings-general、`hHd-Xa_`→官方 sidebar、`pI_x6G_`→官方 layout；**两棵树都搜才判得准**——只搜 profile 会得 0 命中而误判「哈希消失」）、§4 两行后缀式改回源码实写的子串 + frame 域，并加复核块说明市场 UI 当前未启用、§2/§4/§6 市场段无处对账。
+- ⏳ **排队（须浏览器，排 T8 之后）** `scripts/cdp-probe.mjs:544` 的 `[class$="_card"]`：原文逐字属实，基线吸收也属实（该条无 `includes` ⇒ detail 变了仍记 BASE、`new=0`）。**两项新增发现**：①宿主 `uV2eYG_card` 是**两态** class——`workspaceTrigger` 为真时拼成 `uV2eYG_card uV2eYG_cardWorkspaceTrigger`，后缀**必失配**（`[data-composer-card]` 是稳定替代，仓库已在用）；②同一行的锚点 `querySelector('textarea')` **也已换代失配**（0.1.5 composer 是 Lexical，会话包内 `textarea` 零命中，页面上能取到的 textarea 来自别的包）。两处一起换，再跑一轮决定该基线条目是否加 detail 约束。
+- ⏳ **待浏览器复核** `layout.css.ts:938-942`（≤359px 对 `[class*="_label"]:has(> svg)` 施加 `display:none`）与 README/AGENTS「模式名保留文字」的矛盾——C 自己标了未验证，无浏览器同样无法定论。
 
 ### §6.6 E 向：宿主契约与第三方（`E-host-contracts.md`）
 
@@ -510,9 +516,12 @@ A 先修掉了上一轮脚本的两处系统性误差——分组选择器没拆
 - **F-6 门禁看不见 `lib/` 下的未跟踪文件**：干净 clone 里植入孤儿产物后 `git diff --exit-code lib` 仍 exit 0，`git add lib` 之后也是 0；而 **tsc 从不清理 outDir**，删源码会留下永久孤儿。补法：`git status --porcelain --ignored lib` 必须为空。
 - **F-7/F-8** 见 Global Constraints 与 §6.3。
 - **F-10** `lib/client.js` **没有 sourcemap**（build-client.mjs 显式删），而 host 半区 3 个 `.js.map` 全发货——最大的出货文件不可回溯。
-- **F-11** CSS 占 bundle **37.0%**（130812/353082 B），src 里已有的 CSS 被整份复制一遍；顺带修正了本文件与 AGENTS 的「client.js≈2 万行」旧读数（实测 7003 行 / 353082 B / 27 模块）。
+  - **2026-09-16 修正（结论保留，说法改准）**：磁盘上确实没有 `lib/client.js.map`，但**服务端会合成并 200 返回一个 map**（396744 B，index map：1 个 section、累计 `sources` 1 个、mappings 34924 字符）——那 80 字节 `sourceMappingURL` 尾巴是加载器加的，不是 bundle 自带。要害是它的 `sources` 只有 `/plugins/dsh-web-mobile/client.js` **它自己**：devtools 拿到的是「bundle 映射到 bundle」的退化 map，**无法回溯到 `src/`**。所以 F-10 的结论（最大出货文件不可回溯）成立，但「没有 sourcemap／devtools 拿不到东西」的说法不准确；排查时也别拿那 396 KB 的响应体去反推源码。
+- **F-11** CSS 占 bundle **37.0%**（130812/353082 B；2026-09-16 复核 131965/352521 B ＝ **37.4%**，量级一致），src 里已有的 CSS 被整份复制一遍；顺带修正了本文件与 AGENTS 的「client.js≈2 万行」旧读数（实测 7003 行 / 353082 B / 27 模块）。
 
 **F 主动声明未取证的一条**：served bundle 的字节前缀判据它没做成（cookie 过期 → 组合 URL 返回空 body，正是 `da39a3ee5e6b` 那个别误判形态）。这条链路 **F 不下结论**，本文件也不据此改动。
+
+> **2026-09-16 已补齐**（`4223fe5`）：空 body 的真因不是 cookie，而是 **URL 里的 `rev` 必须是 shell HTML 的当前值**——自造的 `rev=probe`、全零或过期值一律 404 空 body，外观与「插件没被服务」完全相同（这正是当初误判的入口）。取当前 rev 后判据成立：HTTP 200，总 **352601 B ＝ `lib/client.js` 352521 B ＋ 80 B `sourceMappingURL` 尾巴**，前缀 sha1 **`2dfc5c027bd6`** 与本地文件逐字节相同。链路另外两环也已实测：profile 用 `link:` 装本仓库（`~/.dsh/profiles/web/node_modules/dsh-web-mobile → ../../../../dsh-mobile-nav`）、本仓库 `lib/` 与 HEAD 逐字节一致（干净导出重建：69 文件全同、0 孤儿）。**至此「浏览器跑的到底是哪份代码」在无浏览器条件下也可判定**，AGENTS 与 pitfalls §① 已同步食谱。
 
 ---
 
