@@ -59,8 +59,16 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      and the newest message sits under the composer because the host's
      at-bottom follow scrolls its own scroll body, not the document. With
      border-box the padding is taken out of the 100% height instead, so the
-     frame is exactly one viewport tall and the document never scrolls. */
-  [data-mobile-nav="frame"] {
+     frame is exactly one viewport tall and the document never scrolls.
+
+     The leading html element selector is load-bearing, not decoration: the
+     third-party @linxin666/dsh-web-all sheet ships an equal-specificity
+     !important grid-template-columns for this same element under
+     (max-width: 768px), so without the extra element the winner is decided by
+     which sheet happens to be injected later. Measured before and after with
+     scripts/probes/cascade-conflict-probe.mjs: no computed value moves, the
+     rule only stops depending on sheet order (audit D-5 option A). */
+  html [data-mobile-nav="frame"] {
     box-sizing: border-box !important;
     position: relative !important;
     grid-template-columns: minmax(0, 1fr) 0 0 !important;
@@ -193,15 +201,16 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      scripts/probes/cascade-conflict-probe.mjs reports both sides imp=true at
      (0,4,0) and lists this as a reviewed order-tie; if the injection order
      flips, the dismiss shadow returns as a visible inline-flex box with
-     pointer-events restored. To make it order-independent, lift this rule's
-     specificity to (0,4,1) by prefixing a leading element selector (for example
-     html) - not done yet, pending decision, see the audit's D-5. The hash class
-     and the label stay as fallbacks for hosts without that hook. */
-  [data-mobile-nav="frame"][data-sidebar-collapsed] [data-pane="sidebar"] [data-dsh-responsive-part="sidebar-toggle"],
-  [data-mobile-nav="frame"] [data-dsh-responsive-part="sidebar-toggle"],
-  [data-mobile-nav="frame"] [class*="hHd-Xa_toggle"]:is([aria-label*="sidebar" i], [aria-label*="侧边栏"]),
-  [data-mobile-nav="frame"] button[aria-label*="sidebar" i],
-  [data-mobile-nav="frame"] button[aria-label*="侧边栏"] {
+     pointer-events restored. Done (audit D-5 option A, 2026-09-16): every
+     selector below carries a leading html, which lifts the first one to
+     (0,4,1) and ends the tie - the outcome no longer depends on which sheet is
+     injected later. The hash class and the label stay as fallbacks for hosts
+     without that hook. */
+  html [data-mobile-nav="frame"][data-sidebar-collapsed] [data-pane="sidebar"] [data-dsh-responsive-part="sidebar-toggle"],
+  html [data-mobile-nav="frame"] [data-dsh-responsive-part="sidebar-toggle"],
+  html [data-mobile-nav="frame"] [class*="hHd-Xa_toggle"]:is([aria-label*="sidebar" i], [aria-label*="侧边栏"]),
+  html [data-mobile-nav="frame"] button[aria-label*="sidebar" i],
+  html [data-mobile-nav="frame"] button[aria-label*="侧边栏"] {
     display: none !important;
   }
 
