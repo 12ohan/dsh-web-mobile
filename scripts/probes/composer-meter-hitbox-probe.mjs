@@ -20,14 +20,24 @@
 // Three traps this probe walked into, all worth knowing before asserting on this cluster:
 //   * `[class*="_card"]` is NOT composer-specific. On a 390px phone it matched 14 elements, 13 of
 //     them conversation message cards (CY-8Ka_card). The host's own `[data-composer-card]` marker is
-//     unique (count 1) and is what this probe anchors on, with a fallback for older hosts.
+//     unique (count 1) and is what this probe anchors on — with NO fallback: a census of all 23
+//     published versions of dsh-client-ui-conversation (2026-09-17, npm tarballs + jsdelivr) found
+//     the marker in every one of them, starting with the oldest, 0.0.1-rc.1. A host without it does
+//     not exist, so an absent marker must fail loudly here instead of falling back to message cards.
+//     (`[data-composer-input]` is the generation-gated marker: 0.1.2-alpha.2 onward, Lexical era.)
 //   * `[class*="_root"]:has(> [class*="_trigger"][aria-haspopup="dialog"])` is not unique either: a
 //     message action bar renders `Q51KRG_root > Q51KRG_trigger[aria-haspopup="dialog"]` as well, at
 //     y=-3906 (scrolled far above the viewport, so it still counts as laid out while nothing can
 //     reach it). Always scope the meter lookup into the composer card's trailing lane.
-//   * computed sizes lie about reachability: a composer copy that is not laid out still reports the
+//   * computed sizes lie about reachability: a composer card that is not laid out still reports the
 //     rule's 28x34 while every getBoundingClientRect() reads 0, which silently turns geometry
 //     assertions into false greens. Hence the visibility filter and the elementFromPoint hit tests.
+//     The state was reproduced and pinned down (2026-09-17, .local-tests/hidden-copy-signature.mjs):
+//     it is a card under an ancestor computing display:none — in this app that ancestor is the mobile
+//     frame, i.e. the documented "fence-only" page state. A DETACHED node is a different signature
+//     (getComputedStyle returns empty strings, not 28x34), and content-visibility:hidden on the
+//     composer stack does not zero the rects at all. In that state the filter below yields 0 usable
+//     cards and this probe fails at 0.composer-present, which is the intended loud failure.
 //
 // Scenes: phone 390x844 with touch, then desktop 1280x720 with a fine pointer (the plugin's mobile
 // rules must not touch the meter there at all).
@@ -64,11 +74,10 @@ async function waitFor(fn, label, timeoutMs) {
 // mistaken for it. No synthetic fixture: an injected copy doubles the cluster and skews every gap.
 const MEASURE = `(() => {
   const mobileQuery = matchMedia(${JSON.stringify(MOBILE_QUERY)}).matches
+  // Marker only, no fallback (see trap 1): every published host carries it, and the fallback would
+  // have silently measured the first message card holding an input.
   const marked = [...document.querySelectorAll('[data-composer-card]')]
-  const legacy = marked.length === 0
-    ? [...document.querySelectorAll('[class*="_card"]')].filter((c) => c.querySelector('textarea, [data-composer-input]') !== null)
-    : []
-  const cards = (marked.length > 0 ? marked : legacy).filter((c) => c.getBoundingClientRect().width > 0)
+  const cards = marked.filter((c) => c.getBoundingClientRect().width > 0)
   if (cards.length === 0) return JSON.stringify({ card: false, mobileQuery: mobileQuery })
   const card = cards[0]
   const trailing = card.querySelector('[class*="_trailing"]')
