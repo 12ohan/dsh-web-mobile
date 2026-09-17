@@ -401,7 +401,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 
 ## §3 待用户拍板
 
-### D-1（原 D3）· Android 上这两条 16px 规则留不留？
+### D-1（原 D3）· Android 上这两条 16px 规则留不留？—— **已执行（选项 A，2026-09-16）**
 
 `misc.css.ts:113-116` 与 `:125-129` 把 `[data-question-key] [class*="_customInput"]` 与 `[class*="dsfv-search-input"]` 抬到 16px，但**不带 iOS 门控**，与同文件 L146–148 的「Android 与桌面保持紧凑 13px」相矛盾。
 
@@ -431,7 +431,7 @@ Task 0 落库时写的是「暂不接进 `test:core`：接入即在 16 fatal 上
 - **选项 B**：不接，检测器保持手动跑（AGENTS「维护入口」与本文件都已列它）。代价：T1 修的 16 条 fatal 将来无人守——缩进错位、重复媒体查询、同选择器拆分可以无声回归，而这正是本轮开头那 16 条 fatal 的成因。
 - **选项 C**：只在 CI 里加一步，不进 `test:core`。**不推荐**：`fix/*` 分支不触发任何 CI（见「维护入口」），等于本地仍然无门。
 
-### D-5（新，2026-09-16）· 两条跨插件顺序依赖：结构化修掉，还是登记为有意依赖？
+### D-5（新，2026-09-16）· 两条跨插件顺序依赖：结构化修掉，还是登记为有意依赖？—— **已执行（选项 A，2026-09-16）**
 
 T8 的探针实测出 2 条 plugin-involved 的 order-tie（双方**同特异度、同 `!important`**，只靠样式表顺序分胜负），对手都是第三方 `@linxin666/dsh-web-all` 注入的样式表——**不是宿主**：宿主树里根本没有 `data-dsh-frame` 这个字面量，那条规则原文（`pointer-events: auto; display: inline-flex !important;`，media `max-width:768px`）在它的 `lib/client.js` 里；探针的外来表标签是启发式的（按表文本里的特征选择器取名），读的时候别当成宿主作者。
 
@@ -783,7 +783,7 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 - **验证**：反空转红队＝把 `MODULES` 塞一个不存在的模块 → exit 1；还原后逐字节一致。`test:core` 121/121、`verify`、`build`、lib 与 HEAD 一致。
 - **回滚**：删该测试文件即可（无源码依赖）。
 
-### L2 · 门的地基：把锚点换代（需浏览器）
+### L2 · 门的地基：把锚点换代（需浏览器）—— **已发现第 3 个过期锚点：`cdp-zoom-probe.mjs` 的 composer 卡**（A3/B3 在本机 headless 恒红，A/B 证实与代码改动无关；选择器 `(?:)…:has(textarea)` 在本环境 0 命中），修它时必须同时确定「当前代 composer 到底渲染成什么」（textarea 还是 Lexical contenteditable + mirror/backdrop）
 - **根因**：`scripts/cdp-probe.mjs:544` 的两个锚点都已换代——`[class$="_card"]` 在宿主里是**两态 class**（`workspaceTrigger` 为真时拼成 `…_card …_cardWorkspaceTrigger`，后缀必失配），同行的 `querySelector('textarea')` 在 0.1.5 Lexical composer 上**零命中**；`cdp-compat-contracts.mjs` 的自证也来自「文本扫描把插件自己的样式表算进去」。
 - **改法**：换 `[data-composer-card]`（稳定 marker，仓库已在用）+ Lexical 编辑面 marker；`SCAN_TEXT_EXPRESSION` 排除本插件注入的表；`layout.css.ts:938-942`（≤359px 隐藏 `_label`）与 README「模式名保留文字」的矛盾用浏览器判定后择一改。
 - **验证**：主探针 `SUMMARY base/new` 中 `new` 不得上升（基线条目 detail 变化仍归 BASE 是有意的）；契约探针改判据前后跑一次，比较命中/漏判差值；`≤359px` 那条以 359px/360px 两档截图或几何断言定论。
@@ -795,13 +795,20 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 - **验证**：反空转红队＝**故意删掉 JS 的 coarse 臂或 CSS 的 pointer 臂，新场景必须变红**；再跑一遍全场景确认没有回归。
 - **回滚**：新场景独立于既有场景；`setPointer` 拆维度后旧调用点补默认值即可退回。
 
-### L4 · 行为改动 A：两条跨插件顺序依赖（**等你一句话**：D-5 选项 A 或 B）
+### L4 · 行为改动 A：两条跨插件顺序依赖 —— ✅ 完成（D-5 选项 A，用户 2026-09-16 拍板）
+- **落地**：`layout.css.ts` 的 frame 规则与 toggle 隐藏规则的每个选择器加前导 `html` → (0,1,1) / (0,2,1)…(0,4,1)，与注入顺序无关；探针 `WHITELIST` 清空（机制保留）。
+- **实测（本机独立跑）**：`SUMMARY candidates=0 plugin-involved=0 host-only=10 whitelisted=0 important=0 importance-ties=6 model-errors=0 ALL PASS`，EXIT=0；提权前那两条**不再出现在任何类别**（不是变成 `important`，是彻底消失——赢家仍是我们的规则、值不变）。全场景 `plugin=true` 行数 0 ⇒ 本插件表已不参与任何同特异度判定。
+- **反空转**：白名单机制本身此前已红队过（改坏一条 entry → 候选复现、EXIT=1）；本次清空后，若哪天顺序真的再翻，规则没有白名单可吸收 → 直接红。
 - **根因**：与第三方 `@linxin666/dsh-web-all` 的注入表**同特异度、同 `!important`** → 只靠样式表顺序分胜负；`display` 那条翻转的症状是 dismiss-shadow 变回可见盒。
 - **改法（A）**：给 `layout.css.ts:63` 与 `:199` 加前导元素选择器（如 `html `）→ (0,1,1)/(0,4,1)，与顺序无关；随之**清空探针白名单**，它变成零白名单的纯回归门。**注意探针抓不到「提权后反而赢过头」**（它只报输给同特异度对手的声明，不报「因为特异度变高而新赢的」）——所以验收要另加一步：提权前后各打一次 frame 与 dismiss-shadow 的计算值快照（`grid-template-columns` / `display` / `position` / `padding-top`），必须**逐个相同**。**改法（B）**：维持现状，白名单 2 条（理由已在探针源码里）。
 - **验证**：`scripts/probes/cascade-conflict-probe.mjs` 重跑——A 完成后期望这两条不再出现为 order-tie（或转为「靠特异度赢」的 normal 声明），`whitelisted` 归 0；另跑 `order-flip.mjs` 确认顺序翻转不再改变结果。
 - **回滚**：去掉前缀 + 还原白名单（同一提交内可逆）。
 
-### L5 · 行为改动 B：Android 16px 门控（**等你一句话**：D-1 选项 A 或 B）
+### L5 · 行为改动 B：Android 16px 门控 —— ✅ 完成（D-1 选项 A，用户 2026-09-16 拍板）
+- **落地**：`misc.css.ts` 两条规则加 `html[data-mobile-nav-ios]` 门控（ask composer 的 `_customInput`/`_customTextarea`、file viewer 的 `dsfv-*-input`）；注释同步说明「只在 iOS 需要下限」。
+- **新门（本次补）**：zoom 探针加 A11（安卓：这三个字段必须 <16px）与 B7（iOS：必须 >=16px），断言读**注入形状的计算值**而非规则文本 —— 规则在但失效也能抓到。
+- **实测（本机独立跑，23 断言）**：新 bundle `A11 PASS {"customInput":13.3333,…} / B7 PASS {…:16}`；**旧 bundle 同一环境 A11 FAIL {…:16}**（= D-1 的病灶本体）⇒ 断言非空转，本次改动可被它证伪。
+- **预存红（与本次改动无关，A/B 实证）**：A3/B3 `composer=null` 在旧、新 bundle 上**完全同款**——本机 headless 环境里没有 textarea、也没有可见 contenteditable，探针的 composer 卡选择器 `(?:_card):has(textarea)` 命中不到。归入 L2 锚点换代。
 - **根因**：`misc.css.ts:113-116`、`:125-129` 无 iOS 门控地抬到 16px，与同文件 `:146-148`「Android 与桌面保持紧凑 13px」自相矛盾。
 - **改法（A）**：加 `html[data-mobile-nav-ios]` 前缀 → Android 回落 13px（iOS 不变，那两条在 iOS 上本来冗余）；**（B）**：改 `:146-148` 的说法承认 Android 也是 16px。
 - **验证**：`scripts/cdp-zoom-probe.mjs`（21 断言）必须仍全绿；A 需要**新增一条 Android 断言**（把「第三方 13px 输入框不变」同场景扩到这两个输入框），否则这次像素变更自身也没有门。

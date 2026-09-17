@@ -55,22 +55,14 @@ const MODULES = ['base', 'layout', 'compat', 'misc']
 // here is reported as KNOWN instead of NEW. Keep the reason with the entry; a
 // candidate that stops matching these must resurface as NEW, so keep the
 // substrings as tight as the real selectors allow.
-const WHITELIST = [
-  {
-    property: 'grid-template-columns',
-    loser: ['[data-dsh-frame]'],
-    winner: ['[data-mobile-nav="frame"]'],
-    winnerWhere: 'layout.css.ts',
-    reason: 'layout.css.ts:63 collapses the frame grid to one content column + two zero columns for the drawer. The losing sheet is NOT the host: it is the injected stylesheet of the third-party @linxin666/dsh-web-all (its own app-frame rules use the data-dsh-frame attribute vocabulary, which the host tree does not contain at all - verified 2026-09-16). Both sides are (0,1,0) !important, so this plugin\'s sheet being injected later is the only reason it wins. Two mobile-adaptation plugins style the same DOM and cascade order decides; deliberate today, order-dependent by construction.',
-  },
-  {
-    property: 'display',
-    loser: ['[data-dsh-frame][data-sidebar-collapsed]', 'sidebar-toggle'],
-    winner: ['[data-mobile-nav="frame"][data-sidebar-collapsed]', 'sidebar-toggle'],
-    winnerWhere: 'layout.css.ts',
-    reason: 'layout.css.ts:199 hides the sidebar-toggle on the inert dismiss-shadow the web-all sidebar-dismiss shim is meant to hit. The shadow is deliberately shaped to match the toggle selector. The loser is @linxin666/dsh-web-all\'s own rule (display: inline-flex !important, pointer-events: auto, same (0,4,0) - text extracted from its lib/client.js 2026-09-16), not a host rule. Equal specificity and equal importance means order decides: if that sheet were injected after ours the shadow would come back as a visible inline-flex box.',
-  },
-]
+const WHITELIST = []
+// Empty since 2026-09-16. The two entries that used to live here were the frame
+// grid and the dismiss shadow losing a tie to @linxin666/dsh-web-all, whose
+// injected sheet ships the same specificity and !important. Audit D-5 option A
+// ended both ties by giving those plugin rules a leading html element selector
+// - they now win on specificity and are reported as kind=important, which this
+// probe counts but does not fail. Keep the mechanism: a future deliberate order
+// dependency belongs here with its reason, not left for a red run to discover.
 
 // Gating policy. The audited class is this repo's OWN cross-module stomp (base
 // vs layout vs compat vs misc inside the single concatenated sheet) plus any
