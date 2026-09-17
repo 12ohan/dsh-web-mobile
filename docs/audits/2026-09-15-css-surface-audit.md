@@ -405,7 +405,8 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 
 `misc.css.ts:113-116` 与 `:125-129` 把 `[data-question-key] [class*="_customInput"]` 与 `[class*="dsfv-search-input"]` 抬到 16px，但**不带 iOS 门控**，与同文件 L146–148 的「Android 与桌面保持紧凑 13px」相矛盾。
 
-- **选项 A（推荐）**：加 `html[data-mobile-nav-ios]` 前缀，与 L168–174 的既有体系合一。iOS 行为不变（那边本来也被 L168 覆盖），Android 回到 13px，声明与实现一致。
+- **实测依据（2026-09-16，逐行核对源码）**：这两条的靶子都是文本 `input`/`textarea`，而 iOS 通用网（`html[data-mobile-nav-ios] input:not(...)` / `textarea` / `[contenteditable]:not(...)`）**特异性更高且同为 `!important`**——网是 (0,2,2) 量级（`html`+属性+类型+一个 `:not` 参数），这两条是 (0,1,0)/(0,2,0) → **在 iOS 上它们本来就完全被盖住，是死规则**。也就是说：它们今天唯一的实际作用就是「Android 上把这两个字段从 13px 抬到 16px」，而那正是与本文件 `:147-148`「Android 与桌面保持紧凑 13px」相矛盾的部分。
+- **选项 A（推荐）**：加 `html[data-mobile-nav-ios]` 前缀，与 L168–174 的既有体系合一（iOS 行为逐字节不变——那边本来由网负责）。iOS 行为不变（那边本来也被 L168 覆盖），Android 回到 13px，声明与实现一致。
 - **选项 B**：承认 Android 就是要 16px，改掉 L146–148 的说法（并把这两条从「iOS 反缩放」标题下移出来）。
 - **选项 C**：不动，只加注释说明这是有意的例外——**不推荐**：这正是下一轮审查会再次报同一条的原因。
 
@@ -439,6 +440,7 @@ T8 的探针实测出 2 条 plugin-involved 的 order-tie（双方**同特异度
 | `grid-template-columns` | `layout.css.ts:63` (0,1,0) `minmax(0,1fr) 0 0` | frame 回到单轨，抽屉两条 0 宽轨消失 |
 | `display` | `layout.css.ts:199` (0,4,0) `none` | dismiss-shadow 变回 `inline-flex` + `pointer-events:auto` 的**可见盒** |
 
+- **实测依据（2026-09-16，读源码 + 探针逐元素结果）**：`:199` 那条规则**只有一条声明**（`display: none !important`）→ 提权零波及面；`:63` 那条有 4 条声明（`box-sizing` / `position` / `grid-template-columns` / `padding-top`，全 `!important`），但探针在 frame 这个元素上（四场景唯一那个元素）只发现 `grid-template-columns` 一条同特异度竞争 → **提权在今天不改变任何计算结果**，只是把「今天已经赢来的胜利」写死。
 - **选项 A（我的建议）**：结构化修掉——给这两条规则加前导元素选择器（如 `html `），特异度升到 (0,1,1)/(0,4,1)，从此与顺序无关；随之**白名单清空**，探针变成零白名单的纯回归门。代价：这两条规则内**所有**声明一起提权（理论上只会让更多同特异度的对手让位，但仍须重跑探针 + 相关回归，约一轮）。
 - **选项 B（本轮现状）**：登记为有意顺序依赖（白名单 2 条，理由已写进探针源码）。代价：`dsh-web-all` 是 `^` 版本范围且会重新注入样式，顺序一旦翻转，症状是「影子变成可见盒」；探针**会**把它报成 CANDIDATE（自失效已实测，见状态表 G 行），但它只在有人手动跑探针时才说话——没有 CI 兜底（`fix/*` 分支不触发 CI，见「维护入口」）。
 - **不做的事**：不要把 `data-plugin` 当来源过滤器去改探针（宿主加载器会给所有尚无该属性的 `<style>` 盖章，见 §6.6）。
@@ -795,7 +797,7 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 
 ### L4 · 行为改动 A：两条跨插件顺序依赖（**等你一句话**：D-5 选项 A 或 B）
 - **根因**：与第三方 `@linxin666/dsh-web-all` 的注入表**同特异度、同 `!important`** → 只靠样式表顺序分胜负；`display` 那条翻转的症状是 dismiss-shadow 变回可见盒。
-- **改法（A）**：给 `layout.css.ts:63` 与 `:199` 加前导元素选择器（如 `html `）→ (0,1,1)/(0,4,1)，与顺序无关；随之**清空探针白名单**，它变成零白名单的纯回归门。**改法（B）**：维持现状，白名单 2 条（理由已在探针源码里）。
+- **改法（A）**：给 `layout.css.ts:63` 与 `:199` 加前导元素选择器（如 `html `）→ (0,1,1)/(0,4,1)，与顺序无关；随之**清空探针白名单**，它变成零白名单的纯回归门。**注意探针抓不到「提权后反而赢过头」**（它只报输给同特异度对手的声明，不报「因为特异度变高而新赢的」）——所以验收要另加一步：提权前后各打一次 frame 与 dismiss-shadow 的计算值快照（`grid-template-columns` / `display` / `position` / `padding-top`），必须**逐个相同**。**改法（B）**：维持现状，白名单 2 条（理由已在探针源码里）。
 - **验证**：`scripts/probes/cascade-conflict-probe.mjs` 重跑——A 完成后期望这两条不再出现为 order-tie（或转为「靠特异度赢」的 normal 声明），`whitelisted` 归 0；另跑 `order-flip.mjs` 确认顺序翻转不再改变结果。
 - **回滚**：去掉前缀 + 还原白名单（同一提交内可逆）。
 
