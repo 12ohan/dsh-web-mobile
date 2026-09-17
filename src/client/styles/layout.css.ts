@@ -547,15 +547,21 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     flex: none;
     min-width: 0;
   }
-  /* ContextMeter (JObwrW_ hash family) right-cluster pinning: keep the meter
-     at its official size (28x28 trigger, 14px ring -- enlarging the ring made
-     it steal attention) and glue it to the send button. A small negative
-     right margin trims the 6px lane gap to 2px against send. Anchor on the
-     unique aria-haspopup="dialog" trigger (no other composer control uses
-     it), not the hashed class, so an upstream hash bump cannot silently
-     unhook us. Knob: margin-right trim (-4px). */
+  /* ContextMeter (JObwrW_ hash family) hugging the primary key. This single
+     value is the whole spacing knob, and because the trigger box is centred on
+     the ring ink it doubles as the ink offset:
+       6px + margin-right = the sliver before the primary key = the ink's
+       leftward shift. 0px (current) therefore shifts the ink 6px -- exactly the
+       official lane gap, with no negative-margin trick left in the chain --
+       while -6px pins the ink perfectly still and +8px was vetoed on
+       2026-09-17 as "too much" (14px). The phone owner asked for a visible
+       shift after 1px (-5px) proved imperceptible, and will re-tune this number
+       by eye: change it and nothing else moves.
+     Anchor on the unique aria-haspopup="dialog" trigger (no other composer
+     control uses it), not the hashed class, so an upstream hash bump cannot
+     silently unhook us. */
   [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"] > [class*="_root"]:has(> [class*="_trigger"][aria-haspopup="dialog"]) {
-    margin-right: -4px;
+    margin-right: 0px;
   }
   /* The model pill joins the same right cluster: its margin-left:auto absorbs
      ALL trailing slack, so the adaptive void sits between the tools lane and
@@ -568,14 +574,22 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     margin-left: auto;
     margin-right: -4px;
   }
-  /* Shrink only the trigger BOX (28 -> 24, padding zeroed) while the ring
-     ink stays at its official 14px: the dead inset per side drops from 7px
-     to 5px so the small ring no longer floats in its own button. 24x24 keeps
-     the WCAG 2.2 minimum target size. Ring size itself is intentionally
-     untouched -- enlarging it was rejected as attention-grabbing. */
+  /* Grow only the invisible trigger BOX, never the ring ink: 24x24 -> 28x34.
+     The WIDTH is capped at 28 by pure geometry, not by taste: the box is
+     centred on the ink, and the primary key's hit box begins 14px right of the
+     ink's centre, so 28 is the widest box that can reach that boundary without
+     stealing a single pixel from the destructive key (the current 1px sliver
+     is the spacing knob on the root rule above); the same arithmetic puts the
+     left edge on the model pill's edge. The 34px HEIGHT is free: the primary
+     key is already the tallest control in the lane, so the box cannot overlap
+     anything vertically and the row height does not move. Hit area 576 -> 952
+     square px (+65%) with the ink within 1px of its old spot (probe-asserted),
+     and the ring's ink stays at its official 14px -- enlarging it is rejected
+     as attention-grabbing. Knob: height can drop to 28 if the tap halo should
+     be a circle rather than a stadium. */
   [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"] > [class*="_root"]:has(> [class*="_trigger"][aria-haspopup="dialog"]) > [class*="_trigger"] {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 34px;
     padding: 0;
   }
   /* Slack-absorber priority in the trailing lane: model pill > meter > send.
