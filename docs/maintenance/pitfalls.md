@@ -8,7 +8,7 @@
 
 ---
 
-## CDP 手势实测（scripts/cdp-swipe-probe.mjs，现 32 项断言）驱动的两处修正
+## CDP 手势实测（scripts/cdp-swipe-probe.mjs，现 35 项断言）驱动的两处修正
 
 **CDP 手势实测（scripts/cdp-swipe-probe.mjs，现 32 项断言）驱动的两处修正**：① **`touch-action` 的真正落点是 html/body 而不是 drawer**——layout.css.ts 里 mobile 的 html/body `touch-action: manipulation` 允许横向 pan，左缘热区触摸穿透到 body 背景（drawer 空壳/无内容时 `elementFromPoint` 命中 body）后横向拖动被浏览器判为 pan 发 `pointercancel`，手势层收不到完整事件流。已改为 `pan-y`（禁横向 pan 保纵向 + pinch-zoom；`touch-action` 不继承，只影响直接命中根背景的触摸，内容容器内横向滚动不受影响）。drawer 的 pan-y 保留双保险。② **内容区判定必须几何优先**（`beginStroke` 用 `clientX ∈ drawerRect` 而非 `drawer.contains(event.target)`）——hero/blank 空抽屉没有内容元素，pointerdown 穿透到 frame 背景，target 树判定会误拒手势；坐标判定对空抽屉同样成立（用户滑开空抽屉后仍能滑回）。验证注意：隔离 profile 全新启动会弹宿主 "Internal Testing Notice" 模态（BODY > `_root_15u5s`，含 mask + `aria-modal`），探针必须移除整个 root（只删 `[aria-modal=true]` 会留 mask 拦截触摸）；打开/关闭手势间需等待 cooldown 350ms 过期，否则反向手势被冷却拦（探针每步后 `sleep(500)`）。
 
@@ -132,6 +132,30 @@
 
 **代际检测仍必须用结构类名（col 类含 `sidebarCol`）＋ computed position，绝不能用 computed z-index**：检测跑在我们 CSS 还在场的时候，读到的 z 是我们自己压出来的值（当年是 40、现在是 1300），用 z 阈值检测会永久 false 形成死锁（2026-09-14 实测：z 阈值版探针 A1/A2 恒 FAIL）。手势层**零改动兼容**——手势 commit 本来就是 `ctx.layout.toggleSidebar()`（开=锁轴即 commit、关=inline 滑出落地后 commit），官方 absolute col 上 inline transform 照常工作；cdp-swipe-failures 16 场景实测 12 场景全过（composer 场景为探针脚本形状漂移，见 runbook）。主探针 7/9 与修复前同基线（mobile.open-control＝鲸鱼盖 toggle 的独立待决项）。升级对账点：`sidebarCol` 类子串（0.1.5 哈希 `pI_x6G_` 会变，升级后按 `docs/upstream/compat-contracts.json` 对账）。
 
+
+---
+
+## 0.1.5 窄屏分支压掉抽屉关态槽位 → 点击路径动画全丢（2026-09-17 实锤，第十二轮）
+
+**症状**：点左上角 toggle 开抽屉、点右侧遮罩收抽屉**都没有动画**（连续 16 帧 computed transform 恒 `none`），而手势开关抽屉动画正常。
+
+**根因（两条叠加）**：
+1. **层叠**：0.1.5 窄屏分支（注入者 `@deepseek-ai/dsh-api-session-controller`，`@media (max-width: 768px)`）新增
+   `[data-dsh-frame][data-sidebar-collapsed] [data-pane="sidebar"] { width:52px !important; transform:none; pointer-events:none; background:transparent !important; border:0 !important }`（并把 slot 子节点 `display:none !important`，只留 `[data-dsh-responsive-part="sidebar-toggle"]`）——**特异度 (0,3,0)**，比插件 `[data-mobile-nav="frame"] > :first-child`（(0,2,0)）高一档，于是插件的 `transform: translateX(-110%)` 与 `width: min(88vw,280px) !important` **一起落败**。实测关态 `transform:none / width:52px / rect [0,0,52,844] / pointer-events:none / background:transparent`，开态 `width:280px / transform:none`。
+   于是开↔关**唯一实际变化的是 width（52↔280）**，而过渡属性是 `transform` → 没有可插值的量，点击路径硬跳。手势路径之所以幸存：手势层写的是 **inline** `transform !important`（inline important 胜过作者 important）。
+2. **翻态撕视觉**：宿主在 marker 翻转瞬间就把 pane 变透明、去边框、内容 `display:none`。所以只修 (1) 只能救「开」方向；关闭方向必须**先动画、落地才翻**（第八轮晚提交已解决同构问题）。
+
+**修复（三处，互相独立）**：
+- `layout.css.ts` 以**同特异度**重申关态槽位：`[data-mobile-nav="frame"][data-sidebar-collapsed] > :first-child { width: min(88vw, 280px) !important; transform: translateX(-110%) !important }`（关态回到 `[-308,280]`，right=-28）。
+- `sidebar-swipe.ts` 导出 `closeDrawerAnimated(ctx)`：复用 `commitWithAnimation`（280ms 滑到 `±110%`、落地 `finishPendingCommit` 才翻 marker、写 cooldown 350ms、marker 守卫防盲 toggle）；`prefers-reduced-motion: reduce` 或抽屉已关时返回 false。
+- `phone-chrome.ts` 的 `installOverlayInteractions` 把唯一的 `toggleSidebar` 本地别名改为 `if (!closeDrawerAnimated(ctx)) ctx.layout.toggleSidebar()` → 六个点击关闭入口（backdrop tap / Escape / 非行导航 tap / 已选中行 tap / `armNav` 观察者 / `closeOnNavigation` 回退）全部先动画；开方向保持普通 toggle。
+
+**教训（可复用）**：
+- **宿主升级时「插件规则被更特异度规则压掉」是静默的**，症状不是布局错乱而是「两个状态只差一个不在 transition 列表里的属性」→ 动画静默消失。改 CSS 状态机后必须逐帧采样确认中间帧存在，只看终态计算值会漏。
+- **探针断言「离屏」不够**：52px 透明壳同样「离屏」（`pointer-events:none`、`elementFromPoint` 命中会话内容）。必须断言**设计槽位数学**（`rect.left <= -rect.width`）。
+- 探针里插值代码谨防 **ASI 陷阱**：`...getComputedStyle(x).transform` 换行接 `(() => {...})()` 会被解析成 `transform(...)` 调用（报错 `getComputedStyle(...).transform is not a function`），插值表达式前加 `void` 或分号。
+
+**回归门**：`scripts/probes/drawer-click-animation-probe.mjs`（5 场景：关态槽位几何 / toggle 开 16 帧采样 / backdrop 关 / Escape 关 / 桌面零命中）。注意「点 toggle 开」是可达路径，而**抽屉开时点 toggle 不可达**（抽屉盖住它，且第三方 dismiss shim 吞 frame 内、抽屉外的点击）——该场景用 Escape 验证同一收口。
 
 ---
 

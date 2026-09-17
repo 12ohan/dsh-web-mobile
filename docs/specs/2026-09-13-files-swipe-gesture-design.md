@@ -1,6 +1,6 @@
 # 右缘文件面板手势（files-swipe）
 
-> **评审状态**：基于 `docs/specs/2026-08-27-sidebar-swipe-gestures.md` 的 B 档手势层做右缘扩展，不新建监听器。方向语义与抽屉让位收窄经用户两轮拍板（2026-09-13）：①右缘 45% 屏宽；②右缘左滑＝开文件面板、右滑＝关闭已开界面；③**抽屉开着时右缘左滑绝不收抽屉**（对 2026-08-29 anywhere-close 的刻意收窄），只有右缘右滑收抽屉。
+> **评审状态**：基于 `docs/specs/2026-08-27-sidebar-swipe-gestures.md` 的 B 档手势层做右缘扩展，不新建监听器。方向语义与抽屉让位收窄经用户两轮拍板（2026-09-13）：①右缘 45% 屏宽；②右缘左滑＝开文件面板、右滑＝关闭已开界面；③**抽屉开着时右缘左滑绝不收抽屉**（对 2026-08-29 anywhere-close 的刻意收窄；2026-09-17 限定为「抽屉右缘之外」——抽屉本体上的左滑永远归抽屉族），只有右缘右滑收抽屉。
 > **定位**：宿主 0.1.5 的 Files 面板（`ui-sidebar-right`）目前唯一入口是右上角文件夹按钮；本方案给它补上与抽屉对称的边缘滑动手势。
 
 ## 概述
@@ -23,11 +23,11 @@
 | 抽屉关 + Files 开 | 无动作 | **关闭 Files 面板** |
 | 抽屉开 | **无动作（绝不收抽屉）** | **收抽屉**（走抽屉现有动画关闭路径，观感与今天一致） |
 
-- **左滑永不收起任何东西**：抽屉开着时右缘左滑是刻意的无动作——此时开 Files 会被抽屉（z-1100）盖住不可见，等于手势坏了；抽屉的左滑收起语义保留在**左半屏与抽屉内容区**（8-29 行为在左区原样）。
+- **左滑永不收起任何东西（限「抽屉右缘之外」，2026-09-17 收窄）**：抽屉开着时右缘左滑是刻意的无动作——此时开 Files 会被抽屉（z-1100）盖住不可见，等于手势坏了；抽屉的左滑收起语义保留在**左半屏与抽屉内容区**（8-29 行为在左区原样）。
 - Files 面板开着时，左缘右滑仍是「开抽屉盖到面板上」（现状不变）。
 - 关闭提交按**可见顶层**路由：抽屉开 → 收抽屉；否则 Files 开 → 关 Files 面板。
 - 无动作格子不写 consume、不进入提交，合成 click 正常派发（与抽屉非判定 stroke 同构）。
-- **抽屉开 + 右滑 = 抽屉关闭的门槛**：该格提交的是**抽屉关闭**，故沿用抽屉族的 `CLOSE_DISTANCE_RATIO = 0.13 × viewport` 或 `|velX| ≥ 0.45`（方向须与笔画一致）——两族对同一笔物理笔画判定一致。**不可省**：390px 下 files 区（x ≥ 214）与抽屉列（280px）重叠 66px，抽屉内容上的拇指在滚动时会横向漂 8px，无门槛即误收抽屉并吞掉这次 click（2026-09-14 质检发现，判定函数原本直接 `return 'close'`）。
+- **抽屉开 + 右滑 = 抽屉关闭的门槛**：该格提交的是**抽屉关闭**，故沿用抽屉族的 `CLOSE_DISTANCE_RATIO = 0.13 × viewport` 或 `|velX| ≥ 0.45`（方向须与笔画一致）——两族对同一笔物理笔画判定一致。**不可省**：390px 下 files 区（x ≥ 214）与抽屉列（280px）重叠 66px，而**这 66px 自 2026-09-17 起归抽屉族**（起点落在抽屉矩形内即由抽屉族接管，触摸抽屉本体左滑＝收回；files 区只从抽屉右缘之外起算），抽屉内容上的拇指在滚动时会横向漂 8px，无门槛即误收抽屉并吞掉这次 click（2026-09-14 质检发现，判定函数原本直接 `return 'close'`）。
 - **RTL 镜像**：files 区＝左缘 45%，左滑↔右滑语义整体镜像。
 
 ## 判定参数（全部镜像抽屉现值，标注可调）
@@ -52,7 +52,7 @@
 1. `src/client/effects/sidebar-swipe.ts`
    - 新增 `FILES_ZONE_RATIO` / `FILES_DISTANCE_RATIO` / `FILES_VELOCITY` 常量与 `filesZonePxFor()`、`filesZoneHit()`（纯函数，RTL 镜像，导出供单测）。
    - 新增纯函数 `classifyFilesSwipe(panelOpen, drawerOpen, dx, velX, thresholds, rtl)`：方向 × 状态决策表——左滑仅当 `!panelOpen && !drawerOpen` → `'open-files'`；右滑时 `panelOpen → 'close-files'`，否则 `drawerOpen → 'close-drawer'`；其余 `'none'`。锁轴时快照 `panelOpen`（与 `lockDrawerOpen` 同模式）。
-   - `beginStroke`：抽屉关时左区→drawer 模式、右区→files 模式；抽屉开时左区/抽屉内→drawer 模式（不变）、右区→files 模式（承担右滑收抽屉 + 左滑抑制）。全部让位前置检查（cooldown/modal/takeover/selection/drag 标记/悬浮窗形状/横滚容器）两条分支共用，不新增。
+   - `beginStroke`：抽屉关时左区→drawer 模式、右区→files 模式；抽屉开时左区/抽屉内→drawer 模式、**抽屉右缘之外**的右区→files 模式（承担右滑收抽屉 + 左滑抑制）。家族路由由纯函数 `openStateStartMode(insideDrawer, inFilesZone)` 决定（2026-09-17）：抽屉体内一律归抽屉族。全部让位前置检查（cooldown/modal/takeover/selection/drag 标记/悬浮窗形状/横滚容器）两条分支共用，不新增。
    - `tryLock` / `onPointerMove`：files 模式跳过 `startFollow` / `applyFollow`（无跟手），采样照常。
    - `endStroke`：files 分支按 `classifyFilesSwipe` 判定——`'open-files'` / `'close-files'` → `filesToggle()` + 冷却 + consume；`'close-drawer'` → 与抽屉 close 判定同一提交路径（`commitFollowClose`，280ms 晚提交动画）+ consume；`'none'` → 释放、无动作。
 2. `src/client/index.tsx`：`installSidebarSwipe(ctx, openFilesPanel)` 一行接线。
