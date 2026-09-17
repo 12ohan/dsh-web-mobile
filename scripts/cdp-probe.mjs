@@ -465,6 +465,45 @@ async function runCoreScenario(client, config, signal, pageErrors) {
   });
   pass('desktop.boundary-1024', 'frame=absent preview=absent controls=hidden');
 
+  // Narrow viewport, mouse pointer: the width condition matches and the pointer
+  // condition does not, which is the one state no other scene covers. Both
+  // halves of the guard are checked here - MOBILE_QUERY's coarse arm keeps the
+  // frame out, and the desktop hide block's pointer arm keeps the injected
+  // controls hidden even though the viewport is only 390px wide. Same width and
+  // same page as the touch scene further down, so the pair differs in exactly
+  // one variable: delete either guard and this scene turns red while that one
+  // stays green.
+  await setViewport(client, 390, 844, false);
+  await waitFor('narrow mouse no-op', config.timeoutMs, signal, async () => {
+    const state = await client.evaluate(`(() => {
+      const visible = (selector) => {
+        const element = document.querySelector(selector);
+        if (element === null) return false;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      };
+      const pointer = (feature) => window.matchMedia('(' + feature + ')').matches;
+      return {
+        widthMatches: window.matchMedia('(max-width: 1023px)').matches,
+        coarse: pointer('pointer: coarse'),
+        fine: pointer('pointer: fine'),
+        none: pointer('pointer: none'),
+        frame: document.querySelector(${JSON.stringify(MOBILE_FRAME_SELECTOR)}) !== null,
+        preview: document.querySelector('[data-mobile-preview-full]') !== null,
+        toggleVisible: visible(${JSON.stringify(MOBILE_TOGGLE_SELECTOR)}),
+        fabVisible: visible(${JSON.stringify(MOBILE_FAB_SELECTOR)}),
+      };
+    })()`);
+    const quiet = !state.frame && !state.preview && !state.toggleVisible && !state.fabVisible;
+    return state.widthMatches && !state.coarse && quiet ? state : null;
+  }).then((state) => {
+    pass(
+      'desktop.narrow-mouse-no-op',
+      `390x844 mouse=pointer:${state.fine ? 'fine' : state.none ? 'none' : '?'} frame=absent preview=absent controls=hidden`,
+    );
+  });
+
   // Exact 1023px boundary: still mobile, so the frame and an open control must
   // come back.
   await setViewport(client, 1023, 800, true);

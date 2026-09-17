@@ -221,7 +221,7 @@ pnpm build && git diff --exit-code lib   # 期望无差异（lib 已随源码重
 - (a) **完全相同的选择器文本**跨模块且同名属性取值不同 → **0 组**（这是个有用的阴性结论：冲突不是「同一选择器写两遍」这种显式形态）。
 - (b) 不同选择器、**特异度相同**、同名属性取值不同 → **63 组候选**，但绝大多数是**假阳性**：`[data-mobile-nav="toggle"]`（base L7）与 `[data-mobile-nav="fab"]`（base L205）特异度都是 (0,1,0) 且都声明 `display`/`align-items`，可它们**永远不可能是同一个元素**。静态匹配无法回答「是否命中同一元素」，所以 (b) 只能当线索表，**不能当结论**。
 
-**结论：这一类无法用静态分析定性，必须取运行时的元素级 matched rules。** 唯一可靠手段是 CDP 的 `CSS.getMatchedStylesForNode`（对每个命中元素返回 matchedCSSRules、各自特异度与来源样式表），把「被同特异度对手按顺序压掉的声明」逐条列出来。本仓库现有 15 个探针 + 主探针 32 断言 + CI 三门**都没有覆盖这个能力**。
+**结论：这一类无法用静态分析定性，必须取运行时的元素级 matched rules。** 唯一可靠手段是 CDP 的 `CSS.getMatchedStylesForNode`（对每个命中元素返回 matchedCSSRules、各自特异度与来源样式表），把「被同特异度对手按顺序压掉的声明」逐条列出来。本仓库现有的 18 个 anchors 探针 + 4 个 cdp-* 探针 + 主探针 14 项断言 + CI 三门**都没有覆盖这个能力**（2026-09-16 订正：此前写的 15/32 是过时计数）。
 
 **同一类别里另外三个未审项**（都需要运行时，本次完全没碰）：
 1. **状态矩阵**：抽屉开/合 × files 面板开/合 × sheet 开 × `[role="menu"]` 开 × 流式中 × subagent running/idle 形态 × `html[data-mobile-nav-ios]` 有/无 × ≥1024px 宽触摸。本次只在「默认态」上推理。
@@ -789,11 +789,19 @@ git log --all --oneline -S'isNativeDrawerGeneration' -- src/client/effects/phone
 - **验证**：主探针 `SUMMARY base/new` 中 `new` 不得上升（基线条目 detail 变化仍归 BASE 是有意的）；契约探针改判据前后跑一次，比较命中/漏判差值；`≤359px` 那条以 359px/360px 两档截图或几何断言定论。
 - **回滚**：探针改动只影响探针文件，单提交可撤。
 
-### L3 · 补最高危的零覆盖：指针臂场景（需浏览器）
+### L3 · 补最高危的零覆盖：指针臂场景 —— ✅ 完成（2026-09-16）
 - **根因**：`cdp-probe.mjs:159 setViewport(w,h,mobile)` 把**宽度与指针耦合**在同一参数上，结构上无法表达「窄视口 + 鼠标」——于是 `MOBILE_QUERY` 的 `(pointer: coarse)` 臂与 misc 隐藏块的 `(pointer: fine)/(pointer: none)` 臂**没有任何场景覆盖**：删掉任一侧指针臂，全套门仍然绿（2026-08-30 已泄漏过一次的形态）。
 - **改法**：把两个维度拆开（`setViewport(w,h)` + 独立的 `setPointer(client,'coarse'|'fine')`，后者走 `Emulation.setTouchEmulationEnabled`——`setEmulatedMedia` 对 pointer 特征无效）；新增「390×844 + pointer:fine」场景，断言插件零干预（frame 不出现、注入控件不在、移动规则 `matches=false`）；反向「≥1024px + coarse」可仿 session-delete 的 16a–16d。
 - **验证**：反空转红队＝**故意删掉 JS 的 coarse 臂或 CSS 的 pointer 臂，新场景必须变红**；再跑一遍全场景确认没有回归。
 - **回滚**：新场景独立于既有场景；`setPointer` 拆维度后旧调用点补默认值即可退回。
+
+### L3 的落地与实测（2026-09-16）
+- **新场景** `desktop.narrow-mouse-no-op`：390×844 + 非粗指针（关触摸模拟）。断言四件事同时成立——宽度条件命中（`(max-width: 1023px)` 为真）、`(pointer: coarse)` 为假、frame 缺席、注入控件不可见。实测输出把它自报为 `mouse=pointer:none`。
+- **控制组就是既有场景**：同一宽度 390×844 的 touch 场景（frame 在场、控件可见）——两场景同宽同页，只差指针一个变量 ⇒ 删掉 JS 的 coarse 臂或 CSS 的 pointer 臂，本场景必红而 touch 场景仍绿（不需改源码做对照实验）。
+- **实测**：`SUMMARY pass=14 skip=1 fail=0 base=0 new=0 green=false`，EXIT=0，无残留 chromium 进程。
+- **`(pointer: fine)` 臂无法用 CDP 覆盖**：headless 报 `pointer: none`，`Emulation.setEmulatedMedia` 与 `--blink-settings=primaryPointerType=4,availablePointerTypes=4` 都试过无效（后者连 headless 都没改观，已从启动参数里撤掉，不留死配置）。该臂改由**结构断言**守：`tests/css-structure.test.ts` 第二条断言把隐藏块钉成 MOBILE_QUERY 的补集（宽度 +1、pointer 覆盖 fine/none 两侧）。
+- **两条红队**：①删掉隐藏块的 `(pointer: fine)` 臂 → 该测试红（2 项），且检测器同时报 `top-level at-rule outside the allowed set`（它的 allowed-set 白名单本来就在守这行，L1 接门后才生效）；②把 MOBILE_QUERY 宽度改成 767 而隐藏块不动 → **新断言红、检测器仍绿** ⇒ 这条「两处必须同步」的推导链此前确实无人守（768–1023 带会静默失去桌面侧隐藏）。
+- **顺带订正过时计数**：AGENTS 两处与本文档一处写的「主探针 32 断言」实为 14 项（SUMMARY 的 pass+skip）。
 
 ### L4 · 行为改动 A：两条跨插件顺序依赖 —— ✅ 完成（D-5 选项 A，用户 2026-09-16 拍板）
 - **落地**：`layout.css.ts` 的 frame 规则与 toggle 隐藏规则的每个选择器加前导 `html` → (0,1,1) / (0,2,1)…(0,4,1)，与注入顺序无关；探针 `WHITELIST` 清空（机制保留）。
