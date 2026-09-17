@@ -164,6 +164,26 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     touch-action: pan-y pinch-zoom !important;
   }
 
+  /* Closed slot, at the host's OWN specificity. 0.1.5 added a narrow-branch
+     rule [data-dsh-frame][data-sidebar-collapsed] [data-pane="sidebar"]
+     { width:52px !important; transform:none; pointer-events:none;
+     background:transparent !important } - specificity (0,3,0), one class above
+     the rule above, so it won BOTH width and transform: the closed drawer
+     stayed a 52px transparent shell at x=0 and the only state delta left was
+     the width (52<->280), which "transition: transform" cannot animate.
+     Measured 2026-09-17: closed pane transform:none / width:52 /
+     rect [0,0,52,844], and every frame sampled across a toggle click stayed
+     transform:none - the owner's "no slide animation on click" report.
+     Matching that specificity (plus !important, since the host declaration is
+     important) restores the design's own slot (spec 2026-08-27, drawer DOM):
+     a min(88vw, 280px) column translated -110% of its own width, i.e. -308px
+     at 390px. The gesture layer never depended on this rule - it writes an
+     inline transform !important - so only the CSS-driven click paths regressed. */
+  [data-mobile-nav="frame"][data-sidebar-collapsed] > :first-child {
+    width: min(88vw, 280px) !important;
+    transform: translateX(-110%) !important;
+  }
+
   /* Expanded state (frame without data-sidebar-collapsed) slides the drawer in.
      The open state must be transform:none — NOT translateX(0): an identity
      transform still makes the drawer the containing block for fixed-position
