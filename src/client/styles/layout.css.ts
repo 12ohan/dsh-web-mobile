@@ -314,7 +314,8 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      Suppress only inside the actions row — the fork's original scope. On
      this host (0.1.1-rc.2) NO tooltip renders as a visible bubble: the copy
      label is a visuallyHidden span and no client-ui package emits
-     role="tooltip". The user message bubble (gdEzaW_bubble) and the goal
+     role="tooltip". The user message bubble (Sixlwa_bubble since the host moved
+     it to dsh-client-ui-chat) and the goal
      bubble (oRe1gG_bubble) live in _userStack/_row, NOT in _actions — the
      previously unscoped selector hid every user message on touch devices
      (2026-09-06 live regression). role="tooltip" stays globally suppressed:
@@ -1102,8 +1103,8 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      Anchored structurally, not by class substring: a bare [class*="_header"]
      also matches every plugin settings card header in the options area —
      the official Plugins config cards (YyYd_a_header) and the dsh-web-ui-all
-     group cards (Kwoi6G_header / bpnj3G_header / Jh0q7G_header / jmhvDG_header /
-     rUBhvW_header, all sharing the upstream template text-align:left,
+     group cards (Kwoi6G_header / Jh0q7G_header / rUBhvW_header; the bpnj3G_/jmhvDG_
+     siblings were renamed upstream in dsh-web-all 0.3.20, verified 2026-09-18), all sharing the upstream template text-align:left,
      gap:12px, padding:14px 16px). The old broad anchor right-aligned their
      text, gutted the padding and painted a 32px gray circle behind the
      chevron (2026-09-05 sweep: 8 bleeding headers). The toolbar has two

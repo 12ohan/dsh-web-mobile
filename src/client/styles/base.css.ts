@@ -30,15 +30,15 @@ export const BASE_CSS = `
   outline-offset: 1px;
 }
 
-/* Drawer footer actions: the relocated Session log download plus the Files
-   action that opens the dsh-web-ui explorer sheet. */
+/* Drawer footer action: the relocated Session log download. The Files entry
+   was removed on 2026-09-17 (see
+   docs/specs/2026-09-17-sidebar-files-coexistence-design.md). */
 [data-mobile-nav="drawer-actions"] {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-[data-mobile-nav="session-log"],
-[data-mobile-nav="explorer"] {
+[data-mobile-nav="session-log"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -55,8 +55,7 @@ export const BASE_CSS = `
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-[data-mobile-nav="session-log"]:hover:not(:disabled),
-[data-mobile-nav="explorer"]:hover {
+[data-mobile-nav="session-log"]:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06));
 }
 [data-mobile-nav="session-log"]:disabled {

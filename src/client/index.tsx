@@ -239,7 +239,6 @@ export function apply(ctx: ClientContext): void {
       // the double assertion (string and Branded<'SessionId'> do not overlap).
       downloadSessionLog: (sessionId: string) =>
         ctx.sessionLogDownload.download(sessionId as unknown as DownloadSessionId),
-      toggleSidebar: () => ctx.layout.toggleSidebar(),
     }),
   }, MobileDrawerFooter))
 }

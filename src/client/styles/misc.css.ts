@@ -113,7 +113,7 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
       selectors to the owning region, prefer stable data-* markers); the
       class-name suffix match follows the plugin's established harness
       CSS-module convention (verified against the live app: generated names
-      end with the original local name, e.g. uV2eYG_input / qDHVXG_searchInput). */
+      end with the original local name, e.g. uV2eYG_input / bhn1Oq_searchInput). */
   html[data-mobile-nav-ios] [data-question-key] [class*="_customInput"],
   html[data-mobile-nav-ios] [data-question-key] [class*="_customTextarea"] {
     font-size: 16px !important;
@@ -265,7 +265,6 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   [data-mobile-nav="fab"],
   [data-mobile-nav="backdrop"],
   [data-mobile-nav="session-log"],
-  [data-mobile-nav="explorer"],
   [data-mobile-nav="preview-full-toggle"],
   [data-mobile-nav="drawer-actions"] {
     display: none !important;

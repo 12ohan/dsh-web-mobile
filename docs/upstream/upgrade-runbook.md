@@ -28,7 +28,9 @@ CSS module 哈希是包版本的函数；下列前缀是本插件选择器/探�
 
 - 数据：`docs/upstream/compat-contracts.json`（26 条，其中 11 条 `lazy`＝状态门控/懒加载条目）
 - 执行：`node scripts/cdp-compat-contracts.mjs`（无需 `DSH_PROBE_SESSION_ID`，非 lazy 的 MISS 才 exit 1；SKIP/MISS 条目按其 `state` 提示手动复扫）
-- 当前 5 条 MISS 全带 `manual audit` 说明，属「该场景没渲染/需特定 UI 在场」，不是插件回归：`hero-header-actions`（`qDHVXG_`，需 hero 态）、`user-bubble`（`gdEzaW_`，需用户消息在场）、`session-log-dialog`（`_dialog_15u5s_22`，需对话框打开）、`group-card-2`/`group-card-4`（`bpnj3G_`/`jmhvDG_`，需 dsh-web-all 的设置卡在场）。要让这条门真绿：按各自场景复扫，或把这些条目改标 `lazy: true`——改数据前先按场景复核，别无脑放宽门。
+- **首批 5 条 MISS 的真因是上游改名（针已死），不是「该场景没渲染」**——2026-09-18 全盘普查（`grep -rlF` 扫全局 dsh 与 profile 的 node_modules）：`qDHVXG_` / `gdEzaW_` / `_dialog_15u5s_22` / `bpnj3G_` / `jmhvDG_` **各 0 命中**；替代物全部已定位并回填 `compat-contracts.json`：`wSkVaW_headerActions`（conversation）、`Sixlwa_bubble`（气泡已迁 `dsh-client-ui-chat`；goal 气泡 `oRe1gG_` 属 `dsh-client-ui-goal`）、`_dialog_w1urq_22`（web-frontend）→ 复跑变成 `hit=20 / skip=4 / miss=2`。
+- 仍红的 2 条：`group-card-2` / `group-card-4`（`bpnj3G_` / `jmhvDG_`，dsh-web-all 0.3.20 改了名；同族的 `Kwoi6G_` / `Jh0q7G_` / `rUBhvW_` 仍在）。新哈希**要按活页面逐卡认领，不许猜**；也不许改标 `lazy`——那会把永不绿的针洗成 SKIP。
+- 记法教训：把这类 MISS 记成「场景没渲染」，死针就会被当成环境差异静静躺过去（首轮就是这么记的）。
 
 | 哈希前缀 | 归属 | 涉及契约 |
 | --- | --- | --- |
@@ -38,12 +40,12 @@ CSS module 哈希是包版本的函数；下列前缀是本插件选择器/探�
 | `JObwrW_` | ContextMeter | trigger 无 `aria-haspopup="menu"`，右簇钉住规则依赖 |
 | `uV2eYG_` | composer 卡 | hero/tools/scroll；Lexical `<p>` 命中 `_scroll` 的 `:not(:has([data-composer-input]))` 排除 |
 | `pI_x6G_frame` | 会话 frame | box-sizing / safe-area 规则落点 |
-| `qDHVXG_headerActions` | hero 相位 | 探针区分 hero 自有 headerActions 与 slot 容器 |
+| `wSkVaW_headerActions`（旧 `qDHVXG_`） | hero 相位 | 探针区分 hero 自有 headerActions 与 slot 容器 |
 | `VOzbGW_close` | 设置对话框叉号 | dshmarket 反制 nav 的唯一关闭路径 |
-| `gdEzaW_bubble` / `oRe1gG_bubble` | 用户消息 / goal 气泡 | tooltip 压制规则的反断言元素 |
+| `Sixlwa_bubble`（chat）/ `oRe1gG_bubble`（goal） | 用户消息 / goal 气泡 | tooltip 压制规则的反断言元素（旧 `gdEzaW_` 属 conversation，已改名） |
 | `-NprXq_searchInput` | 第三方 13px 搜索框 | iOS 16px 下限覆盖对象 |
 | `wSkVaW_` | hero composer stack | 多 token class 子串匹配实证样例 |
-| `_dialog_15u5s_22` | Session log 模态 | CDP 假阴性防护 |
+| `_dialog_w1urq_22`（旧 `_dialog_15u5s_22`） | Session log 模态 | CDP 假阴性防护（后缀 `_22` 是模块序号） |
 | `YyYd_a_`（官方 Plugins 卡）＋ `Kwoi6G_` / `bpnj3G_` / `Jh0q7G_` / `jmhvDG_` / `rUBhvW_`（dsh-web-ui-all 分组卡） | 插件设置卡头 | 工具栏三连规则结构化锚定的回归对象，`plugin-card-header-bleed.mjs` |
 
 ## 3. DOM / 端点契约分代（升级到 0.1.2-rc.1+ 时）
