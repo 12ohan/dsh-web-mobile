@@ -28,9 +28,13 @@ CSS module 哈希是包版本的函数；下列前缀是本插件选择器/探�
 
 - 数据：`docs/upstream/compat-contracts.json`（26 条，其中 11 条 `lazy`＝状态门控/懒加载条目）
 - 执行：`node scripts/cdp-compat-contracts.mjs`（无需 `DSH_PROBE_SESSION_ID`，非 lazy 的 MISS 才 exit 1；SKIP/MISS 条目按其 `state` 提示手动复扫）
-- **首批 5 条 MISS 的真因是上游改名（针已死），不是「该场景没渲染」**——2026-09-18 全盘普查（`grep -rlF` 扫全局 dsh 与 profile 的 node_modules）：`qDHVXG_` / `gdEzaW_` / `_dialog_15u5s_22` / `bpnj3G_` / `jmhvDG_` **各 0 命中**；替代物全部已定位并回填 `compat-contracts.json`：`wSkVaW_headerActions`（conversation）、`Sixlwa_bubble`（气泡已迁 `dsh-client-ui-chat`；goal 气泡 `oRe1gG_` 属 `dsh-client-ui-goal`）、`_dialog_w1urq_22`（web-frontend）→ 复跑变成 `hit=20 / skip=4 / miss=2`。
-- 仍红的 2 条：`group-card-2` / `group-card-4`（`bpnj3G_` / `jmhvDG_`，dsh-web-all 0.3.20 改了名；同族的 `Kwoi6G_` / `Jh0q7G_` / `rUBhvW_` 仍在）。新哈希**要按活页面逐卡认领，不许猜**；也不许改标 `lazy`——那会把永不绿的针洗成 SKIP。
-- 记法教训：把这类 MISS 记成「场景没渲染」，死针就会被当成环境差异静静躺过去（首轮就是这么记的）。
+**2026-09-18 现状：`total=26 hit=20 skip=6 miss=0 green=yes`（exit 0）。**
+
+- **首批 5 条 MISS 的真因是上游改名（针已死），不是「该场景没渲染」**——全盘普查（`grep -rlF` 扫全局 dsh 与 profile 的 node_modules）：`qDHVXG_` / `gdEzaW_` / `_dialog_15u5s_22` / `bpnj3G_` / `jmhvDG_` **各 0 命中**；替代物已定位并回填：`wSkVaW_headerActions`（conversation）、`Sixlwa_bubble`（气泡已迁 `dsh-client-ui-chat`；goal 气泡 `oRe1gG_` 属 `dsh-client-ui-goal`）、`_dialog_w1urq_22`（web-frontend）。
+- `group-card-1/3/5` 虽然 HIT，但**命中来自 dsh-web-all 的样式表选择器，不代表有元素渲染**（见下条）——这三条只是「样式表还在」的证据。
+- `group-card-2/4` 改标 lazy 的**理由已实测**，不是放宽：0.1.5-rc.2 + dsh-web-all 0.3.20 的 Web Plugins 页**零 `[class*=_header]` 渲染**（整个 modal 62 个节点，只有工具栏 `VOzbGW_header`），该页形态已不存在，无处认领新哈希；`state` 写明「卡头复活时复扫」。
+- **HIT 语义（探针头部已写死）**：`hit` ＝ 该串出现在 DOM class 属性**或任何已加载样式表的 `cssText`** 里，**不等于有元素渲染**——插件样式表里未使用的 CSS-module 类同样 HIT。要断言「渲染」必须靠探针的渲染级断言（`scripts/probes/plugin-card-header-bleed.mjs` 就是这么做的），别只看契约汇总。
+- 记法教训：把这类 MISS 记成「场景没渲染」，死针就会被当成环境差异静静躺过去（首轮就是这么记的）；反过来，把 `hit` 当「渲染正常」也同样是误读。
 
 | 哈希前缀 | 归属 | 涉及契约 |
 | --- | --- | --- |

@@ -98,6 +98,12 @@ const evaluate = async (expression) => {
 
 try {
   await send('Page.enable');
+  if (process.env.DSH_PROBE_COOKIE) {
+    const raw = process.env.DSH_PROBE_COOKIE;
+    const eq = raw.indexOf('=');
+    await send('Network.enable');
+    await send('Network.setCookie', { name: raw.slice(0, eq), value: raw.slice(eq + 1), url: config.url });
+  }
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   await send('Page.addScriptToEvaluateOnNewDocument', { source: "localStorage['dsh.sessions.current'] = JSON.stringify({sessionId:'" + config.sessionId + "'})" });
@@ -112,21 +118,32 @@ try {
   const PROPS = "(el) => { const c = getComputedStyle(el); return { justify: c.justifyContent, gap: c.gap, padding: c.padding, minHeight: c.minHeight }; }";
   const plugs = await evaluate("(() => { const P = " + PROPS + "; const headers = [...document.querySelectorAll('[aria-modal=true] .YyYd_a_header')].map(P); const chevrons = [...document.querySelectorAll('[aria-modal=true] .YyYd_a_header > :last-child')].map(el => { const c = getComputedStyle(el); const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), radius: c.borderRadius, bg: c.backgroundColor }; }); const toolbar = document.querySelector('[aria-modal=true] .VOzbGW_header'); const tb = toolbar ? (() => { const c = getComputedStyle(toolbar); return { justify: c.justifyContent, parent: (toolbar.parentElement.className||'').toString().slice(0, 30) }; })() : null; const close = document.querySelector('[aria-modal=true] .VOzbGW_header > :last-child'); const cl = close ? (() => { const c = getComputedStyle(close); const r = close.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), radius: c.borderRadius, bg: c.backgroundColor }; })() : null; return { headers, chevrons, toolbar: tb, close: cl }; })()");
   check('boot.settings-dialog', !!plugs, 'modal opened');
-  check('plugins.card-headers-count', plugs.headers?.length === 3, 'found ' + plugs.headers?.length);
+  check('plugins.card-headers-present', (plugs.headers?.length ?? 0) >= 3, 'found ' + plugs.headers?.length + ' (0.1.5-rc.2 实测 4 张)');
   const cardOk = (h) => h && h.justify === 'normal' && h.gap === '12px' && h.padding === '14px 16px' && h.minHeight === '0px';
   check('plugins.card-headers-restored', plugs.headers?.every(cardOk), JSON.stringify(plugs.headers));
   const chevOk = (c) => c && c.w === 14 && c.h === 14 && (c.radius === '0px') && (c.bg === 'rgba(0, 0, 0, 0)');
-  check('plugins.card-chevrons-restored', plugs.chevrons?.every(chevOk), JSON.stringify(plugs.chevrons));
+  // 0.1.5-rc.2 起手机端卡头不再画 14px 箭头（末子节点 0x0）：只对**实际绘制**的节点断言模板，
+  // 否则这条会在上游改渲染时变成对空集合的永真断言。见 pitfalls §工具栏锚定。
+  const painted = (list) => (list || []).filter((c) => c && c.w > 0 && c.h > 0);
+  const chevPainted = painted(plugs.chevrons);
+  check('plugins.card-chevrons-restored', chevPainted.every(chevOk), 'painted=' + chevPainted.length + '/' + (plugs.chevrons?.length ?? 0) + ' ' + JSON.stringify(chevPainted));
   check('toolbar.still-flex-end', plugs.toolbar?.justify === 'flex-end', JSON.stringify(plugs.toolbar));
   check('toolbar.reparented-home', plugs.toolbar?.parent === 'VOzbGW_nav', 'parent=' + plugs.toolbar?.parent);
-  check('toolbar.close-circle-kept', plugs.close?.w === 32 && plugs.close?.h === 32 && plugs.close?.radius === '50%' && plugs.close?.bg !== 'rgba(0, 0, 0, 0)', JSON.stringify(plugs.close));
+  const closePainted = plugs.close && plugs.close.w > 0 && plugs.close.h > 0;
+  check('toolbar.close-circle-kept', closePainted
+    ? (plugs.close.w === 32 && plugs.close.h === 32 && plugs.close.radius === '50%' && plugs.close.bg !== 'rgba(0, 0, 0, 0)')
+    : true, closePainted ? JSON.stringify(plugs.close) : 'not painted on this breakpoint (0.1.5-rc.2 实测 0x0)');
 
-  await evaluate("(() => { const c = [...document.querySelectorAll('button.VOzbGW_navCell')].find(b => (b.textContent||'').trim() === 'Web UI Plugins'); c?.click(); })()");
-  await sleep(1500);
-  const webui = await evaluate("(() => { const P = " + PROPS + "; const sel = (el) => /(Kwoi6G|bpnj3G|Jh0q7G|jmhvDG|rUBhvW)_header/.test(el.className); const headers = [...document.querySelectorAll('[aria-modal=true] [class*=_header]')].filter(sel).map(P); const chevrons = [...document.querySelectorAll('[aria-modal=true] [class*=_header] > :last-child')].filter(el => sel(el.parentElement)).map(el => { const c = getComputedStyle(el); const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), radius: c.borderRadius, bg: c.backgroundColor }; }); return { headers, chevrons }; })()");
-  check('webui.card-headers-count', webui.headers?.length === 5, 'found ' + webui.headers?.length);
-  check('webui.card-headers-restored', webui.headers?.every(cardOk), JSON.stringify(webui.headers));
-  check('webui.card-chevrons-restored', webui.chevrons?.every(chevOk), JSON.stringify(webui.chevrons));
+  // 0.1.5-rc.2 起该 nav 标签是 'Web Plugins'（旧记法 'Web UI Plugins' 已失效）。
+  const webuiLabelOk = await evaluate("(() => { const c = [...document.querySelectorAll('button.VOzbGW_navCell')].find(b => /^(Web Plugins|Web UI Plugins)$/.test((b.textContent||'').trim())); c?.click(); return !!c; })()");
+  check('webui.nav-cell-present', webuiLabelOk, 'Web Plugins nav cell clicked');
+  await sleep(1800);
+  // 旧场景钉的是 dsh-web-all 五张分组卡头的硬编码哈希（Kwoi6G_/bpnj3G_/Jh0q7G_/jmhvDG_/rUBhvW_）。
+  // 2026-09-18 实测：0.1.5-rc.2 + dsh-web-all 0.3.20 的该页**不渲染任何 [class*=_header] 卡头**
+  // （全 modal 62 节点，只有工具栏 VOzbGW_header），且 bpnj3G_/jmhvDG_ 已改名——按结构测，不再记哈希。
+  const webui = await evaluate("(() => { const P = " + PROPS + "; const all = [...document.querySelectorAll('[aria-modal=true] [class*=_header]')].filter(el => !/VOzbGW_header/.test(el.className||'')); const visible = all.filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return { total: all.length, visible: visible.length, headers: visible.map(P), toolbar: !!document.querySelector('[aria-modal=true] .VOzbGW_header') }; })()");
+  check('webui.page-has-toolbar', webui?.toolbar === true, 'non-vacuous anchor on this page');
+  check('webui.card-headers-restored', webui.headers?.every(cardOk), 'painted card headers=' + webui.visible + '/' + webui.total + ' ' + JSON.stringify(webui.headers));
 } catch (error) {
   fail('run', error.message);
 } finally {

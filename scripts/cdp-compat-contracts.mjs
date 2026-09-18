@@ -2,7 +2,12 @@
 // Machine-readable counterpart of docs/upstream/upgrade-runbook.md §2.
 // Consumes docs/upstream/compat-contracts.json; scans the live page
 // (DOM class attributes + every reachable CSSRule's cssText) for each
-// needle. A lazy contract whose needle is absent is SKIP (state-gated or
+// needle. **HIT means the string exists in the DOM or in any loaded
+// stylesheet — NOT that an element renders with it**: a CSS-module class
+// that ships in a plugin's sheet but is used by no element still HITs
+// (2026-09-18 实测 group-card-1/3/5 即此情况), so pair a hash contract with
+// a rendering assertion in a probe when the page shape matters.
+// A lazy contract whose needle is absent is SKIP (state-gated or
 // not yet loaded; see its "state" note); a non-lazy MISS exits 1 so a host
 // upgrade surfaces rehash drift immediately.
 // Inputs (environment): DSH_PROBE_URL (default http://127.0.0.1:3080/),
