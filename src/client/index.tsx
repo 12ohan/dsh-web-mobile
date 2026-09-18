@@ -218,16 +218,16 @@ export function apply(ctx: ClientContext): void {
 
 
   // Session log download, relocated from the session header to the drawer
-  // footer on mobile (the header capsule is hidden by CSS); the drawer
-  // footer also hosts the Files action that opens the dsh-web-ui explorer
-  // sheet.
+  // footer on mobile (the header capsule is hidden by CSS). The footer's
+  // Files action was removed on 2026-09-17 — see
+  // docs/specs/2026-09-17-sidebar-files-coexistence-design.md.
   //
   // Footer stacking relies on the list-slot sort by (priority, order):
   // dsh-remote-web-ui leaves it unset (default 0, its two icon buttons stay
-  // on top) and dsh-usage-stats uses 10. Order 5 keeps the Files + Session
-  // log pills directly under the icon row with the usage/balance badge
-  // below them — instead of a tie at 10 where registration order could
-  // wedge the badge between the icons and the pills.
+  // on top) and dsh-usage-stats uses 10. Order 5 keeps the session-log pill
+  // directly under the icon row with the usage/balance badge below it —
+  // instead of a tie at 10 where registration order could wedge the badge
+  // between the icons and the pill.
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
     name: 'sidebar.footer.action',
     id: 'mobile-nav-session-log',

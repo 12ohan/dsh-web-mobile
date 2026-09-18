@@ -217,23 +217,26 @@ async function main() {
     await sleep(400)
     const footer = JSON.parse(await evaluate(`(() => {
       const actions = document.querySelector('[data-mobile-nav="drawer-actions"]')
-      const log = document.querySelector('[data-mobile-nav="session-log"]')
+      const log = actions === null ? null : actions.querySelector('[data-mobile-nav="session-log"]')
+      const buttons = actions === null ? -1 : actions.querySelectorAll('button').length
       const r = log === null ? null : log.getBoundingClientRect()
       const hit = r === null ? null : document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
       return JSON.stringify({
         actions: actions !== null,
         explorer: document.querySelector('[data-mobile-nav="explorer"]') !== null,
+        buttons,
         log: log !== null,
         logHit: hit !== null && (hit === log || log.contains(hit)),
       })
     })()`))
-    record(footer.actions === true && footer.explorer === false && footer.log === true && footer.logHit === true,
+    record(footer.actions === true && footer.explorer === false && footer.buttons === 1 && footer.log === true && footer.logHit === true,
       '9.footer-no-files-entry',
-      `actions=${footer.actions} explorer=${footer.explorer} log=${footer.log} logHit=${footer.logHit}`)
-    // Close with Escape rather than a second TOGGLE click: on this host the
-    // toggle's own close path never flips data-sidebar-collapsed back (dead
-    // before this change too — a pristine tree reproduces it), while Escape is
-    // the plugin's own working close entry (phone-chrome.ts).
+      `actions=${footer.actions} explorer=${footer.explorer} buttons=${footer.buttons} log=${footer.log} logHit=${footer.logHit}`)
+    // Close with Escape rather than a second TOGGLE click: while the drawer is
+    // open the header toggle sits outside the drawer, so dsh-web-all's
+    // installMobileSidebarDismiss swallows the click — programmatic ones too —
+    // and the plugin's own handler never runs; Escape is the plugin's own
+    // working close path (docs/specs/2026-09-17-sidebar-files-coexistence-design.md §2).
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
     await waitFor(async () => await evaluate(`document.querySelector('${FRAME}')?.hasAttribute('data-sidebar-collapsed') === true`), 'drawer closed after footer check', 8000)
