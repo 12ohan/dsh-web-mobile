@@ -64,66 +64,28 @@ test('compat-contracts.json entries are well-formed', async () => {
   }
 })
 
-// CJK has no word boundaries, so compare contiguous 2- and 3-character windows:
-// a mnemonic like the one naming the width-breakpoint section must match a
-// section that talks about 断点 … 设备 without containing the label verbatim.
-const cjkWindows = (text: string): string[] =>
-  (text.match(/[\u4e00-\u9fff]+/g) ?? []).flatMap((run) => {
-    const windows: string[] = []
-    for (const size of [2, 3]) {
-      for (let i = 0; i + size <= run.length; i += 1) windows.push(run.slice(i, i + size))
-    }
-    return windows
-  })
-
-// ponytail: a heuristic, with its ceiling measured rather than assumed — the
-// real mnemonic 断点与设备 (0.571) and an invented 不存在的主题xyz (0.556) are
-// not separable by any threshold, so this only catches pointers that share
-// essentially nothing with the archive. Upgrading means giving every pointer an
-// explicit heading slug and resolving it exactly, which needs all 31 labels
-// rewritten.
-const archiveOverlap = (archiveLower: string, label: string): number => {
-  const runs = label.match(/[\u4e00-\u9fff]+/g) ?? []
-  if (runs.length === 0) return 1
-  return Math.max(
-    ...runs.map((run) => {
-      const windows = cjkWindows(run)
-      if (windows.length === 0) return 0
-      return windows.filter((window) => archiveLower.includes(window)).length / windows.length
-    }),
-  )
-}
-
-test('pitfalls archive mirrors the condensed AGENTS.md pointers', async () => {
+// The index in AGENTS.md is a list of bare names, and each name IS the anchor of
+// its archived entry (`### <name>` in docs/maintenance/pitfalls.md), so pointers
+// resolve by equality. Before 2026-09-18 this test scored CJK-window overlap
+// between thematic § labels and archive text, with a measured ceiling: the real
+// label 断点与设备 (0.571) and an invented 不存在的主题xyz (0.556) were not
+// separable by any threshold. The name-slug scheme replaced that estimate with
+// an exact check, so the scoring helpers are gone.
+test('pitfalls archive mirrors the AGENTS.md name index', async () => {
   const agents = await readRepoFile('AGENTS.md')
   const archive = await readRepoFile('docs/maintenance/pitfalls.md')
-  const pointers = (agents.match(/docs\/maintenance\/pitfalls\.md` §/g) ?? []).length
-  const sections = (archive.match(/^## /gm) ?? []).length
-  assert.ok(sections >= 15, `archive has only ${sections} sections`)
-  assert.ok(pointers >= 15, `AGENTS.md has only ${pointers} archive pointers`)
 
-  // Counting alone cannot see a pointer that names no section: every label
-  // still counts, and the dead-reference test above resolves only path-shaped
-  // references, never § labels. Labels are deliberately thematic mnemonics
-  // (`iOS zoom`, `两个 closer`), not heading prefixes, so each must share
-  // either a >=4-character Latin token or enough CJK windows with the archive.
-  const headings = (archive.match(/^## .+$/gm) ?? []).map((line) => line.slice(3))
-  const archiveLower = archive.toLowerCase()
-  const labels = (agents.match(/docs\/maintenance\/pitfalls\.md` §([^\n]*)/g) ?? []).map((line) =>
-    line.replace(/^.*§/, ''),
+  const pitfalls = agents.split(/^## /m).find((section) => section.startsWith('Pitfalls\n')) ?? ''
+  const names = (pitfalls.match(/^- `([^`]+)`$/gm) ?? []).map((line) => line.slice(3, -1))
+  assert.ok(names.length >= 40, `AGENTS.md Pitfalls index has only ${names.length} names`)
+
+  const anchors = new Set((archive.match(/^### .+$/gm) ?? []).map((line) => line.slice(4)))
+  const missing = names.filter((name) => !anchors.has(name))
+  assert.deepEqual(
+    missing,
+    [],
+    'index names with no `### <name>` anchor in the archive: ' + missing.join(' | '),
   )
-  assert.ok(labels.length >= 15, `expected the pointer set, found ${labels.length}`)
-
-  const resolves = (label: string): boolean => {
-    const lower = label.toLowerCase()
-    if (archiveLower.includes(lower)) return true
-    if (headings.some((heading) => lower.includes(heading.toLowerCase()))) return true
-    const latin = lower.match(/[a-z][a-z0-9_-]{3,}/g) ?? []
-    if (latin.some((token) => archiveLower.includes(token))) return true
-    return archiveOverlap(archiveLower, label) >= 0.5
-  }
-  const unresolved = labels.filter((label) => !resolves(label))
-  assert.deepEqual(unresolved, [], 'archive pointers with no matching content: ' + unresolved.join(' | '))
 })
 
 // Cross-generation safety of the rules added for the 0.1.5 host. The plugin

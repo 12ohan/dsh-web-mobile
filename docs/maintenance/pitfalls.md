@@ -1,6 +1,6 @@
 # Pitfalls 档案（AGENTS.md 压缩条目的完整原文）
 
-> AGENTS.md 的「Pitfalls」只保留可直接执行的紧凑不变式（含指针）；本文件按原顺序归档这些条目的**完整原文**——完整推导、取证记录、实验证据与参数表都在这里。接手复杂改动、或 AGENTS.md 的紧凑条目不够用时，先读本档对应小节。新增坑位的流程：紧凑条目进 AGENTS.md（可执行规则），原文归档到本文件（追加小节，保持顺序与 AGENTS.md 一致）。
+> AGENTS.md 的「Pitfalls」只保留**名字清单**（名字 = 触发词 = 本档的 `### 锚点`）；本文件是这些坑的**完整原文**——推导、取证记录、实测数据、探针断言表、被否决方案都在这里。动手改某块代码前，先按 AGENTS.md 里的名字定位本档对应 `### 条目`（`tests/docs-consistency.test.ts` 精确校验名字与锚点一一对应）。新增坑位的流程：名字加进 AGENTS.md 的清单，原文写进本文件并补 `### 同名` 锚点（顺序保持一致）。本档同时保留各时期的原始记录，其中的**计数 / 断言数 / 提交号都是当时口径**——现役数字一律以 `AGENTS.md` 与 `README.md` 为准（由 `tests/docs-consistency.test.ts` 对账），不要照抄本档的历史计数。
 
 ## 抽屉手势层（sidebar-swipe.ts）的铁律与共存契约
 
@@ -244,7 +244,7 @@
 
 ### 边界
 
-- hero 态（无会话）该 slot 不渲染（实测 `[data-mobile-nav="files"]` absent），不存在「钉到别的容器」的风险；hero 的 Files 入口在抽屉 footer（`data-mobile-nav="explorer"`）。
+- hero 态（无会话）该 slot 不渲染（实测 `[data-mobile-nav="files"]` absent），不存在「钉到别的容器」的风险；hero 的 Files 入口在抽屉 footer（`data-mobile-nav="explorer"`）。**2026-09-18 更正：该入口已于 2026-09-17 删除，hero 态不再有任何 Files 入口**（`src/client/components/MobileDrawerFooter.tsx` 现只渲染 session-log；契约 `docs/specs/2026-09-17-sidebar-files-coexistence-design.md`）。
 - utilities 座位自 2026-09-14 起被插件限高 30px（它只顶行高，不画东西）；哪天它真的渲染出控件，我们的按钮会与它重叠 8px——届时按锚点提示改 `right` 值或让位（锚点断言里已记录该座位的坐标与宽度）。
 - 装置层验证：`scripts/probes/header-files-pin-probe.mjs`（12 断言）；真机读数走 `?mobile-nav-debug=1` 的调试上报（见 Testing & QA）。
 
@@ -460,3 +460,163 @@ hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session heade
 ## 宿主 Shiki 高亮止血 patch（本机配方：宿主升级后重放）
 
 **宿主 Shiki 高亮止血 patch（本机配方，2026-09-14；2026-09-18 复核已失效 → 同日定案：默认不重放，根治走上游）**：`tokenizeTimeLimit:0`（单块不限时）→ `100`ms，消除大 code 块高亮尖刺。宿主前端是独立依赖 dsh-web-frontend 的 dist（发布包内无源码），**每次宿主升级整包替换 dist → 补丁必被抹掉**。2026-09-18 实测：旧的 `index-ClqxG24t.js` 已不存在，现役 `dist/assets/index-BKQ_L1z6.js` 里是 `tokenizeTimeLimit:0`——**补丁当前不生效**（`grep -o "tokenizeTimeLimit:[0-9]*" <file>` 印出 `:0` 即未打，`:100` 才算打上）。重放命令（文件名 hash 每次可能变，先 `grep -rl tokenizeTimeLimit <dsh>/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/` 重新定位）：`cp <file> ~/dsh-mobile-nav/.local-tests/$(basename <file>).bak-pre-shiki && sed -i "s/tokenizeTimeLimit:0/tokenizeTimeLimit:100/" <file>`；改完重启 `dsh web` 再按上面的 grep 复核。`~/dsh-mobile-nav/.local-tests/*.bak-pre-shiki` 是**旧那代 bundle 的未打补丁副本**，不是现役还原点（该目录 gitignore、不入库）。已验证：served 生效 + 真 6.8MB 会话 boot 正常 phase=active；超时降级行为（超预算块变纯文本、内容完整）未在真块上实测——真机若见个别块无语法色即此降级，属预期，可调大数值。这是**本机对宿主 dist 的手改**，不是插件不变式：插件源码不含该改动，重装/升级宿主即失效。**2026-09-18 决定（用户确认）：默认不重放**——下游每升一次宿主就被抹一次，属于给未来埋维护税；根治产物已交给上游（`docs/upstream/host-jank-feedback.md` §问题 2：单遍 tokenize 110–400ms、叠加 400–1900ms longtask，附 idle 调度/分片/视口优先三条修法）。下面命令保留为**应急手段**，只在真机明显被大 code 块卡到时才用，用完照上面的 grep 复核。
+
+---
+
+## 2026-09-18 迁入原文：原 AGENTS.md「Pitfalls」节（逐字）
+
+> 2026-09-18 从 `AGENTS.md` 的 Pitfalls 节**逐字**迁入（含推导、取证、实测数据、探针断言清单、被否决方案）。AGENTS.md 现只保留 48 个名字清单（名字 = 触发词 = 本块的 `### 锚点`），按顺序与本块一一对应，由 `tests/docs-consistency.test.ts` 精确校验。与上文小节内容重叠处，以本块为较新版本（本块只增不改）。
+### 手势层
+
+- **抽屉手势层（sidebar-swipe.ts）铁律**（推导/A/B → `docs/maintenance/pitfalls.md` §手势层）：开=提前提交（8px 锁轴即 arm + inline `-101%` 百分比跟随 + arm 帧 `content-visibility:hidden`）；关=晚提交（280ms 滑自身宽×110% px 槽位，落地才翻 marker，防 React 中途换子树倒跳）；（同一条晚提交路径也服务点按关闭：六个入口统一走 closeDrawerAnimated，2026-09-17）；手势判定后必须 `markGestureConsumed(target, 300, drawer)`，宿主 `onDrawerClick`/`onDrawerPointerUp` 首行 `isStrokeLocked() || consumeIfGestured(event)` yield；drawer 滚动容器 `touch-action: pan-y pinch-zoom`（**漏 pinch-zoom 会让浏览器施加的缩放无法撤销，#45**；主探针断言含 pinch-zoom 且不含 pan-x；真正落点是 html/body，drawer 是双保险）；起点纯几何（`hitTestStart`，0.45×视口宽≈176px@390；冲突由让位体系解决，识别区不缩）；inline 一律 `setProperty(...,'important')`，断言看计算后几何；`transform:none` 无 inline 残留只约束终态。参数速查：START_ZONE_RATIO=0.45、LOCK_PX=8、open/close 0.16/0.13 视口比例、速度=60ms 窗末两点斜率、openVel/closeVel 0.45px/ms、cooldown 350ms、consume 300ms（consumedEl 每次 pointerdown 清空）。让位清单（beginStroke 前置 + tryLock 每次锁轴前复查）：cooldown/modal/takeover/selection/横滚容器/**拖动标记/悬浮窗形状**——拖动组件拖动期间挂 `data-mobile-nav-dragging`（被按住元素/祖先或 body/documentElement 全局）手势层即整笔让位（配合实现的组件走标记）；不配合的第三方可拖动悬浮件（dsh-pet 桌宠实测 148×160 fixed）走位置启发式 `findFloatingWidget`：起点祖先链上第一个 fixed|absolute 且 ≤200px（FLOATING_WIDGET_MAX_PX）的自由定位浮层即让位（frame 子树除外——FAB/backdrop/抽屉不误伤）；让位≠拦截，悬浮窗拖动照常执行；一旦锁轴即承诺，锁后出现的标记/形状不回头。划词选择（双选区模型都读，塌缩光标不算拥有）与多指必须整体让位；距离从 startX 起算；#32 nav-arm 关闭路径不许掐死；`gesture-guard.ts` 保持零 import。回归门：`scripts/cdp-swipe-failures.mjs` 16 场景 + 主探针 14 项核心断言（+6 集成）+ `scripts/probes/draggable-conflict-probe.mjs`（15 断言：0.45 区几何 / 无标记悬浮球让位 + 跟手 / 标记接口 / 清除后恢复）；主探针 `drawer-touch-action` 断言为含 pan-y + pinch-zoom 且不含 pan-x（#45 zoom 契约后同步）。
+### files 手势
+
+- **files 手势（右缘，2026-09-13 用户拍板的判定矩阵）**：`strokeMode` 双族路由写在 beginStroke——抽屉开时右缘笔画也进 **files 族**但判定等价（左滑='none' 永不收抽屉——**2026-09-17 起限「抽屉右缘之外」**，抽屉体内归抽屉族——用户原话「右缘左滑抽屉要是开的情况下，不会收起！只有右缘右滑才能做到」；右滑='close' 走 commitFollowClose 动画收起，**门槛＝抽屉族的 CLOSE_DISTANCE_RATIO 0.13×视口或 0.45px/ms 速度**——390px 下 files 区与抽屉列重叠 66px，缺这道门槛时抽屉内容上的拇指横向漂 8px 就会收抽屉并吞掉这次 click（2026-09-14 两阶段审查抓到，原判定直接 `return 'close'`；`tests/sidebar-swipe.test.ts` 有跨族等价测试钉住两族判定一致）；抽屉关时右缘 45% 区起滑进 files 族（双关+左滑=开面板；面板开+右滑=关面板）。三个已踩坑：①endStroke 的 verdict 必须在 `reset()` **之前**捕获 strokeMode/lockFilesOpen（reset 会把 strokeMode 重写回 'drawer' 并清 lockFilesOpen，判定静默降级为 'none'）；②files 提交必须 **toggle 先于 markStrokeConsumed**——标记链从起点走到 frame，而 frame 是 header 的祖先，标记先落会把 openFilesPanel 自己程序化的 opener click 经公共祖先段吞掉（面板永不打开）；'none' files 释放仍要吞合成 click（释放点在开启的面板内、宿主 toggle 就在下面），但必须在提交分支之后；③filesPanelOpen() 不能只查元素在场——0.1.5 面板常驻 DOM（关闭形态 visibility:hidden + rect 顶到 x=视口宽），要用 visibility/display/rect 三重判定。files 笔画不画跟手（applyFollow mode-guard），files 提交也不进 cooldown 例外。锚点 `scripts/probes/files-swipe-probe.mjs`（11 场景：上列矩阵 + footer 无文件入口 + 面板被抽屉压住仍存活/收抽屉后仍在）；**抽屉底部文件入口已删**；共存契约与已知不修清单 → docs/specs/2026-09-17-sidebar-files-coexistence-design.md；`close-follow-reaches-slot` 场景已迁到抽屉族最深合法起点（390px 下左区起点最多 -211px，槽位算术由 followTranslate 单测钉死）。
+### 抽屉导航 click
+
+- **抽屉里的导航项只能在 click 落地后关抽屉，pointerup 关闭会连 click 一起取消（「点新会话只收回抽屉」根因，2026-09-13）**：`installOverlayInteractions` 对非 `[role="treeitem"]` 的导航目标（newSession / taskboard / ssh / search）原来在 document 捕获 `pointerup` 里 `toggleSidebar()`——pointerup 收抽屉后触摸点已不属于按钮，Chrome **不派发 click**（trace `pointerdown@open>pointerup@closed`，此后无 click），宿主 onClick（`startSession()`）从不执行。会话行早由 #32 的「选中标题变化」observer 绕开，非行分支是漏网；修复＝删掉该分支的关闭，交给既有 document 捕获 click 收抽屉（click 已派发给按钮，事件路径派发时已固定，React 委托照收）。**任何在 pointerup 里收起容器/改布局的写法，先问「这次手势的 click 还没派发吧」**。锚点 `scripts/probes/drawer-new-session-probe.mjs`（5 断言）→ `docs/maintenance/pitfalls.md` §抽屉导航 click。
+### 抽屉行菜单
+
+- **摘要层要警惕「渲染了 ≠ 可点到」：会话行 ⋯ 菜单四连坑（2026-09-14 真机）**：①第三方 `@linxin666/dsh-web-all` 的 `installMobileSidebarDismiss` 缺 `_rowActions` 豁免 → 点行内 ⋯ 被当「点了会话行」、去 `.click()` logo 收抽屉；插件注入惰性影子 `[data-mobile-nav="dismiss-shadow"]` 让它先命中（inline `display:none !important`、作 sidebar pane 首子节点、**别放 logo 行**）。②触摸看不到三点（宿主 `_rowActions` 只 hover/menuOpen 显示）→ 插件自实现长按 500ms + 抬手吞合成 click 800ms + `pointerleave` 守卫 1200ms。③菜单被抽屉压住（宿主 menu `z-index:1100` < 抽屉列 1300）→ 移动分支 `body:has([data-mobile-nav="frame"]:not([data-sidebar-collapsed])) [role="menu"] { z-index:1400 !important }`。④同一 shim 还吞掉 frame 内、抽屉外的一切点击 → 删除确认卡必须挂 `document.body` + `delete-dialog-backdrop` 1400 / `delete-dialog` 1401，否则按钮全死。**同类断言必须带 `elementFromPoint` 命中测试**（DOM-only 断言在「渲染了但被盖住」时全绿）。锚点 `scripts/probes/drawer-row-actions-probe.mjs`（13 断言）→ `docs/maintenance/pitfalls.md` §抽屉行菜单。遗留：workspace（项目）行 ⋯ 同样 hover-only。
+### backdrop 误吞
+
+- **手势消费标记的 backdrop 误吞坑（「点两次才关」）**：手势打开抽屉后 `markGestureConsumed` 链式标记手势起点目标，若起点 `event.target` 的祖先链**不含 drawer**（headless 命中穿透时起点落到 body；或 drawer 空壳无内容元素），链会一路走到 document——把 **backdrop / FAB 也标记为 consumed**。随后 1s 窗口内点 backdrop 想关闭，sidebar-swipe 的 document 捕获 `onClick` 命中标记 → `stopPropagation` → backdrop 元素级 click 监听收不到 → 点一次无效（用户感知"要点两次"）。修复：`onClick` 对命中 `[data-mobile-nav="backdrop"], [data-mobile-nav="fab"]` 的 click **无条件放行**（backdrop/FAB 绝不可能是手势合成 click 的目标——手势起点只在左缘 start zone/drawer 内容区）。同时 `markGestureConsumed` 的 upTo 收敛为 drawer（非 frame），减小误标范围。
+### composer 行
+
+- **composer 底部行三件套契约**（推导/探针 → `docs/maintenance/pitfalls.md` §composer 行）：固定图标控件（_add 28 / ContextMeter trigger 28 / _primary 34）不参与收缩；trailing `flex:1 1 auto`、发送 `margin-left:auto` 钉右缘；自适应余量吸收器优先级=模型条>圈>发送键，互斥由置零规则双 arm（menu+dialog）保证，空隙永远在焊接簇之前；模型条与 dock 槽隔 `display:contents`，trailing 域用后代组合器；收缩规则必须 `:not` 排除 `_add`/`_primary`/`_root`；ContextMeter（`JObwrW_`）trigger 无 `aria-haspopup="menu"` 须单独钉住 root。**圈命中盒/间距（2026-09-17 定稿）**：trigger 盒移动端 `28×34`（宽 28 = 几何上限、高 34 行高零成本），`margin-right: 0px`；唯一旋钮且 1:1（`6px + margin-right = 缝 = 环左移量`），环墨迹恒官方 14px 不放大。子代理形态：running 渲染双 `_primary` → 该形态恢复官方 wrap（`:has([class*="_primary"] ~ [class*="_primary"])`）；idle 无模型条 → 圈 root 挂 auto。回归探针 `scripts/probes/subagent-composer-fix-probe.mjs`、`scripts/probes/diag-sub-idle-pin.mjs`、`scripts/probes/composer-meter-hitbox-probe.mjs`（圈命中盒/间距断言 + A/B 非空转）。**取数口径**：选卡只锚 `[data-composer-card]`（无回退分支）；`[data-phase]` 是双命名空间（根=app 相位、编辑面=提交相位）；宿主链式叠加顶掉 composer 时（`[data-chain-overlay-fallback="conversation.composer"]` 内联 `display:none`，如未回答的提问卡）探针走 SKIP 并点名 elected 节点，不当红也不静默跳过。
+### 键盘 guard
+
+- **composer 键盘 guard（PR #48）marker 契约按宿主分代**：`[data-composer-input]` 是 Lexical 编辑面 marker（0.1.2-alpha.2 起），早于它只有 card/seat（guard 安全空转）；升级宿主按 composer-keyboard-guard.ts 文件头注释对账两 marker；headless 的 `detectIosWebKit` 恒 false，本地 CDP 无法验活跃路径（贡献者 iPhone 实机 + tests/composer-keyboard-guard.test.ts 源码不变量已过）→ `docs/maintenance/pitfalls.md` §键盘 guard。
+### 断点与设备
+
+- **宽度断点 ≠ 设备判定（2026-08-30 PC 泄漏）**：`MOBILE_QUERY = '(max-width: 1023px) and (pointer: coarse)'`（JS 常量 + compat/layout/misc 全部顶层 media 块同步）；misc 桌面隐藏块=精确补集 `@media (min-width: 1024px), (pointer: fine), (pointer: none)`。**维护约定：新增任何 `data-mobile-nav` 注入控件（slot 按钮、task 注入元素）必须同步加进隐藏块清单**（dispose 竞态最后防线）。**唯一豁免（v2.4.1）：session-delete 三件套**（`session-delete` 菜单项 + `delete-dialog-backdrop` + `delete-dialog`）不进宽度臂——它们按 `TOUCH_QUERY = '(pointer: coarse)'` 全宽度武装（大平板横屏契约），只受 misc 尾部独立的 pointer-only 块 `(pointer: fine), (pointer: none)` 隐藏；`installMobileEffect` 支持第 4 参 query 覆盖默认 MOBILE_QUERY。探针必须 `Emulation.setTouchEmulationEnabled`（`setEmulatedMedia` 对 pointer 特征无效），桌面场景必须关掉；断言 slot 按钮前等 active phase（hero 的 `wSkVaW_headerActions` 不是同一容器）。完整案例 → `docs/maintenance/pitfalls.md` §断点与设备。
+### 探针运行环境
+
+- **CDP 探针环境参数**：主探针要 `DSH_PROBE_SESSION_ID`；`DSH_PROBE_URL` 三个探针统一 `http://127.0.0.1:3080/`；`DSH_PROBE_CHROME` 在 Termux 要显式传（缺省会 spawn ENOENT）。**活性标记是元素属性 `[data-phase="active"]`，`document.body.dataset.dshPhase` 不存在**（照抄它会一直超时）；插件自己的 `[data-mobile-nav="frame"]` 更早，要「插件已武装」用它。连续跑会泄漏 headless chromium 进程（实测 31 个残留把 load 顶到 7.0），排查前先 `pgrep -c chrom`。完整清单（cookie TTL / `mint-cookie.mjs` / URL 带 token 的陷阱）→ `docs/maintenance/pitfalls.md` §探针运行环境。
+### iOS zoom
+
+- **iOS 一输入就放大（#45）已按机制修**（完整取证/已否决路线/未验证后续项 → `docs/maintenance/pitfalls.md` §iOS zoom）：根/抽屉 `touch-action` 必须含 `pinch-zoom`（沿祖先链交集，漏一层授权就被抵消）；`gesturestart` 一律不 preventDefault；16px 下限走 `html[data-mobile-nav-ios]`（misc.css，盖 textarea / `[contenteditable]:not([contenteditable="false"])` / 文本类 input + composer 三件套同字号；`select` 故意不改）；**不要改回 `maximum-scale=1`**（iOS 10+ 忽略、安卓/桌面认真执行）；宿主 viewport meta 各版都不带 maximum-scale；引擎判定=纯函数 `detectIosWebKit`（先 CSS.supports 特征探针再 UA，iPadOS 13+ 发桌面 UA 靠 maxTouchPoints）。viewport meta 所有权（重申 `width=device-width, initial-scale=1, viewport-fit=cover`，写入永不带缩放锁）已合并 cb16329。探针见 Commands（**A3/B3 本机 headless 预存红**：composer 卡选择器 0 命中，A/B 已证与改动无关，归 L2）。
+### 探针基线
+
+- **主探针（`scripts/cdp-probe.mjs`）的 3 项预存失败已写成机读基线**：探针源码内 `EXPECTED_FAILURES`（name 精确匹配；`page.errors` 另要求 detail 含 `404`，防掩盖新的页面错误）＝`page.errors`（一个 404 资源）、`integration.gitgraph.reparented`（`hasCard=true reparented=false`）、`integration.gitgraph.pressed`（`transform=none`，是上一项的下游：芯片未进 dock 则 `:active` 规则不命中）。命中基线的 FAIL 记 BASE 不计入退出码，SUMMARY 显示 `base=N new=M` 且 base>0 时打印 `BASELINE <names>`，只有 `new>0` 才 exit 1（gitgraph 芯片缺席时走 SKIP，属正常环境差异；某条目修好后必须从 EXPECTED_FAILURES 移除）。判定方法＝bundle A/B（见上条哈希子串）——判定探针结果时看 SUMMARY 的 new 字段，别把基线归给当前改动；修 gitgraph reparent 属独立课题。
+### meme 卡
+
+- **dsh-meme 表情卡片（meme-picker）**：手机端贴 anchor 双侧对齐（`left/right:0`+`width:auto`+`max-width:386px`）；网格 grid `minmax(64px,1fr)` 手机 4 列/平板 5 列（覆盖 dsh-meme 行内尺寸）；滚动条细条。dsh-meme 改卡宽/缩略图尺寸后回来对账 → `docs/maintenance/pitfalls.md` §meme 卡。
+### preset 菜单
+
+- **agent preset 模式选择菜单底部弹层**：`[role="menu"]:has([class*="cubgiG_item"])`（`:has` 圈定，不误伤其他 role=menu）；水平居中+顶部手柄+内部 viewport 滚动+细滚动条；桌面保持官方大下拉。参数 → `docs/maintenance/pitfalls.md` §preset 菜单。
+### header 拥挤
+
+- **会话 header 拥挤保护必须 `[class*="_root"]`**（尾随空格根因+修正 → `docs/maintenance/pitfalls.md` §header 拥挤）：`ZKlsPq_root ` 带尾随空格，`[class$=]` 真实 DOM 0 命中（合成 fixture 复现不出，只有真渲染能暴露）；门控 `header:has([class*="_crumbs"] [class*="_root"])`；钉宽只钉计数/jobs root（`:has(> button[class*="_trigger"])`），排除 switcherRoot 让 title 省略号收缩；官方 `ZKlsPq_separator` 手机端隐藏，crumbSep 保留。**让位优先级（2026-09-14 反转，用户拍板）**：模式名（手机端唯一的模式切换入口）与会话标题都保住文字，让位的是后台任务芯片的冗长标签 `_count`（≤440px 直接 `display:none`——截成数字在两位数任务时会显示错误的计数；≤559px 再加「lineage 同时在场」条件）——原先压模式文字的 `max-width:18px` 两条规则已删除。
+### header 行高与弹层
+
+- **会话 header 的行高、座位线与弹层包含块（2026-09-14 真机三项反馈 → `docs/maintenance/pitfalls.md` §header 行高与弹层）**：①弹层——`dsh-client-ui-jobs` 的菜单是 `position:absolute; top:calc(100%+5px)` 挂在 `.QsffPG_root{position:relative}`（28px 流式盒）上，被我们 chip root 的 `overflow:hidden` 与宿主 `session-title-cluster{overflow:hidden}` 双重裁掉、且 `right:8px` 相对 156px chip root 解析到 x=-16，芯片 `aria-expanded=true` 却什么都没画；修复＝**header `position:relative` + headerActions 内 chip root `position:static`**，两半都必需（只 static 会让包含块外移到 frame，菜单落到 x=8 y=849 屏外）。②行高——宿主手机版 `grid-template-rows: minmax(32px,auto) minmax(44px,auto)` 被空 utilities 座位（44px）与 `[role=tab]{min-height:44px}` 顶成 44/44（97px 里只有 36px 是内容）；压到 rows 36/32 + tab 32 + 座位 30px ⇒ 77px，宿主 `padding-top:8px` **不许再收**（收到 4px 会让标题行中心 22 而两角按钮中心 26）；规则用 `:has(> *)` 门控：hero 那个空 header 仍占 85px，不许被压缩（hero composer rect 逐字节不变）。③title cluster 的 44px 预留裁到 26px（我们的 Files 按钮只画 28px 带，留 8px 净空），标题道再得 18px。
+### files 按钮
+
+- **「打开文件列表」按钮（`[data-mobile-nav="files"]`）必须钉在右上角，与左侧抽屉按钮对称（2026-09-14 真机反馈）**：宿主把会话头 actions slot 挂在它的 title cluster 里，而 cluster 自带 `padding-right: 44px` 给一个手机端恒空的 utilities 座位（390px 实测 `headerUtilities` x=374 宽 0），**流式布局的按钮永远够不到右边缘**——修前实测 `[300,16,28,28]`，右边留了 62px 空档；桌面版同样如此但桌面不归插件管。修复＝移动分支把按钮改成绝对定位 `position:absolute; right:8px; top:12px; z-index:2`（和左侧 `[data-mobile-nav="toggle"]` 的 `left:8px; top:12px` 同一座位线），顺带把它占的 28px 还给标题道（crumbs 170→200）；该 44px 预留随后被裁到 26px（见上一条），标题道再得 18px。两点别踩：①它必须是 `position` 覆盖而不是加负 margin（容器 `justify-content:flex-end`，负 margin 会被 cluster 的 padding 吃掉一部分，且标题道宽度不会回收）；②竖向上两个角按钮都随 frame 的 safe-area padding 一起下移（实测 inset 47 时 top 12→59）——这是必须的，否则按钮会被状态栏压住。锚点 `scripts/probes/header-files-pin-probe.mjs`（11 断言：规则只在移动分支 / 右缘 382=390-8 / 与抽屉按钮同 top / 命中测试到按钮本体 / 不压 utilities 座位 / 插 inset 后两角同步下移且仍钉右缘）。（hero 态该 slot 不渲染，无钉错容器风险。）
+### 哈希子串
+
+- **哈希类选择器一律子串匹配 `[class*=]`，禁止 `[class$=]`**（实锤案例+守卫族清单 → `docs/maintenance/pitfalls.md` §哈希子串）：`[class$=…]` 对整个 class 属性串做后缀测试，多 token/尾随空格（`ZKlsPq_root `、`wSkVaW_… wSkVaW_composerHero`）即整体失配；复活后可能过匹配，前缀重叠片段加 `:not`。已守卫族：`_action(s)`、`_header`（含 `_headerStatic` 排除）、`_stat(_statsRow)`、`_scroll`（`:has(p)` + `:not(:has([data-composer-input]))`，PR #47）、`_tabBar`、`_row` 复合族五段 `:not`；低危候选 `_search/_searchInline/_searchBox` 升级后普查。回归：headless 向 scrollBody 注入 `<p>` 断言 padding 保持；bundle A/B 用 `git show <commit>:lib/client.js > lib/client.js`（服务端 no-cache，A/B 窗口要短并及时还原）。
+### 工具栏锚定
+
+- **设置工具栏规则结构化锚定，禁止裸 `[class*="_header"]`**（0.1.5-rc.2 实测官方 Plugins 页 4 张 `YyYd_a_` 卡头命中，dsh-web-all 分组卡头页零渲染；锚定 reparent 后 `> [class*="_nav"] > [class*="_header"]`、reparent 前 `> :last-child > [class*="_header"]`）；新装插件卡再现同类症状先查这条；回归探针 `scripts/probes/plugin-card-header-bleed.mjs`（10 断言，需 `DSH_PROBE_COOKIE`，nav 标签现为 `Web Plugins`）→ 案例 `docs/maintenance/pitfalls.md` §工具栏锚定。
+### tooltip
+
+- **触屏 tooltip 压制必须保留 `[class*="_actions"]` 祖先限定**（裸 `[_bubble]` 会 display:none 用户消息/goal 气泡——0.1.1-rc.2 上「CDP 实测 10 个 tooltip」就是 10 条用户消息，断言断在 bug 本身；摘抄/移植类 CDP 验证必须同时断言非目标元素可见）→ 完整取证 `docs/maintenance/pitfalls.md` §tooltip；回归探针 `scripts/probes/diag-flow4.mjs`。
+### hero 净空
+
+- **hero 净空与胶囊锚点净空的级联冲突（2026-09-06）**：同特异度 (0,3,0) 跨块踩踏（misc 拼接在 compat 之后）——hero 40px 净空被踩成 6px、28px 胶囊压输入行；修复=misc padding-top 覆盖加 `:not(:has([data-gitgraph-chip-anchor]))`，净空随芯片生长 40→44px。教训：同张拼接样式表跨块调参前先用探针量同特异度冲突；胶囊异步渲染必须轮询等锚点再断言。回归探针 `scripts/probes/diag-hero-chip.mjs`（8 断言）→ `docs/maintenance/pitfalls.md` §hero 净空。
+### hero 输入框下限
+
+- **hero 空态输入框不许被压到宿主自己的下限之下（2026-09-14 真机：滚动条 + 首行被裁）**：Lexical 代宿主（0.1.2-rc.1 起实测到 0.1.5-rc.2）给 hero 输入框钉了 `min-height: 52px`（hero 提示文案会折两行），而 **min-height 永远赢过外层的 height**——插件从 fork 摘的「空态压成一行」镜像规则（`height:28px !important` 打在 `_scroll`/`_grow`/`[data-composer-input]`）在真宿主上只压小了滚动窗口（clientHeight 28 / scrollHeight 52）→ 滚动条 + 首行不可见。该规则已删除（hero 输入框回到宿主两行高度，卡 108px）；textarea 代（0.1.1-rc.2）的同一 collapse 保留——那代输入框是透明 `height:100%` 覆盖层、自身无下限，规则确实生效。**教训**：镜像到新一代的「压小」规则必须对账宿主是否给该元素钉了自己的下限（合成 fixture 里没有下限，这正是它当年 11 断言全绿却漏网的原因）；同族检修=任何「压小宿主元素」的规则先查该元素有没有 min-height/size 下限。锚点 `scripts/probes/hero-composer-clip-probe.mjs`（12 断言：无溢出 / 未滚动 / 输入框与提示完整可见 / 输入框不低于宿主下限 / 插件规则不钉该链高度 / 桌面零干预）→ `docs/maintenance/pitfalls.md` §hero 输入框下限。
+### overlay 两信号
+
+- **`data-conversation-composer-overlay` 是通用 overlay 属性，非 file-viewer 专属**：marker 判定只认 `.dsfv-panel`；手势让位 `takeoverActive()` 直查通用属性（轨迹 tab 也让位，FAB 仍可开抽屉）；注入形状必须含反断言形态（纯属性、无 dsfv 类 → marker 不置位但滑动让位）→ `docs/maintenance/pitfalls.md` §overlay 两信号；设计 `docs/specs/2026-09-06-conversation-overlay-takeover-design.md`；探针 `scripts/probes/file-viewer-probe.mjs`。
+### tab strip
+
+- **会话 header view tab strip 手机端横滚（#41）**：strip `overflow-x:auto` + 按钮 `flex-shrink:0; white-space:nowrap` + `touch-action: pan-x`（strip 自己认领横向 pan）+ `overscroll-behavior-x: contain` + scroll-snap；affordance=右缘被切断的 tab；起始于已溢出 strip 的边缘滑被 `findHorizontalScroller` 在 beginStroke 拒绝 → `pitfalls.md` §tab strip。
+
+### reconciler
+
+- **全树 reconciler 的 task 必须幂等且 dispose 可恢复**：`ensure` 每次移动第三方 DOM 时刷新 `origin`（React 会重建节点）；`dispose` 找回元素限定在被移动容器内，不用全局文本搜索；task 注册的 disposer 不得丢弃，否则同环境插件重载后 reconciler 失效。
+### 文档漂移
+
+- **文档/注释与实现的漂移**：`MobileNavOverlay.tsx` 已删除，其职责由 shared reconciler task（`settings-toolbar-reparent`/`git-chip-reparent`）承担；提到该组件即视为过时。触觉反馈（`HapticRow`/`haptic-pref`）也已从源码移除，README 相关条目已清理。README「未发布」段的参数同样会漂移——定稿 release notes 前必须对源码常量核对（v2.3.0 漏过识别区旧值，以源码常量为准）。变更条目**只描述结果不写过程**（2026-09-05 用户偏好：不写症状/修复叙事，直接写修复后的最终状态）；功能条目同理**不列举特点细节**，一句话说清是什么即可（2026-09-08 用户偏好：功能不用解释有哪些特点）。计数条目（探针/测试文件数）README 与 AGENTS.md 各持一份，收口时必须两处同步——2026-09-08 实漏：会话删除收口只更 AGENTS.md 探针计数，README 的「七个」留在旧值。
+### 合并冲突
+
+- **合并涉及 CSS 字符串的 PR 会冲突在生成文件**：`lib/types/client/styles/*.css.d.ts` 和 `.d.ts.map` 是单行大字符串，双方只要都改过同一 CSS 模块，git 会在这些生成文件上报行级冲突。解法是合并后跑 `pnpm build` 重建 lib 再 `git add`，不要手工编辑 d.ts。
+
+### 子代理芯片
+
+- **子代理芯片触摸兼容（subagent-chip-touch.ts）**（三类症状分类+iOS 壳硬约束 → `docs/maintenance/pitfalls.md` §子代理芯片）：上游 count 变体 trigger 无 onClick（hover 定时器开关）；触摸路径=pointerup 派发合成 ArrowDown/Escape 走组件键盘路径 + ~800ms 吞射向 `ZKlsPq_`/`h8S2Va_` 子树的 trusted hover 事件（不吞 click）。CDP 注意：每步先断言无 aria-modal（误触 Session log 会拉起模态），一律全新 user-data-dir。
+### subagent 两代
+
+- **dsh-client-ui-subagent 两代互斥开关实现必须同兼容**（闪退竞态根因+修复 → `docs/maintenance/pitfalls.md` §subagent 两代）：0.1.0-rc.6~8（`h8S2Va_`）=onClick 代，0.1.1-rc.1/2（`ZKlsPq_`）=hover 代（npm dist-tag 不可信）；判定看 served bundle 有无 onClick/hover 定时器，别看版本号。onClick 代双开关竞态由 `toggledTrigger`（1s 宽限）+ document 捕获吞同 trigger 的 click 解决；`HOVER_SUBTREE_SELECTOR` 同时列两代哈希——两条吞噬防护并存、在另一代上各自 no-op，即两代通吃。
+### irow
+
+- **已安装列表的 outer-row 选择器必须排除嵌套 action 容器**：`irowActions` / `irowTrailing` 类名都含 `irow`，宽泛的 `[class*="irow"]` 会把 action 容器一起 `flex-wrap:wrap`、状态与按钮错位 → outer row 必须 `[class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"])`，切回 ≥1024px 要清掉自己写的 inline。**该族上游当前 0 命中**（2026-09-16 实测），规则留作复活守卫。
+### 市场头
+
+- **市场头部「文字变竖排」的触发器是待更新按钮**：`_titleRow`（nowrap flex）出现 "Update market/all" 时 ~450px 撑爆 ~334px 表单 → `_title` 逐词换行。compat 已改 wrap + `_title` ellipsis + 按钮 nowrap；同区 `_opPanel` fixed 居中。**该族上游当前 0 命中**（2026-09-16），留作复活守卫。
+### dshmarket
+
+- **dshmarket ≥1.20 手机端隐藏设置 nav 造成死路，需镜像条件反制**：1.20.x 起上游 `Market.module.css` 在 `@media(max-width:560px)` 注入 `[role="dialog"]:has([data-dsh-market-root]) > nav { display:none }`（意图让市场在手机上接管整个设置对话框），注释假设宿主会在 content header 自留关闭按钮——但本宿主唯一叉号 `VOzbGW_close` 就在该 nav 里，于是打开市场后分类行与叉号一起消失、无路可退。已在 `compat.css.ts` 镜像上游同一 media 条件反制：frame 域限定 + `[role="dialog"]:has([data-dsh-market-root]) > nav { display:flex !important }`。取证手法：活页面遍历 `document.styleSheets`（含 media 规则递归）找命中目标元素且带 display:none 的规则，即可定位注入 style 标签（带 `data-plugin=dshmarket data-plugin-css=…`）。profile 的 `^caret` 版本范围会静默升 minor——dshmarket 升级后按调试地图 §7 对账。
+### debug badge
+
+- **`?mobile-nav-debug=1` 的 debug badge 不能观察自己写入的子树**：badge 位于 `document.body` 内，而 `paint()` 写 `badge.textContent` 会产生 childList mutation；若 MutationObserver 直接以 `paint` 为回调，会把自身输出再次喂给 `paint()`，造成页面硬冻结（headless/真实浏览器都会卡在 "Loading plugins…"）。回调必须跳过 `badge` 自身及其子树上的 mutation（`record.target === badge || badge.contains(record.target)`），否则调试模式本身就是事故源。
+### 反引号
+
+- **CSS 模板字符串注释内禁止反引号**：`src/client/styles/*.css.ts` 的 CSS 是 TypeScript 模板字面量，注释里写 Markdown 反引号会提前终止模板，tsc 报 `TS1005`。引用类名用普通引号或纯文本。
+### has 下限
+
+- CSS relies on `:has()` and therefore requires Chromium 105+; unsupported `:has()` rules can disappear silently in old WebViews. Preserve `prefers-reduced-motion` behavior.
+### lib 纪律
+
+- Generated code discipline: `lib/` is intentionally committed because consumers install without a build step. A source change is incomplete until `pnpm build` refreshes it.
+### bundle 校验
+
+- **页面状态/bundle 校验**：**对账法已按 0.1.5 实测修正**：插件由组合加载器提供 `http://127.0.0.1:3080/plugins/??dsh-web-mobile/client.js&rev=<rev>`（无 cookie 401，cookie 用 `.local-tests/mint-cookie.mjs` 铸；**rev 必须取自 shell HTML 的当前值——自造/过期 rev 与「非组合路径」同样是 404 空 body（sha1 恒 da39a3ee5e6b），别据此判「插件没被服务」**）。**rev 既不是 sha1(lib/client.js) 也不是 sha1(served)**（实测 760a4196b484 vs c37fc641a402 / ffcefb5084f8）——别用 rev 对账；权威判据＝served body 是 `lib/client.js` 的**逐字节前缀 + 80 字节 `//# sourceMappingURL=…` 尾巴**：`curl -s -H "Cookie: $C" '<combo url>' | head -c $(stat -c%s lib/client.js) | sha1sum` 必须等于 `sha1sum lib/client.js`。设备出现旧 UI 时先换全新 browser context/清站点数据——复用旧 context 会让 harness web 进入「fence-only」状态（frame 内联 `display:none`、最后一条 dsh-ui fence 挂 app 根级），与插件无关；再用上面的前缀 sha1 判据比对，不要据此改 mobile-nav 代码。
+
+### host ESM
+
+- **host 半区 ESM 相对导入必须带 `.js` 扩展名**：`tsconfig.json` 用 `moduleResolution: "bundler"`，tsc 把相对说明符原样发射；Node ESM 不猜扩展名 → `ERR_MODULE_NOT_FOUND`，plugin tree 加载失败、`dsh web` 直接崩（实锤 #31：`src/index.ts` 写 `from './compress'` 漏 `.js`）。bundler 模式会把 `./compress.js` 映射回 `compress.ts`，所以源码写 `.js` 即可，不必动 tsconfig。`lib/index.js` 应可从仓库根 `node -e "import('./lib/index.js')"` 直接解析。
+### safe-area
+
+- **safe-area padding 与 `box-sizing: border-box` 必须成对出现**（frame `height:100%`+content-box 会把视口撑出 inset 滚动量、composer seat 沉到视口下——「跟随失效」是假象，错位的是外层 document；桌面 inset=0 复现不出，须 CDP 注入 47px 模拟；断言 scrollHeight-clientHeight===0 且 seat.bottom===innerHeight）→ `docs/maintenance/pitfalls.md` §safe-area。
+### Files 面板 safe-area
+
+- **Files 列表面板（宿主 ui-sidebar-right）顶行压在手机状态栏下（2026-09-14）**：面板是宿主自己的全屏 fixed sheet（`[data-sidebar-right-panel=fullscreen]` → `position:fixed; inset:0`，z-index 40，自绘 `--dsw-alias-bg-base`），宿主 CSS 全程无 safe-area 处理，而 **fixed 元素的包含块是视口**——插件给 frame 加的 `padding-top: env(safe-area-inset-top)` 够不到它，顶行（tab 标签 / `+` / Split / 退出全屏）y=0…38 正好落在状态栏下。修复＝移动分支给**全屏形态**的面板本体吃 inset：`[data-sidebar-right-panel="fullscreen"] { padding-top: env(safe-area-inset-top, 0px) !important }`（layout.css 移动块）；成立前提是面板自绘背景（状态栏那一条不露底、无接缝）且为 border-box（padding 只下推内容，面板仍铺满视口）。**必须带 `="fullscreen"` 形态限定**：宿主另一种形态是停靠面板（820×1180 实测 `form=push`、`position:absolute`），它的包含块是 frame 的 padding box，本来就在状态栏下方，再吃一次 inset 会顶两次（探针场景 5 守此）。锚点 `scripts/probes/files-panel-safe-area-probe.mjs`（21 断言：规则在场且只在移动分支 / 规则选择器**命中活面板本体** / 宿主 fixed 全屏形态 + 自绘背景 / 模拟 inset 后整行按值下移、右缘不动、paneBody 不溢出 / 停靠形态不被规则命中且不双重 padding）→ `docs/maintenance/pitfalls.md` §Files 面板 safe-area。桌面零影响：规则在移动 media 块内，1280×720 `pointer:fine` 实测 `matches=false`。
+
+### 响应压缩
+
+- **响应压缩是进程级 prototype patch**：`src/compress.ts` 直接替换 `http.ServerResponse.prototype` 的 writeHead/write/end（disposer 还原），作用于 DSH Web 进程内所有响应而不只是本插件路由；仅压缩 ≥4KB 且 content-type 含 json、无既有 content-encoding、客户端 Accept-Encoding 支持 br/gzip 的响应，SSE 有意不压。改动该文件时必须保持三条不变式：小 JSON 原样字节透传（原头不动）、Content-Length 与实发字节数一致、dispose 完整还原三个方法。
+### 会话删除
+
+- **会话删除的注入面按宿主分代**（fork wzxmt-zhc 摘抄；完整取证 → `docs/fork-wzxmt-zhc/backlog.md` 会话删除行）：rc.2 手机抽屉只渲染宿主 rail（现役 `bhn1Oq_rail`；上游已改名，子串匹配不受影响），会话行 `_sessionRow` 与 ⋯ 菜单只在 ≥1024px 桌面面板存在 → session-menu.ts 在 touch 门控内静默、宿主升级后自动激活；**别为此做全宽注入或抽屉展开面板**（用户已否决）。**0.1.5 菜单换形（2026-09-13 真机）**：仍 3 项但渲染换代——`role="menuitem"` 按钮直排文本、无子元素（rc.2 的 `_itemIcon/_itemLabel` 克隆模板消失）；读取用 `itemLabel`（label span → 整按钮 textContent）双代兼容，注入项在无 label span 且无子元素时整按钮改文+染色，**未知形状（有子元素却无 label span）不猜文本**。升级绊线：`scripts/probes/session-delete-probe.mjs` 断言 5（rail 在场但 0 行/0 菜单）——0.1.3 上翻红即按 SKIP 提示复启注入/弹窗套件。桌面零注入由断言 15c/15d 守（pointer 门控 + misc pointer-only 隐藏块双保险），宽屏触摸（≥1024px + touch emulation）注入由 16a-16d 守。删除端点真机已验：冷会话 200 + 整目录移除、GET 405 / 空参 400 / 未知 404；**运行中会话 409 仅单测**。源码不变量守卫 `tests/session-menu.test.ts`。
+
+### 0.1.5 抽屉 z 与遮罩
+
+- **0.1.5 官方窄屏已是原生 overlay 抽屉，但插件**不放权**——抽屉与遮罩全代都归插件（2026-09-13 用户拍板，2026-09-14 修正文档）**：官方 `pI_x6G_sidebarCol` 是 `position:absolute; z-index:1100`（collapsed 52px rail / expanded 321px 拖宽把手），**实测无全屏遮罩**（内容仍可点）→ 插件继续用自己的抽屉列（`z-index:1300`，layout.css + base.css 的 1250 遮罩契约）与全屏 backdrop，覆盖所有代际。**别再按「代际让位」理解，也别再写「检测宿主代际」的钩子**（`data-mobile-nav-gen` 那套已删）；真要检测官方形态只能用结构类名（col 类含 `sidebarCol`）＋ computed position，**绝不能用 computed z-index**（检测跑在我们 CSS 在场时，读到的是自压值）；`z-index:40!important` 压官方 1100 曾让抽屉「有 box、computed 正常却不绘制不命中」，已由 1300 解决。升级对账点：`sidebarCol` 子串（0.1.5 哈希 `pI_x6G_` 会变）→ `pitfalls.md` §0.1.5 抽屉 z 与遮罩。
+
+### 0.1.5 关态槽位
+
+- **宿主更高特异度规则会静默压掉插件的抽屉槽位（0.1.5 实测，2026-09-17）**：关态只剩不在 transition 列表里的 width → 点击开关**无动画**（手势写 inline `transform !important` 幸存）。修＝同特异度重申槽位 + `closeDrawerAnimated(ctx)` 收口六个点击关闭入口 + 开态判定区右缘＝抽屉右缘（`openStateStartMode`）。探针须钉 `rect.left <= -rect.width`，只断「离屏」会漏 → `pitfalls.md` §0.1.5 关态槽位。
+
+### 性能契约
+
+- **流式期每帧热点性能契约**：stats-line 快路径 `statsAnchorAlive`（失位先摘旧标记再回落慢路径，scopes 恒 `['*']`）；installed-list 观察者走 `core/raf-scheduler.ts` rAF 合并（flush 重验 mq，dispose cancel）；抽屉会话树 `content-visibility:auto` 为会话数增大后的渐进增强；arm-open 冻结治本在宿主（React 互斥子树同步挂载），插件 CSS 只能消 layout/paint 份额 → `docs/maintenance/pitfalls.md` §性能契约。
+
+### Shiki
+
+- **宿主 Shiki 高亮止血 patch（已定：不重放，走上游）**：`tokenizeTimeLimit` 0→100ms 的手改已被宿主升级抹回 0；根治见 `docs/upstream/host-jank-feedback.md` §问题 2 → `docs/maintenance/pitfalls.md` §Shiki。
+
+### 包改名边界
+
+- **npm 包改名边界（2026-08-30：dsh-mobile-nav → dsh-web-mobile）**：包名、patch 行 id/name、client loader id、served 路径 `/plugins/dsh-web-mobile/`、style dataset `data-plugin` 与 CSS 动画名（`dsh-web-mobile-fade/sheet-in/sheet-up`）全部随新名；**刻意不改**：DOM 标记 `data-mobile-nav="frame"` 族与 `?mobile-nav-debug=1` 参数（用户可见契约，保持短且已文档化）。旧 npm 名 dsh-mobile-nav（2.2.0/2.3.0）已整包 unpublish、不可恢复；DSHA 的 vendored 副本仍是 `@dsh-external/dsh-mobile-nav`（2.1.x 代），不影响其 APK 运行，等它 re-vendor 才对齐。仓库目录名保持 `~/dsh-mobile-nav` 不改（AGENTS/Shiki patch 备份路径引用它，改目录名会断链）。本机换名需重跑 `dsh plugin --profile web add link:~/dsh-mobile-nav`。旧名用户的迁移契约：**必须 rm 旧名 → add 新名，不能并存**——patch 行 id 随包名一起换了，两行 bundle 会让宿主把同一插件加载两份（style/slot/locale 双重注册，locale 重复注册直接抛错）；旧名 unpublish 后死依赖会毒化 profile 的所有后续 install（与 /root 机 dsh-api-dashboard 404 同机制），所以这是强制迁移而非可选更新；README 包名说明里已附迁移命令。
+
+### 字号轴
+
+- **消息字号只读长写 `--dsw-font-markdown-base-font-size`（`-base` 是 `font:` 简写）；守卫断源串，勿遍历 DOM 级联（遍历须先判 `selectorText`，否则容器上抛错）→ `docs/maintenance/pitfalls.md` §字号轴。
+### 两个 closer
+
+- **只许一个抽屉 closer 武装**：`armNav()` 与 `closeOnNavigation()` 各自先 disarm 对方（disarm 即置 done，排队 `fire` 不再补 toggle）；`isTapWithinSlop` 逐轴 max-norm，勿改 `hypot`。**行导航不依赖合成 click 时序**：`armNav` 的 `aria-selected` 观察者 2000ms 自 disarm、document 捕获 click 在行 tap 后 500ms 让位（两者都在 `phone-chrome.ts`，曾误记为子代理芯片）→ `docs/maintenance/pitfalls.md` §两个 closer。
