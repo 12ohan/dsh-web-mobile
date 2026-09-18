@@ -232,6 +232,7 @@ async function main() {
         logHit: hit !== null && (hit === log || log.contains(hit)),
       })
     })()`))
+    // explorer === false is a revive guard, not a live assertion: no src/ producer remains, so it turns red only if the entry returns.
     record(footer.actions === true && footer.explorer === false && footer.buttons === 1 && footer.log === true && footer.logHit === true,
       '9.footer-no-files-entry',
       `actions=${footer.actions} explorer=${footer.explorer} buttons=${footer.buttons} log=${footer.log} logHit=${footer.logHit}`)

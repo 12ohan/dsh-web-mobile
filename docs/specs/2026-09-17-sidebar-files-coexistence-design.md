@@ -92,7 +92,7 @@
 - `src/client/index.tsx`：`sidebar.footer.action` 的 `inject` 去掉 `toggleSidebar` 传参。
 - `src/client/styles/base.css.ts`：共享按钮规则列表去掉 `[data-mobile-nav="explorer"]` 那半、删掉它的 `:hover` 规则（删按钮后都是死选择器）。
 - `src/client/styles/misc.css.ts`：桌面隐藏块里的 `[data-mobile-nav="explorer"]` 条目同样删除（清单必须与实际注入控件一致）。
-- `src/client/styles/compat.css.ts` 不动：`[data-mobile-nav="drawer-actions"] > button { flex: 1 1 0 }` 会让剩下的「会话日志」独占整行（原来是两个按钮平分），属视觉细节，按浏览器审查结论定夺。
+- `src/client/styles/compat.css.ts` 规则不动（只刷新了描述该行的注释）：`[data-mobile-nav="drawer-actions"] > button { flex: 1 1 0 }` 会让剩下的「会话日志」独占整行（原来是两个按钮平分），属视觉细节，按浏览器审查结论定夺。
 - `scripts/probes/files-swipe-probe.mjs`：**扩existing**（不新增探针文件，README/AGENTS 的探针文件计数不变），新增两侧栏共存场景与「抽屉 footer 已无文件入口」断言。
 - 文档：本文（权威契约）＋ `docs/maintenance/pitfalls.md` 详细节 ＋ `AGENTS.md` 压缩条目 ＋ README「未发布」一条（只写最终状态）。
 - `open-files-panel.ts` 不动（顶栏按钮仍在用）；`files` 这个 locale key 不动（顶栏按钮仍在用）。
@@ -107,4 +107,4 @@
 
 既有场景 2/3（右缘左滑开面板、面板开右滑关面板）、5/6（抽屉开着时右缘左滑无动作、右滑收抽屉）不得回退——「面板开 + 右滑关面板」已由场景 3 覆盖，不重复新增。
 
-门：`pnpm verify`、`pnpm test:core`、`pnpm build`（lib 与源码同提交）、`node scripts/probes/files-swipe-probe.mjs`、主探针 `pnpm smoke:cdp`（35 项不回退）、桌面 pointer:fine 零影响。
+门：`pnpm verify`、`pnpm test:core`、`pnpm build`（lib 与源码同提交）、`node scripts/probes/files-swipe-probe.mjs`、主探针 `pnpm smoke:cdp`（20 项：14 核心 + 6 集成，含 3 项机读基线，`new=0`）、桌面 pointer:fine 零影响。
