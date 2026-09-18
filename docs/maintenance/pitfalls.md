@@ -194,6 +194,16 @@
 
 代价与对账点：形态值被宿主改名（或新增第三种形态）时，修复会在**没有** inset 的形态上静默失效——所以场景 1 的断言把选择器文本钉死为 `[data-sidebar-right-panel="fullscreen"]`（放宽或改名都会翻红），场景 2 另断宿主手机态 form 仍为 `fullscreen`。
 
+## 抽屉 ⇄ 文件面板：一套「看似两个抽屉、实则三套机制」的共存契约（2026-09-17 实测，五轮活页面）
+
+用户报告「抽屉和打开文件管理打架」，实测发现冲突面有四个、机制有三层，别当成一个问题修：
+
+1. **z 序**：宿主的文件面板 `[data-sidebar-right-panel]` 手机档是 `P3OORG_panel[data-sidebar-right-panel=fullscreen]`（`position:fixed; inset:0`，**z-index 40**），而且**在 frame 内部**（`frame > … > pI_x6G_rightbarCol > panel`）；插件抽屉列 1300、backdrop 1250 ⇒ 抽屉永远压面板；插件顶栏两个角按钮 `z-index:2`、header `z-index:auto` ⇒ 面板画在顶栏之上（`base.css` 的 55/56/57 是删除确认卡、`compat` 的 55/56 是 aionui 两列，都不在 header 上，别拿它们当解释）。
+2. **第三方 shim 吞点击**：`@linxin666/dsh-web-all` 的 `installMobileSidebarDismiss` 在 `max-width: 768px` 且 frame 无 `data-sidebar-collapsed`（＝左栏/抽屉开着）时，对**不在 `[data-pane="sidebar"]` 子树内**的点击一律 `preventDefault + stopPropagation` 并顺手点宿主自己的 `sidebar-toggle`——**程序化 `.click()` 一样被吞**。实锤：抽屉开着时点 `[data-sidebar-right-expand]`，按钮自身捕获监听 `listenerFired: 0`、面板 `data-sidebar-right-open` 零变化；抽屉关着时同一点击 90ms 后置 `true`。
+3. **宿主自身的门槛**：即使绕过 shim，左栏开着时宿主也不接受右栏展开。实测「先收抽屉 → 延迟点展开」矩阵：**0ms ✗ / 120ms ✗ / 320ms ✓ / 600ms ✓**（关抽屉是晚提交，marker 在 280ms 动画落地才翻，shim 守卫与宿主状态都到那时才放开）。
+
+结论（用户 2026-09-17 拍板）：抽屉底部的文件入口**删除**，不给它加时序补丁；共存规则定为「抽屉压面板、打开抽屉不销毁也不关闭面板、收掉抽屉即回到面板、面板开着时顶栏角按钮不可达＝接受」。契约全文与已知不修清单见 `docs/specs/2026-09-17-sidebar-files-coexistence-design.md`；锚点 `scripts/probes/files-swipe-probe.mjs` 场景 9/10/11（footer 无文件入口 + 抽屉压在面板上仍命中抽屉、面板存活 + 收抽屉后面板仍在）。
+
 ## 「打开文件列表」按钮没有钉在右上角（2026-09-14 真机反馈）
 
 原话：「打开文件列表的按钮……没有进行固定，它仍然受到状态栏自适应影响」。**主语是按钮，不是文件列表面板**——同一天的 safe-area 修复修的是面板顶行，两者不是一回事。

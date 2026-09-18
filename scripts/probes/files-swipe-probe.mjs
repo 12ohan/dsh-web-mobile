@@ -268,7 +268,8 @@ async function main() {
       `drawer=${over.drawer} inDrawer=${over.inDrawer} panel=${over.panel}`)
 
     // ---- 11. the panel is still there once the drawer is dismissed ----
-    // A trusted tap on the backdrop (x > 390*0.7, beside the drawer column).
+    // A trusted tap on the backdrop, past the drawer column's right edge: the
+    // column is min(88vw, 280px) wide (280px at 390px), so x = 350 is outside it.
     await touchSwipe(350, 420, 350, 420, 40)
     await waitFor(async () => await evaluate(`document.querySelector('${FRAME}')?.hasAttribute('data-sidebar-collapsed') === true`), 'drawer dismissed', 8000)
     await sleep(400)
