@@ -54,7 +54,7 @@
 | 打开抽屉 | 顶栏左上角抽屉按钮；左缘 45% 区**右滑**（面板开着同样有效） |
 | 关闭抽屉 | 抽屉本体/左区**左滑**；抽屉右缘之外**右滑**；点 backdrop；Escape；导航项 click；六个点击关闭入口 |
 
-抽屉底部**不再**提供文件入口（§3.3）。
+抽屉底部**不再**提供文件入口（§3.3）。表里「顶栏两个角按钮」只在**文件面板关闭时**可达——面板打开时它画在顶栏之上（§3.2 末条），那一段的「打开抽屉」实际只剩左缘右滑一条路。
 
 ### §3.2 层叠与生命周期
 
@@ -90,19 +90,21 @@
 
 - `src/client/components/MobileDrawerFooter.tsx`：删除 Files 按钮、`openExplorer`、随之失效的 `toggleSidebar` prop 与 `IconPanelLeftOutline16` / `openFilesPanel` import。
 - `src/client/index.tsx`：`sidebar.footer.action` 的 `inject` 去掉 `toggleSidebar` 传参。
+- `src/client/styles/base.css.ts`：共享按钮规则列表去掉 `[data-mobile-nav="explorer"]` 那半、删掉它的 `:hover` 规则（删按钮后都是死选择器）。
+- `src/client/styles/misc.css.ts`：桌面隐藏块里的 `[data-mobile-nav="explorer"]` 条目同样删除（清单必须与实际注入控件一致）。
+- `src/client/styles/compat.css.ts` 不动：`[data-mobile-nav="drawer-actions"] > button { flex: 1 1 0 }` 会让剩下的「会话日志」独占整行（原来是两个按钮平分），属视觉细节，按浏览器审查结论定夺。
 - `scripts/probes/files-swipe-probe.mjs`：**扩existing**（不新增探针文件，README/AGENTS 的探针文件计数不变），新增两侧栏共存场景与「抽屉 footer 已无文件入口」断言。
 - 文档：本文（权威契约）＋ `docs/maintenance/pitfalls.md` 详细节 ＋ `AGENTS.md` 压缩条目 ＋ README「未发布」一条（只写最终状态）。
 - `open-files-panel.ts` 不动（顶栏按钮仍在用）；`files` 这个 locale key 不动（顶栏按钮仍在用）。
 
 ## §7 验证标准
 
-`scripts/probes/files-swipe-probe.mjs` 新增断言（全部带命中测试，避免「渲染了 ≠ 可点到」）：
+`scripts/probes/files-swipe-probe.mjs` 由 8 场景**扩到 11 场景**（全部带命中测试，避免「渲染了 ≠ 可点到」；不新增探针文件，README/AGENTS 的文件计数不变，该探针的「8 场景」描述同步改）：
 
-1. 抽屉 footer 内 `[data-mobile-nav="explorer"]` **缺席**，`[data-mobile-nav="drawer-actions"]` 与「会话日志」按钮在场且命中本体；
-2. 两侧栏同时开（面板开 → 左缘右滑）：抽屉矩形内命中元素属于抽屉子树、抽屉为 open；
-3. 同场景面板仍 `visibility:visible`（未被抽屉开关销毁）；
-4. 点 backdrop 收抽屉后，面板仍 `visibility:visible`；
-5. 面板开 + 抽屉关时，右缘右滑关面板（钉住既有提交路径）；
-6. 抽屉开时右缘左滑＝无动作（抽屉不关、面板不开，既有锚点保持）。
+- `9.footer-no-files-entry`：抽屉 footer 内 `[data-mobile-nav="explorer"]` **缺席**，`[data-mobile-nav="drawer-actions"]` 与「会话日志」按钮在场且命中本体；
+- `10.panel-survives-drawer-overlay`：面板开 → 左缘 45% 右滑开抽屉，抽屉矩形内命中元素属于抽屉子树（`inDrawer === true`）、抽屉为 open、且面板仍 `visibility:visible`；
+- `11.panel-visible-after-drawer-close`：点 backdrop 收掉抽屉后，面板仍 `visibility:visible`（生命周期契约的落点）。
+
+既有场景 2/3（右缘左滑开面板、面板开右滑关面板）、5/6（抽屉开着时右缘左滑无动作、右滑收抽屉）不得回退——「面板开 + 右滑关面板」已由场景 3 覆盖，不重复新增。
 
 门：`pnpm verify`、`pnpm test:core`、`pnpm build`（lib 与源码同提交）、`node scripts/probes/files-swipe-probe.mjs`、主探针 `pnpm smoke:cdp`（35 项不回退）、桌面 pointer:fine 零影响。
