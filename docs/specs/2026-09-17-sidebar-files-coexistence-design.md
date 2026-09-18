@@ -99,7 +99,7 @@
 
 ## §7 验证标准
 
-`scripts/probes/files-swipe-probe.mjs` 由 8 场景**扩到 11 场景**（全部带命中测试，避免「渲染了 ≠ 可点到」；不新增探针文件，README/AGENTS 的文件计数不变，该探针的「8 场景」描述同步改）：
+`scripts/probes/files-swipe-probe.mjs` 由 8 场景**扩到 11 场景**（其中 9/10 两项带 `elementFromPoint` 命中测试——「会话日志」按钮本体与抽屉子树的 `inDrawer`；1 只验入口在场、11 只验面板仍可见，其余为手势行为断言——避免「渲染了 ≠ 可点到」；不新增探针文件，README/AGENTS 的文件计数不变，该探针的「8 场景」描述同步改）：
 
 - `9.footer-no-files-entry`：抽屉 footer 内 `[data-mobile-nav="explorer"]` **缺席**，`[data-mobile-nav="drawer-actions"]` 与「会话日志」按钮在场且命中本体；
 - `10.panel-survives-drawer-overlay`：面板开 → 左缘 45% 右滑开抽屉，抽屉矩形内命中元素属于抽屉子树（`inDrawer === true`）、抽屉为 open、且面板仍 `visibility:visible`；

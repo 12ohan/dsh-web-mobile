@@ -74,4 +74,4 @@
 
 - **单测**（`tests/sidebar-swipe.test.ts` 增补，决策表风格）：`filesZoneHit` 边界（区左右缘、RTL 镜像）；`classifyFilesSwipe` 全矩阵（方向 × panel/drawer 状态 × 距离/速度边界、方向反转拒绝）。
 - **新探针** `scripts/probes/files-swipe-probe.mjs`（CDP 触摸手势，参照 `files-panel-safe-area-probe.mjs` 的 opener/panel 流程）：右缘左滑开面板、面板开右滑关、方向反例不动作、抽屉开时右缘右滑收抽屉、右缘左滑不收抽屉（收窄反断言）、consume 不误触、桌面/无指针零影响。
-- **既有回归门全绿**：主探针 32 断言（含改写后的 `close-from-backdrop-area`）、`cdp-swipe-failures.mjs` 16 场景、`draggable-conflict-probe.mjs` 15 断言、`pnpm verify` + `pnpm test:core` + `pnpm build`（lib 新鲜度）。
+- **既有回归门全绿**：主探针 14 核心 + 6 集成（3 项机读基线）、`scripts/cdp-swipe-probe.mjs` 35 项（含改写后的 `swipe.close-from-right-zone`）、`cdp-swipe-failures.mjs` 16 场景、`draggable-conflict-probe.mjs` 15 断言、`pnpm verify` + `pnpm test:core` + `pnpm build`（lib 新鲜度）。
