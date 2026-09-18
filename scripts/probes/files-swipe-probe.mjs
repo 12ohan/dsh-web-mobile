@@ -21,6 +21,7 @@
 //   8. mouse pointer (touch emulation kept on): the same right-edge drag is
 //      inert — the pointerType guard rejects mouse strokes; desktop
 //      zero-impact is additionally covered by the pointer media gate.
+//   9. the drawer footer carries no Files entry any more (only session log).
 //
 // Env: DSH_PROBE_URL (default http://127.0.0.1:3080/), DSH_PROBE_SESSION_ID
 // (REQUIRED - the opener lives in a session frame), DSH_PROBE_COOKIE
@@ -207,6 +208,36 @@ async function main() {
     await sleep(700)
     const s8 = await state()
     record(s8.panel === false && s8.collapsed === true, '8.mouse-drag-inert', `panel=${s8.panel} collapsed=${s8.collapsed}`)
+
+    // ---- 9. the drawer footer no longer offers a Files entry ----
+    // The hit test needs the drawer on screen: its closed slot sits at a
+    // negative x, where elementFromPoint returns null by definition.
+    await evaluate(`(() => { document.querySelector('${TOGGLE}')?.click(); return true })()`)
+    await waitFor(async () => await evaluate(`document.querySelector('${FRAME}')?.hasAttribute('data-sidebar-collapsed') === false`), 'drawer open for footer check', 8000)
+    await sleep(400)
+    const footer = JSON.parse(await evaluate(`(() => {
+      const actions = document.querySelector('[data-mobile-nav="drawer-actions"]')
+      const log = document.querySelector('[data-mobile-nav="session-log"]')
+      const r = log === null ? null : log.getBoundingClientRect()
+      const hit = r === null ? null : document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      return JSON.stringify({
+        actions: actions !== null,
+        explorer: document.querySelector('[data-mobile-nav="explorer"]') !== null,
+        log: log !== null,
+        logHit: hit !== null && (hit === log || log.contains(hit)),
+      })
+    })()`))
+    record(footer.actions === true && footer.explorer === false && footer.log === true && footer.logHit === true,
+      '9.footer-no-files-entry',
+      `actions=${footer.actions} explorer=${footer.explorer} log=${footer.log} logHit=${footer.logHit}`)
+    // Close with Escape rather than a second TOGGLE click: on this host the
+    // toggle's own close path never flips data-sidebar-collapsed back (dead
+    // before this change too — a pristine tree reproduces it), while Escape is
+    // the plugin's own working close entry (phone-chrome.ts).
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await waitFor(async () => await evaluate(`document.querySelector('${FRAME}')?.hasAttribute('data-sidebar-collapsed') === true`), 'drawer closed after footer check', 8000)
+    await sleep(600)
   } finally {
     chrome.kill()
     await sleep(300)
