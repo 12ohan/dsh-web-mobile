@@ -1,6 +1,6 @@
 # DSH 宿主升级 Runbook
 
-> 本仓库插件适配官方 DSH Web 宿主。宿主（或其 client-ui 子包）升级可能重排 CSS module 哈希、改 composer/端点形状——本清单把 AGENTS.md 里与宿主版本绑定的契约点汇总成升级后按序核对的电池。文档仅本地维护，不随 npm 发布。
+> 本仓库插件适配官方 DSH Web 宿主。宿主（或其 client-ui 子包）升级可能重排 CSS module 哈希、改 composer/端点形状——本清单把 AGENTS.md 里与宿主版本绑定的契约点汇总成升级后按序核对的电池。文档随仓库维护，但不进 npm 包。
 
 ## 0. 升级前快照
 
@@ -24,10 +24,11 @@ dsh web                              # 重启 127.0.0.1:3080
 
 CSS module 哈希是包版本的函数；下列前缀是本插件选择器/探针的契约锚点，升级后用 CDP 在真实页面逐一确认仍在（换了就改 `src/client/styles/` 与对应探针，并回填 AGENTS.md）。
 
-本表已有机读版与自动对账探针（首跑 19 HIT / 3 SKIP / 0 MISS）：
+本表已有机读版与自动对账探针（2026-09-18 复跑：`total=26 hit=17 skip=4 miss=5 green=no`，exit 1）：
 
-- 数据：`docs/upstream/compat-contracts.json`（22 条，`lazy` 标记状态门控/懒加载条目）
-- 执行：`node scripts/cdp-compat-contracts.mjs`（无需 `DSH_PROBE_SESSION_ID`，非 lazy 的 MISS 才 exit 1；SKIP 条目按其 `state` 提示手动复扫）
+- 数据：`docs/upstream/compat-contracts.json`（26 条，其中 11 条 `lazy`＝状态门控/懒加载条目）
+- 执行：`node scripts/cdp-compat-contracts.mjs`（无需 `DSH_PROBE_SESSION_ID`，非 lazy 的 MISS 才 exit 1；SKIP/MISS 条目按其 `state` 提示手动复扫）
+- 当前 5 条 MISS 全带 `manual audit` 说明，属「该场景没渲染/需特定 UI 在场」，不是插件回归：`hero-header-actions`（`qDHVXG_`，需 hero 态）、`user-bubble`（`gdEzaW_`，需用户消息在场）、`session-log-dialog`（`_dialog_15u5s_22`，需对话框打开）、`group-card-2`/`group-card-4`（`bpnj3G_`/`jmhvDG_`，需 dsh-web-all 的设置卡在场）。要让这条门真绿：按各自场景复扫，或把这些条目改标 `lazy: true`——改数据前先按场景复核，别无脑放宽门。
 
 | 哈希前缀 | 归属 | 涉及契约 |
 | --- | --- | --- |
@@ -47,10 +48,11 @@ CSS module 哈希是包版本的函数；下列前缀是本插件选择器/探�
 
 ## 3. DOM / 端点契约分代（升级到 0.1.2-rc.1+ 时）
 
-- composer 编辑面：`[data-composer-input]` 是 0.1.2-rc.1 Lexical marker；0.1.1-rc.2 只有 `data-composer-card`/`data-composer-seat`（guard/marker 逻辑按各文件头注释对账）。
+- composer 编辑面：`[data-composer-input]` 是 Lexical marker，`0.1.2-alpha.2` 起出现（`0.1.2-rc.1` 及以后都有；早于它只有 `data-composer-card`/`data-composer-seat`）；0.1.1-rc.2 只有 `data-composer-card`/`data-composer-seat`（guard/marker 逻辑按各文件头注释对账）。
 - `[data-input-mirror]`/`[data-input-backdrop]` 自 0.1.2 被删（保留为旧宿主兜底，新宿主空转）。
-- client bundle 端点：0.1.2-rc.1 起走合并式 `/plugins/??a/client.js,b/client.js&rev=<12位>`；**rev 既不是 `sha1sum lib/client.js` 也不是 served body 的 sha1**（0.1.5 实测 rev `6d6b8afda63c` vs sha1(lib) `70e6f5deeb99`）——别拿 rev 对账。单包组合 URL 一律 404（空 body，sha1 恒 `da39a3ee5e6b`），只有 `__DSH_BOOT__` 里那条完整 URL 才 200；权威判据＝served body 是 `lib/client.js` 的**逐字节前缀 + 80 字节 `//# sourceMappingURL=…` 尾巴**（AGENTS.md「页面状态/bundle 校验」有完整命令）。
+- client bundle 端点：0.1.2-rc.1 起走合并式 `/plugins/??a/client.js,b/client.js&rev=<12位>`；**rev 既不是 `sha1sum lib/client.js` 也不是 served body 的 sha1**（0.1.5 一次性快照：rev `6d6b8afda63c` vs sha1(lib) `70e6f5deeb99`——bundle 每次提交都变，别当常量）——别拿 rev 对账。单包组合 URL 一律 404（空 body，sha1 恒 `da39a3ee5e6b`），只有 `__DSH_BOOT__` 里那条完整 URL 才 200；权威判据＝served body 是 `lib/client.js` 的**逐字节前缀 + 80 字节 `//# sourceMappingURL=…` 尾巴**（AGENTS.md「页面状态/bundle 校验」有完整命令）。
 - `data-conversation-composer-overlay` 渲染在每个活跃 conversation.view 根上（轨迹 tab 同款）；marker 判定只认 `.dsfv-panel`。
+- **composer 会被「链式叠加」整体顶掉**：`dsh-client-ui-renderer` 的 `renderChainResult(slotKey, elected, opts)` 在有 `opts.overlay` 时把 fallback 包进 `[data-chain-overlay-fallback="<slotKey>"]`——`elected === null` 时该包装 `display: contents`（正常），一旦有叠加被选中就写成**内联 `display: none`**，并把选中节点渲染成它的下一个兄弟。实测（2026-09-18）：会话里挂着未回答的提问卡（`dsh-client-ui-user-questions`，`Mbwy4a_frame[data-question-key]`）时，`conversation.composer` 的 fallback 被隐藏 → 整棵 composer（含本插件注入的控件）**仍连接、computed 仍是规则值，但 `getBoundingClientRect()` 全 0**。任何量 composer 的探针遇到该状态必须走 SKIP 并点名 elected 节点（不许当失败，也不许静默跳过）；`scripts/probes/composer-meter-hitbox-probe.mjs` 已实现。
 - viewport meta：宿主各版都不带 `maximum-scale`；插件武装期接管并重申 `width=device-width, initial-scale=1, viewport-fit=cover`。
 
 ## 4. 升级后验证电池（按序）
@@ -61,11 +63,12 @@ pnpm verify && pnpm test:core && pnpm build && git diff --exit-code lib
 
 # CDP（Termux 本机参数；SESSION_ID 取 ~/.dsh/sessions/--data-data-com.termux-files-home--/ 最新）
 export TMPDIR=$HOME/tmp XDG_RUNTIME_DIR=$HOME/tmp
-export DSH_PROBE_URL=http://127.0.0.1:3080/ DSH_PROBE_CHROME=chromium-browser
+export DSH_PROBE_URL=http://127.0.0.1:3080/
+export DSH_PROBE_CHROME=chromium-browser   # 2026-09-18 实测可 spawn；异常时直指真实 ELF /data/data/com.termux/files/usr/lib/chromium/chrome
 node scripts/cdp-compat-contracts.mjs          # 契约对账（无需 SESSION_ID）；miss=0 才算过，SKIP 按提示手动复扫
 DSH_PROBE_SESSION_ID=<id> pnpm smoke:cdp      # SUMMARY new=0 才算过；BASELINE 见探针内 EXPECTED_FAILURES
 node scripts/cdp-swipe-failures.mjs           # 16 场景手势门
-node scripts/cdp-zoom-probe.mjs               # 21 断言 iOS/viewport 守卫
+node scripts/cdp-zoom-probe.mjs               # 23 断言 iOS/viewport 守卫
 for f in scripts/probes/*.mjs; do node "$f" || echo "FAIL $f"; done
 ```
 

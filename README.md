@@ -57,6 +57,8 @@
 - 抽屉遮罩跟随抽屉滑出渐隐，宽窄断点来回切换后依然生效
 - 与第三方适配插件（如 dsh-web-all）共存时，移动端框架与控件隐藏规则不再受样式表注入顺序影响，同一视口下结果一致
 - Android 上「提问」自定义输入框与文件面板的搜索 / 跳转 / 页码框回到紧凑字号：16px 下限只为 iOS 的聚焦放大而设
+- 上下文圈的可点区域增大到 28×34，环的墨迹保持官方 14px 不放大，与发送键之间留出 6px 缝
+- 抽屉底部移除「文件列表」入口：抽屉打开时它打不开文件列表、只会收起抽屉；文件列表仍由会话头右上角按钮与屏幕右缘手势打开
 
 ### v2.4.1
 
@@ -93,12 +95,14 @@
 
 ## 兼容插件
 
-- [dsh-web-ui](https://www.npmjs.com/package/@linxin666/dsh-web-ui-all)——**0.1.20**
-- [dshmarket](https://www.npmjs.com/package/dshmarket)——**v1.38.0**
-- [dsh-usage-stats](https://github.com/Ychris12138/dsh-usage-stats)——**0.3.1**
-- [dsh-genui](https://github.com/omdsh-dev/dsh-genui)——**0.9.1**
-- [dsh-meme](https://github.com/mexiaosqwq/dsh-meme)——**v0.1.39**
-- [dsh-file-viewer](https://github.com/liguobao/dsh-file-viewer)——**v0.3.1**
+下列版本为**实装并验证过**的版本（以本机 profile 的 `node_modules/<包名>/package.json` 为准；profile 用 `^` 范围会静默升 minor，升级后重新对账）。
+
+- [@linxin666/dsh-web-all](https://www.npmjs.com/package/@linxin666/dsh-web-all)——**0.3.20**
+- [@linxin666/dsh-client-ui-market](https://www.npmjs.com/package/@linxin666/dsh-client-ui-market)——**0.3.20**
+- [@ychris12138/dsh-usage-stats](https://www.npmjs.com/package/@ychris12138/dsh-usage-stats)——**0.3.1**
+- [@changfenhuang/dsh-genui](https://www.npmjs.com/package/@changfenhuang/dsh-genui)——**0.10.0**
+- [dsh-meme](https://www.npmjs.com/package/dsh-meme)——**0.1.39**
+- [dsh-file-viewer](https://www.npmjs.com/package/dsh-file-viewer)——**未安装**（0.3.1 时期验证过布局兼容，装回后需复验）
 
 ## 安装
 
@@ -133,7 +137,7 @@ pnpm build
 
 - **先读 [AGENTS.md](AGENTS.md)**：带注释的仓库树、每条 Pitfall 的紧凑不变式与完整档案（`docs/maintenance/pitfalls.md`）。
 - 本地门：`pnpm verify`（typecheck）→ `pnpm test:core`（单测）→ `pnpm build`；`lib/` 随源码入库，漏构建会被 CI 的 `git diff --exit-code lib` 新鲜度门拦下。
-- 回归探针：`scripts/probes/` 二十个锚点可单跑（会话删除探针兼作宿主升级绊线）；主探针 `pnpm smoke:cdp`、手势门 `scripts/cdp-swipe-failures.mjs`、iOS 放大守卫 `scripts/cdp-zoom-probe.mjs`（CDP 环境参数见 AGENTS.md）。
+- 回归探针：`scripts/probes/` 20 个锚点可单跑（会话删除探针兼作宿主升级绊线）；主探针 `pnpm smoke:cdp`、手势门 `scripts/cdp-swipe-failures.mjs`、iOS 放大守卫 `scripts/cdp-zoom-probe.mjs`（CDP 环境参数见 AGENTS.md）。
 - 设计文档在 `docs/specs/`；宿主升级对账走 `docs/upstream/`——`node scripts/cdp-compat-contracts.mjs` 一键核对 CSS module 哈希是否漂移。
 
 ## License

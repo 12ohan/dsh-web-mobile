@@ -1,6 +1,6 @@
 // Documentation consistency guard for the knowledge layer.
 //
-// Keeps three drift classes out of the tree:
+// Keeps four drift classes out of the tree:
 // 1. AGENTS.md must reference only tracked assets that actually exist
 //    (dead-reference class — the original multi-maintainer audit P0-1).
 // 2. AGENTS.md must stay within the session-instruction budget (65536
@@ -9,9 +9,15 @@
 //    and the pitfalls archive (docs/maintenance/pitfalls.md) must stay
 //    parseable and non-empty, because the condensed AGENTS.md entries point
 //    into them.
+// 4. Counted claims must match the tree (counted-claim class). The 2026-09-18
+//    audit found the specs count (7 vs 8), the probe/anchor counts and the test
+//    count all stale at once, each one silently: nothing compared the prose
+//    numbers with the directories they describe. A number that can be derived
+//    gets derived here; numbers that cannot (third-party installed versions)
+//    belong to the audit procedure in docs/upstream/upgrade-runbook.md.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile, stat } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -164,6 +170,38 @@ test('0.1.5-era rules stay scoped to the mobile branch', async () => {
       )
     }
   }
+})
+
+// Counted claims, derived rather than remembered. Keep the phrase in the doc and
+// the pattern here in sync when a wording changes — a silently unmatched pattern
+// is itself the drift this test exists to catch.
+test('counted claims match the tree', async () => {
+  const [agents, readme] = await Promise.all([readRepoFile('AGENTS.md'), readRepoFile('README.md')])
+  const tally = async (dir: string, match: RegExp): Promise<number> =>
+    (await readdir(join(root, dir))).filter((name) => match.test(name)).length
+
+  const effects = await tally('src/client/effects', /\.ts$/)
+  const anchors = await tally('scripts/probes', /\.mjs$/)
+  const testFiles = await tally('tests', /\.test\.ts$/)
+  const specs = await tally('docs/specs', /\.md$/)
+
+  const claims = [
+    { what: '效果模块', actual: effects, doc: agents, docName: 'AGENTS.md', pattern: /effects\/\s+← (\d+) 个效果模块/ },
+    { what: '回归锚点', actual: anchors, doc: agents, docName: 'AGENTS.md', pattern: /probes\/\s+← (\d+) 个回归锚点/ },
+    { what: '测试文件', actual: testFiles, doc: agents, docName: 'AGENTS.md', pattern: /（(\d+) 个测试文件/ },
+    { what: '设计文档', actual: specs, doc: agents, docName: 'AGENTS.md', pattern: /specs\/\s+← (\d+) 篇权威设计文档/ },
+    { what: '回归锚点', actual: anchors, doc: readme, docName: 'README.md', pattern: /scripts\/probes\/` (\d+) 个锚点/ },
+  ]
+
+  const drift: string[] = []
+  for (const claim of claims) {
+    const found = claim.doc.match(claim.pattern)
+    if (found === null) drift.push(`${claim.docName} no longer states the ${claim.what} count`)
+    else if (Number(found[1]) !== claim.actual) {
+      drift.push(`${claim.docName}: ${claim.what} says ${found[1]}, the tree has ${claim.actual}`)
+    }
+  }
+  assert.deepEqual(drift, [])
 })
 
 // CSS files are TypeScript template literals, so a Markdown backtick inside a

@@ -32,12 +32,19 @@
 //   * computed sizes lie about reachability: a composer card that is not laid out still reports the
 //     rule's 28x34 while every getBoundingClientRect() reads 0, which silently turns geometry
 //     assertions into false greens. Hence the visibility filter and the elementFromPoint hit tests.
-//     The state was reproduced and pinned down (2026-09-17, .local-tests/hidden-copy-signature.mjs):
-//     it is a card under an ancestor computing display:none — in this app that ancestor is the mobile
-//     frame, i.e. the documented "fence-only" page state. A DETACHED node is a different signature
-//     (getComputedStyle returns empty strings, not 28x34), and content-visibility:hidden on the
-//     composer stack does not zero the rects at all. In that state the filter below yields 0 usable
-//     cards and this probe fails at 0.composer-present, which is the intended loud failure.
+//     The state was reproduced and pinned down (2026-09-18, .local-tests/hidden-copy-signature.mjs):
+//     it is a card under an ancestor computing display:none, and in this app that ancestor is the
+//     HOST's own chain overlay — dsh-client-ui-renderer renderChainResult() wraps the composer in
+//     `[data-chain-overlay-fallback="conversation.composer"]` and writes an inline display:none on it
+//     whenever an overlay is elected for that slot (observed live: a pending user-question card,
+//     `Mbwy4a_frame[data-question-key]` from dsh-client-ui-user-questions). Two other shapes read
+//     differently and must not be confused with it: a DETACHED node returns empty computed strings
+//     (not 28x34), and content-visibility:hidden keeps rect AND computed intact (356x98 measured,
+//     unmoved) — that one is invisible-but-laid-out, caught only by the hit tests, never by the rect
+//     filter. An earlier reading blamed the mobile frame's inline display:none ("fence-only"): it
+//     reproduced the shape but named the wrong mechanism.
+//     Because the overlay state is legitimate, the probe reports it as a SKIP naming the elected node
+//     instead of failing 0.composer-present; any other zero-card state still fails loudly.
 //
 // Scenes: phone 390x844 with touch, then desktop 1280x720 with a fine pointer (the plugin's mobile
 // rules must not touch the meter there at all).
@@ -74,11 +81,25 @@ async function waitFor(fn, label, timeoutMs) {
 // mistaken for it. No synthetic fixture: an injected copy doubles the cluster and skews every gap.
 const MEASURE = `(() => {
   const mobileQuery = matchMedia(${JSON.stringify(MOBILE_QUERY)}).matches
+  // The host can replace the entire composer with a chain overlay (dsh-client-ui-renderer
+  // renderChainResult): the fallback tree -- this card included -- then carries an inline
+  // display:none while the elected overlay renders as its next sibling. Naming that state here is
+  // what separates "the composer is off screen on purpose" from "the composer is broken".
+  const fallback = document.querySelector('[data-chain-overlay-fallback="conversation.composer"]')
+  const replacedBy = (() => {
+    if (fallback === null || getComputedStyle(fallback).display !== 'none') return null
+    const elected = fallback.nextElementSibling
+    return {
+      slot: fallback.getAttribute('data-chain-overlay-fallback'),
+      elected: elected === null ? null : (elected.getAttribute('class') || elected.tagName).slice(0, 40),
+      key: elected === null ? null : elected.getAttribute('data-question-key'),
+    }
+  })()
   // Marker only, no fallback (see trap 1): every published host carries it, and the fallback would
   // have silently measured the first message card holding an input.
   const marked = [...document.querySelectorAll('[data-composer-card]')]
   const cards = marked.filter((c) => c.getBoundingClientRect().width > 0)
-  if (cards.length === 0) return JSON.stringify({ card: false, mobileQuery: mobileQuery })
+  if (cards.length === 0) return JSON.stringify({ card: false, mobileQuery: mobileQuery, overlay: replacedBy })
   const card = cards[0]
   const trailing = card.querySelector('[class*="_trailing"]')
   if (trailing === null) return JSON.stringify({ card: true, meter: false, mobileQuery: mobileQuery })
@@ -202,43 +223,54 @@ async function main() {
 
     // ---- phone scene ----
     const p = await boot('phone', true)
-    record(p.card === true, '0.composer-present', '')
-    record(p.mobileQuery === true, '0.mobile-branch-active', `mobileQuery=${p.mobileQuery}`)
-    if (p.meter !== true) {
-      console.log('SKIP meter not rendered (no context-pressure projection in this profile)')
+    // An overlay elected for the composer slot (a pending user question or an approval card) hides
+    // the whole fallback tree, meter included: there is nothing to measure, and a red here would be
+    // about the host's overlay, not about the plugin. Say so -- never silently -- and skip the scene.
+    const replaced = p.card !== true && p.overlay !== null && p.overlay !== undefined
+    if (replaced) {
+      console.log('SKIP phone scene: composer replaced by chain overlay "' + p.overlay.slot + '"' +
+        ' (elected ' + p.overlay.elected + (p.overlay.key === null ? '' : ' ' + p.overlay.key) + ')' +
+        ' -- the host hides the fallback with an inline display:none, so the meter is off screen by design')
     } else {
-      record(p.cardCount === 1, '0.one-visible-composer-card', `laid-out cards=${p.cardCount}`)
-      record(p.meterCount === 1, '0.single-meter-in-lane', `meters=${p.meterCount}`)
-      record(p.box.w > 0 && p.ink.w > 0, '0.laid-out-not-a-hidden-copy',
-        `box=${p.box.w}x${p.box.h} ink=${p.ink.w}x${p.ink.h}`)
-      record(p.cs.w === '28px' && p.cs.h === '34px', '1.hitbox-28x34', `${p.cs.w}x${p.cs.h} pad=${p.cs.pad}`)
-      record(p.ink.w === 14 && p.ink.h === 14, '1.ring-ink-still-official-14', `${p.ink.w}x${p.ink.h}`)
-      // The ring stays clear of the key; the knob below trades 0px (pinned) to 8px of shift.
-      record(p.inkToKey >= 7 && p.inkToKey <= 15, '2.ring-ink-clear-of-the-key',
-        `ink.right=${p.ink.right} key.left=${p.key.x} gap=${p.inkToKey} (7 official + 0..8 knob)`)
-      record(p.boxToKey >= -0.5 && p.boxToKey <= 8.5, '3.box-reaches-key-without-overlap',
-        `box.right=${p.box.right} key.left=${p.key.x} gap=${p.boxToKey} (knob 6px + margin-right)`)
-      if (p.pill !== null) {
-        record(p.boxToPill >= -0.5, '3.box-never-overlaps-model-pill',
-          `box.left=${p.box.x} pill.right=${p.pill.right} gap=${p.boxToPill}`)
+      record(p.card === true, '0.composer-present', '')
+      record(p.mobileQuery === true, '0.mobile-branch-active', `mobileQuery=${p.mobileQuery}`)
+      if (p.meter !== true) {
+        console.log('SKIP meter not rendered (no context-pressure projection in this profile)')
       } else {
-        record(true, '3.box-never-overlaps-model-pill', 'SKIP: no model pill in this session')
+        record(p.cardCount === 1, '0.one-visible-composer-card', `laid-out cards=${p.cardCount}`)
+        record(p.meterCount === 1, '0.single-meter-in-lane', `meters=${p.meterCount}`)
+        record(p.box.w > 0 && p.ink.w > 0, '0.laid-out-not-a-hidden-copy',
+          `box=${p.box.w}x${p.box.h} ink=${p.ink.w}x${p.ink.h}`)
+        record(p.cs.w === '28px' && p.cs.h === '34px', '1.hitbox-28x34', `${p.cs.w}x${p.cs.h} pad=${p.cs.pad}`)
+        record(p.ink.w === 14 && p.ink.h === 14, '1.ring-ink-still-official-14', `${p.ink.w}x${p.ink.h}`)
+        // The ring stays clear of the key; the knob below trades 0px (pinned) to 8px of shift.
+        record(p.inkToKey >= 7 && p.inkToKey <= 15, '2.ring-ink-clear-of-the-key',
+          `ink.right=${p.ink.right} key.left=${p.key.x} gap=${p.inkToKey} (7 official + 0..8 knob)`)
+        record(p.boxToKey >= -0.5 && p.boxToKey <= 8.5, '3.box-reaches-key-without-overlap',
+          `box.right=${p.box.right} key.left=${p.key.x} gap=${p.boxToKey} (knob 6px + margin-right)`)
+        if (p.pill !== null) {
+          record(p.boxToPill >= -0.5, '3.box-never-overlaps-model-pill',
+            `box.left=${p.box.x} pill.right=${p.pill.right} gap=${p.boxToPill}`)
+        } else {
+          record(true, '3.box-never-overlaps-model-pill', 'SKIP: no model pill in this session')
+        }
+        record(p.lane.h <= p.key.h + 1, '4.row-height-unchanged', `lane=${p.lane.h} primary=${p.key.h}`)
+        // Hit tests: DOM presence is not enough, the tap must land on the meter.
+        record(p.hits.ringCentre === 'meter', '5.hit-ring-centre-is-meter', p.hits.ringCentre)
+        record(p.hits.boxLeftEdge === 'meter', '5.hit-box-left-edge-is-meter', p.hits.boxLeftEdge)
+        record(p.hits.boxRightEdge === 'meter', '5.hit-box-right-edge-is-meter', p.hits.boxRightEdge)
+        record(p.hits.slip6RightOfInk === 'meter', '5.hit-slip-6px-right-of-ring-is-meter',
+          `${p.hits.slip6RightOfInk} (was the primary key with the 24px box)`)
+        record(p.hits.primaryCentre === 'primary', '5.hit-primary-centre-is-primary', p.hits.primaryCentre)
       }
-      record(p.lane.h <= p.key.h + 1, '4.row-height-unchanged', `lane=${p.lane.h} primary=${p.key.h}`)
-      // Hit tests: DOM presence is not enough, the tap must land on the meter.
-      record(p.hits.ringCentre === 'meter', '5.hit-ring-centre-is-meter', p.hits.ringCentre)
-      record(p.hits.boxLeftEdge === 'meter', '5.hit-box-left-edge-is-meter', p.hits.boxLeftEdge)
-      record(p.hits.boxRightEdge === 'meter', '5.hit-box-right-edge-is-meter', p.hits.boxRightEdge)
-      record(p.hits.slip6RightOfInk === 'meter', '5.hit-slip-6px-right-of-ring-is-meter',
-        `${p.hits.slip6RightOfInk} (was the primary key with the 24px box)`)
-      record(p.hits.primaryCentre === 'primary', '5.hit-primary-centre-is-primary', p.hits.primaryCentre)
+
     }
 
     // ---- desktop scene: the plugin must not touch the meter at all ----
     const d = await boot('desktop', false)
     record(d.mobileQuery === false, '6.desktop-keeps-mobile-branch-off', `mobileQuery=${d.mobileQuery}`)
     if (d.meter !== true) {
-      console.log('SKIP desktop meter not rendered')
+      console.log('SKIP desktop meter not rendered' + (d.overlay ? ' (composer replaced by chain overlay "' + d.overlay.slot + '", elected ' + d.overlay.elected + ')' : ''))
     } else {
       record(d.cs.w === '28px' && d.cs.h === '28px', '6.desktop-meter-keeps-official-box', `${d.cs.w}x${d.cs.h}`)
       record(d.cs.marginRight === '0px', '6.desktop-meter-keeps-official-margin', `margin-right=${d.cs.marginRight}`)
