@@ -1,5 +1,6 @@
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
 import type { ReconcilerTask } from '../core/reconciler-core.ts';
+import type { PanelExit } from './panel-exit.ts';
 /** Same width bound as the shell's SIDEBAR_AUTO_COLLAPSE (viewport < 1024),
  *  ANDed with a touch-primary pointer guard. Width alone cannot tell a phone
  *  from a desktop window: split views and OS display scaling push a PC's CSS
@@ -127,6 +128,10 @@ export declare function installOverlayInteractions(ctx: ClientContext): void;
  * Register the shared DOM reconciler tasks. Returns a disposer that
  * unregisters every task and resets the flag, so a same-environment plugin
  * reload can rebuild the reconciler from scratch.
+ *
+ * @param panelExit - the sidebar-panel exit face (panel-exit.ts): its system-back
+ *   route is registered here so it shares this reconciler, and the FAB reads it
+ *   to switch its meaning while a panel owns the main area.
  */
-export declare function registerReconcileTasks(ctx: ClientContext): () => void;
+export declare function registerReconcileTasks(ctx: ClientContext, panelExit: PanelExit): () => void;
 //# sourceMappingURL=phone-chrome.d.ts.map
