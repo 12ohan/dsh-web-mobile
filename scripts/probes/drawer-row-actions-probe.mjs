@@ -282,6 +282,54 @@ async function main() {
       record(closed === true, '5e.confirm-card-cancel-closes')
     }
 
+    // 5f/5g — the workspace row's ⋯ → Rename opens the HOST's own modal: it
+    // portals to a direct body child stacking at z 1000, under the drawer
+    // column (1300), so the dialog was only usable after closing the drawer
+    // (owner report 2026-09-19). The plugin raises that portal root to 1400
+    // while the drawer is open; the dialog itself (inner z 1) sorts inside the
+    // root, so the assertion must target the root. Cancel keeps it
+    // non-destructive. The workspace ⋯ button is hover-only (0x0 box), so the
+    // click is dispatched programmatically like the real touch flow does.
+    const wsRename = await evaluate(`(() => {
+      const btn = [...document.querySelectorAll('button')].find((b) => (b.getAttribute('aria-label') || '').startsWith('Workspace actions'))
+      if (btn === undefined) return { skip: 'no workspace row' }
+      btn.click()
+      return { clicked: true }
+    })()`)
+    if (wsRename === null || wsRename.skip !== undefined) {
+      record(false, '5f.workspace-rename-above-drawer', 'SKIP: ' + (wsRename?.skip || 'no workspace actions button'))
+      record(false, '5g.workspace-rename-cancel-closes', 'SKIP: no workspace actions button')
+    } else {
+      await sleep(500)
+      const renamed = await evaluate(`(() => {
+        const item = [...document.querySelectorAll('[role="menuitem"]')].find((i) => /rename/i.test(i.textContent))
+        if (item === undefined) return null
+        item.click()
+        return true
+      })()`)
+      await sleep(600)
+      const dlgState = await evaluate(`(() => {
+        const dlg = document.querySelector('[role="dialog"][aria-modal="true"]')
+        if (dlg === null) return null
+        const root = dlg.parentElement
+        const r = dlg.getBoundingClientRect()
+        const hit = document.elementFromPoint(Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2))
+        const cancel = [...dlg.querySelectorAll('button')].find((b) => /cancel|取消/i.test(b.textContent))
+        const cr = cancel === null ? null : cancel.getBoundingClientRect()
+        return { rootZ: root === null ? null : getComputedStyle(root).zIndex, inside: dlg.contains(hit), cancelTap: cr === null ? null : { x: Math.round(cr.x + cr.width / 2), y: Math.round(cr.y + cr.height / 2) } }
+      })()`)
+      if (renamed === null || dlgState === null || dlgState.cancelTap === null) {
+        record(false, '5f.workspace-rename-above-drawer', 'SKIP: rename dialog did not open')
+        record(false, '5g.workspace-rename-cancel-closes', 'SKIP: rename dialog did not open')
+      } else {
+        record(Number(dlgState.rootZ) >= 1400 && dlgState.inside === true, '5f.workspace-rename-above-drawer', `rootZ=${dlgState.rootZ} centerHitInside=${dlgState.inside}`)
+        await tap(dlgState.cancelTap.x, dlgState.cancelTap.y)
+        await sleep(500)
+        const dlgGone = await evaluate(`document.querySelector('[role="dialog"][aria-modal="true"]') === null`)
+        record(dlgGone === true, '5g.workspace-rename-cancel-closes', `dialogClosedAfterCancel=${dlgGone}`)
+      }
+    }
+
     // 6 — navigation still dismisses: a different row must switch sessions.
     // The drawer is usually still open here (assertion 5 kept it that way):
     // tapping the toggle again would CLOSE it, so only reopen when collapsed.
