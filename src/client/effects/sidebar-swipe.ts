@@ -401,6 +401,17 @@ export function filesZoneHit(
   return edge >= 0 && edge <= zonePx
 }
 
+/** Which gesture family owns a stroke that begins while the drawer is OPEN.
+ * Inside the drawer body the drawer family always wins (owner's rule
+ * 2026-09-17: the drawer's own surface must answer a leftward drag, whether or
+ * not the viewport-ratio files zone overlaps it — at 390px that zone starts at
+ * x=214, inside the 280px drawer); outside the body the right zone keeps its
+ * files routing and its deliberate leftward 'none' verdict (2026-09-13
+ * narrowing). */
+export function openStateStartMode(insideDrawer: boolean, inFilesZone: boolean): 'drawer' | 'files' {
+  return insideDrawer || !inFilesZone ? 'drawer' : 'files'
+}
+
 /**
  * Pure follow mapping (B 档): the translateX (px) to paint for a stroke
  * sample, or null when THIS sample has no follow. `closedTx` is the signed
@@ -971,6 +982,30 @@ function commitFollowClose(ctx: ClientContext): void {
   commitWithAnimation(ctx, el, target)
 }
 
+/** Animate an OPEN drawer into its closed slot and flip the host state once it
+ * has landed. Every non-gesture closer (backdrop tap, Escape, navigation taps)
+ * routes through this, so a click close animates exactly like a swipe close:
+ * the host swaps the pane's subtree AND drops its surface (transparent,
+ * borderless, content display:none) at the marker flip, so a plain CSS
+ * transition would slide out an invisible shell - the same reason the gesture
+ * close uses a late commit (eighth round, 2026-08-29). The OPEN direction needs
+ * none of this: the host keeps the pane's visuals until the marker flips, so
+ * its own transform transition plays (spec 2026-08-27, A 档).
+ * Returns false when the caller must fall back to a plain toggleSidebar(): the
+ * drawer is already closed (that call would OPEN it) or the user asked for
+ * reduced motion, where the spec degrades the animation instead of adding one. */
+export function closeDrawerAnimated(ctx: ClientContext): boolean {
+  if (!drawerOpen()) return false
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false
+  const drawer = findDrawer()
+  if (drawer === null) return false
+  const target = frameRtl()
+    ? `translateX(${CLOSED_SLOT_PCT}%)`
+    : `translateX(-${CLOSED_SLOT_PCT}%)`
+  commitWithAnimation(ctx, drawer, target)
+  return true
+}
+
 /** Cancel paths: styles back to the host, pointer state to idle. An armed
  * open follow has already flipped the host state, so a cancel must also
  * toggle it back — release the inline pair first so the host transition
@@ -1069,7 +1104,24 @@ function beginStroke(
     if (event.clientY < rect.top || event.clientY > rect.bottom) return false
     // A session-row action menu (kebab) owns its own tap.
     if (event.target.closest('[class*="sessionRow"] button') !== null) return false
-    strokeMode = filesZoneHit(event.clientX, viewportWidthPx, rtl, filesZonePx) ? 'files' : 'drawer'
+    //
+    // 2026-09-17 (owner: the judgment zone must end at the drawer's right
+    // edge): inside the drawer BODY the drawer family always wins. The files
+    // zone is viewport-relative (0.45 from the right edge = x >= 214 at 390px)
+    // and overlaps the 280px drawer by 66px, so that sliver of the drawer's own
+    // surface used to answer 'none' to a leftward drag - touching the drawer and
+    // dragging left did nothing. Routing on the drawer's live rect (not a
+    // hardcoded width) keeps the rule true at every viewport: at >= 509px the
+    // 0.45 zone starts right of the drawer and nothing changes. Outside the
+    // body the files routing, including its leftward no-op, is untouched.
+    const drawer = findDrawer()
+    const drawerRect = drawer === null ? null : drawer.getBoundingClientRect()
+    const insideDrawer =
+      drawerRect !== null && event.clientX >= drawerRect.left && event.clientX <= drawerRect.right
+    strokeMode = openStateStartMode(
+      insideDrawer,
+      filesZoneHit(event.clientX, viewportWidthPx, rtl, filesZonePx),
+    )
   } else if (hitTestStart(event.clientX, viewportWidthPx, rtl, { startZonePx: startZonePxFor(viewportWidthPx) })) {
     strokeMode = 'drawer'
   } else if (filesZoneHit(event.clientX, viewportWidthPx, rtl, filesZonePx)) {

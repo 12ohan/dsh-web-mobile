@@ -697,6 +697,44 @@ async function main() {
     await waitDrawer(client, 'reopen after files-zone close checks', config.timeoutMs, signal, true)
     await sleep(500, signal)
 
+    // --- Checklist 4c: the drawer's own surface ends the files zone
+    // (2026-09-17 owner rule: the open-state judgment zone must reach the
+    // drawer's right edge). At 390px the viewport-relative files zone starts at
+    // x=214 while the drawer ends at 280, so x=265 sits inside BOTH: a leftward
+    // stroke there now belongs to the drawer family and must close the drawer
+    // (before the rule it answered a silent 'none', so the drawer's right
+    // sliver was dead to the finger). The control for the boundary stays in 4b:
+    // beside the drawer (right edge + 40) a leftward stroke must still keep it
+    // open - the files panel would mount under the drawer.
+    const band = await client.evaluate(`(() => {
+      const frame = document.querySelector('[data-mobile-nav="frame"]')
+      const drawer = frame && frame.firstElementChild
+      if (!drawer) return null
+      return {
+        right: Math.round(drawer.getBoundingClientRect().right),
+        zoneFrom: Math.round(window.innerWidth - window.innerWidth * 0.45),
+      }
+    })()`)
+    const bandX = band === null ? 0 : band.right - 15
+    check(
+      'swipe.drawer-band-precondition',
+      band !== null && bandX >= band.zoneFrom && bandX < band.right,
+      `drawerRight=${band && band.right} filesZoneFrom=${band && band.zoneFrom} startX=${bandX} (the stroke must start inside BOTH the drawer body and the files zone)`,
+    )
+    await touchSwipe(client, bandX, 300, bandX - 140, 300, 140, signal)
+    const bandClosed = await waitDrawer(client, 'leftward close from the drawer right band', config.timeoutMs, signal, false)
+    await sleep(600, signal)
+    const afterBandClose = await drawerState(client)
+    check(
+      'swipe.drawer-band-leftward-closes',
+      bandClosed !== null && afterBandClose.collapsed === true && afterBandClose.backdropCount === 0,
+      `startX=${bandX} collapsed=${afterBandClose.collapsed} backdrops=${afterBandClose.backdropCount} (touching the drawer and dragging left must close it, files-zone overlap or not)`,
+    )
+    // Back to open for the checklists that follow.
+    await touchSwipe(client, 8, 300, 200, 300, 140, signal)
+    await waitDrawer(client, 'reopen after drawer-band close', config.timeoutMs, signal, true)
+    await sleep(500, signal)
+
     // --- Checklist 5: post-gesture zero side effects ---
     // After the gesture-open, the drawer is open: a follow-up synthetic
     // click must NOT have fired on the FAB (which would close it again).

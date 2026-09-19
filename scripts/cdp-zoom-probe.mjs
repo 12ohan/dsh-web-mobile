@@ -6,6 +6,9 @@
 //      composer 三件套（textarea / mirror / backdrop）同尺寸，
 //      checkbox 等控件类 input 不被改，select 保持官方尺寸。
 //   C. 桌面（关触摸模拟）+ iPhone UA：移动分支未激活 → 标记必须缺席。
+// A11/B7 是 D-1 决策（2026-09-16）的守卫：ask composer 的自定义字段与文件
+// 面板的搜索/跳转字段只在 iOS 需要 16px 下限（那里才有聚焦放大），安卓保持
+// 宿主紧凑字号。两个族都不在本 profile 的屏上，故注入形状再读计算值。
 // 另断言根与抽屉的 touch-action 仍含 pinch-zoom（浏览器自行放大后用户要能
 // 双指缩回；#45 报告的"关掉重开或旋转才恢复"就是缩不回来的表现），
 // 且 gesturestart 不再被 preventDefault（那会在 iOS 上掐死双指缩放）。
@@ -199,6 +202,32 @@ async function main() {
       return out
     })()`)
 
+  // The two field families the audit's D-1 decision moved under the iOS gate.
+  // Inject one of each and read what the stylesheet actually gives them - an
+  // assertion on the rule text would pass even with the rule inert.
+  const floorProbe = () =>
+    evalv(`(() => {
+      const host = document.querySelector('[data-phase]') || document.body
+      const ask = document.createElement('div')
+      ask.setAttribute('data-question-key', 'probe')
+      const customInput = document.createElement('input')
+      customInput.className = 'probe_customInput'
+      const customTextarea = document.createElement('textarea')
+      customTextarea.className = 'probe_customTextarea'
+      ask.append(customInput, customTextarea)
+      const viewer = document.createElement('input')
+      viewer.className = 'probe-dsfv-search-input'
+      const frame = document.querySelector('[data-mobile-nav="frame"]')
+      const frameHost = frame === null ? host : frame
+      frameHost.appendChild(viewer)
+      host.appendChild(ask)
+      const read = (el) => Number.parseFloat(getComputedStyle(el).fontSize)
+      const out = { customInput: read(customInput), customTextarea: read(customTextarea), dsfvSearch: read(viewer) }
+      ask.remove()
+      viewer.remove()
+      return out
+    })()`)
+
   const describe = (fields) =>
     fields.filter((f) => f.visible).map((f) => `${f.cls || f.tag.toLowerCase()}=${f.fontSize}`).join(' ')
 
@@ -276,6 +305,14 @@ async function main() {
     `content=${JSON.stringify(replaced)} (期望重申: head childList observer 必须重新绑定到新节点)`,
   )
 
+  const aFloor = await floorProbe()
+  const aRaised = Object.entries(aFloor).filter(([, v]) => v >= 16).map(([k]) => k)
+  check(
+    'A11 安卓不抬高 ask / 文件面板字段',
+    aRaised.length === 0,
+    `${JSON.stringify(aFloor)} (期望三个字段都 <16px${aRaised.length > 0 ? '，被抬高的是 ' + aRaised.join('/') : ''}: 这两个族只在 iOS 需要 16px 下限，安卓抬高它们只是改版式)`,
+  )
+
   // ===== B. 手机 + iPhone UA =====
   await send('Emulation.setUserAgentOverride', { userAgent: IPHONE_UA })
   await boot({ width: 430, height: 932, touch: true })
@@ -311,6 +348,14 @@ async function main() {
     'B6 iOS 下 14px 可编辑域抬到 16px，装饰节点不动',
     bEditable.editable === 16 && bEditable.decorator === 12,
     `editable=${bEditable.editable} decorator=${bEditable.decorator} (0.1.2-rc.1 的 Lexical composer 就是这形状: 14px contenteditable + contenteditable=false 装饰节点)`,
+  )
+
+  const bFloor = await floorProbe()
+  const bFlat = Object.entries(bFloor).filter(([, v]) => v < 16).map(([k]) => k)
+  check(
+    'B7 iOS 下同三个字段仍 >=16px',
+    bFlat.length === 0,
+    `${JSON.stringify(bFloor)} (期望都 >=16px${bFlat.length > 0 ? '，未抬高的是 ' + bFlat.join('/') : ''}: 注入形状无人抬高，靠 html[data-mobile-nav-ios] 那条网兜底；<16px 即 Safari 聚焦放大)`,
   )
 
   // ===== C. 桌面（鼠标指针）+ iPhone UA =====

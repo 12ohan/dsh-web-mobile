@@ -16,3 +16,6 @@ playwright-report/
 
 # 本地调试地图（决定不上传，仅本地保留）
 docs/debug/settings-market-debug-map.md
+
+# 2026-09-17 composer DOM recon（与 settings-market-debug-map.md 同类：带日期的现场快照，不入库）
+docs/debug/composer-tree-recon.md

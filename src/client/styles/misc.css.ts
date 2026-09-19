@@ -103,15 +103,19 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
       (e.g. the dialog is dismissed). The ask
       composer's custom-answer <input> (.customInput) and optionless free-form
       <textarea> (.customTextarea) both ship at 14px (ui-user-questions
-      QuestionComposer.module.css). Raise them to 16px on mobile so Safari
-      sees a >=16px field and skips the zoom entirely. Scoped to the ask
+      QuestionComposer.module.css). Raise them to 16px on iOS only, where the
+      zoom can actually happen: on Android and desktop there is nothing to
+      suppress, so they keep the compact size they were designed with
+      (2026-09-16, audit D-1 option A; the iOS WebKit floor below covers these
+      fields too, this rule keeps the requirement stated where it applies).
+      Scoped to the ask
       composer's stable [data-question-key] root (AGENTS.md: scope hashed-class
       selectors to the owning region, prefer stable data-* markers); the
       class-name suffix match follows the plugin's established harness
       CSS-module convention (verified against the live app: generated names
-      end with the original local name, e.g. uV2eYG_input / qDHVXG_searchInput). */
-  [data-question-key] [class*="_customInput"],
-  [data-question-key] [class*="_customTextarea"] {
+      end with the original local name, e.g. uV2eYG_input / bhn1Oq_searchInput). */
+  html[data-mobile-nav-ios] [data-question-key] [class*="_customInput"],
+  html[data-mobile-nav-ios] [data-question-key] [class*="_customTextarea"] {
     font-size: 16px !important;
   }
 
@@ -119,12 +123,13 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
      Same rule as the ask composer above: the file viewer's search / jump-to-
      line / pdf-page fields ship at 13-14px, which Safari auto-magnifies on
      focus inside a panel that does not blur on tap-away. Raise them to 16px
-     on mobile so Safari skips the zoom. Scoped to the frame marker; the
+     on iOS only for the same reason as the ask composer above (2026-09-16,
+     audit D-1 option A). Scoped to the frame marker; the
      viewer itself is scoped by its stable dsfv prefix.
      (Port of community fork fix 2ff7976.) */
-  [data-mobile-nav="frame"] [class*="dsfv-search-input"],
-  [data-mobile-nav="frame"] [class*="dsfv-jump-input"],
-  [data-mobile-nav="frame"] [class*="dsfv-page-input"] {
+  html[data-mobile-nav-ios] [data-mobile-nav="frame"] [class*="dsfv-search-input"],
+  html[data-mobile-nav-ios] [data-mobile-nav="frame"] [class*="dsfv-jump-input"],
+  html[data-mobile-nav-ios] [data-mobile-nav="frame"] [class*="dsfv-page-input"] {
     font-size: 16px !important;
   }
 
@@ -201,10 +206,14 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
    clustered at the left edge with a large dead zone on the right. Cap and
    center the modal sheets and the aionui bottom sheets instead. */
 @media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
-  /* All modal dialogs: centered, never edge-to-edge. The settings sheet has
-     a higher-specificity full-width rule above, so repeat its selector here
-     to win; the generic export/other-modal rule is covered by the second
-     selector. */
+  /* Centered, never edge-to-edge — for the modal shapes below, not for every
+     modal dialog. Covered: modals that are not sheet-shaped, plus sheet-shaped
+     ones with neither a navigation element nor a directory picker. A modal
+     that is sheet-shaped AND carries the directory picker is left out on
+     purpose — layout.css.ts holds the dedicated rule for it. The settings
+     sheet has a higher-specificity full-width rule above, so repeat its
+     selector here to win; the generic export/other-modal rule is covered by
+     the second selector. */
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])),
   [aria-modal="true"]:not(:has(> :first-child > :last-child > button)) {
     left: 0 !important;
@@ -256,7 +265,6 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   [data-mobile-nav="fab"],
   [data-mobile-nav="backdrop"],
   [data-mobile-nav="session-log"],
-  [data-mobile-nav="explorer"],
   [data-mobile-nav="preview-full-toggle"],
   [data-mobile-nav="drawer-actions"] {
     display: none !important;

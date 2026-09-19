@@ -30,8 +30,8 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        html/body count for this (Chromium issue 41483088: inner containers
        are ignored by the navigation path). iOS Safari's edge back-swipe has
        no CSS opt-out (WebKit bug 240183) — there the widened gesture start
-       zone (96px, beyond every browser's edge-claim strip) is the
-       mitigation.
+       zone (START_ZONE_RATIO 0.45 of the viewport width, ~176px at 390px,
+       past every browser's edge-claim strip) is the mitigation.
      - With the client's viewport-fit=cover, env(safe-area-inset-top) is the
        status bar / notch height; the rules below push the app content below
        it so the status bar never covers anything. Off notched phones (or in
@@ -59,8 +59,16 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      and the newest message sits under the composer because the host's
      at-bottom follow scrolls its own scroll body, not the document. With
      border-box the padding is taken out of the 100% height instead, so the
-     frame is exactly one viewport tall and the document never scrolls. */
-  [data-mobile-nav="frame"] {
+     frame is exactly one viewport tall and the document never scrolls.
+
+     The leading html element selector is load-bearing, not decoration: the
+     third-party @linxin666/dsh-web-all sheet ships an equal-specificity
+     !important grid-template-columns for this same element under
+     (max-width: 768px), so without the extra element the winner is decided by
+     which sheet happens to be injected later. Measured before and after with
+     scripts/probes/cascade-conflict-probe.mjs: no computed value moves, the
+     rule only stops depending on sheet order (audit D-5 option A). */
+  html [data-mobile-nav="frame"] {
     box-sizing: border-box !important;
     position: relative !important;
     grid-template-columns: minmax(0, 1fr) 0 0 !important;
@@ -79,13 +87,14 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      dimmed backdrop already separates drawer from content. */
   /* These legacy column rules stay armed on every host generation: the phone
      owner prefers this drawer over the official overlay one (2026-09-13). The
-     official 0.1.5 drawer measures 321px wide at z-index:1100 and ships NO
-     full-screen backdrop, so the conversation beside it stays hit-testable -
-     the rejection reason. z-index:40 is below the host's 1100, but this rule
-     also forces position/inset/width on the same element, and the backdrop we
-     append is what carries the dimming; measured with the drawer open at 390px:
-     column [0,0,321,844], hit-test inside returns the drawer, and the backdrop
-     covers the rest of the screen. */
+     host's own drawer ships NO full-screen backdrop, so the conversation beside
+     it stays hit-testable - the rejection reason.
+     Layering contract: this column is 1300 and the backdrop 1250 (base.css),
+     both deliberately above the host's native sidebarCol at 1100. The earlier
+     value of 40 sat BELOW that 1100: because this same rule also forces
+     position/inset/width on the element, the column kept a correct-looking box
+     while neither painting nor hit-testing, which is the "all black, click
+     anywhere closes" root cause. The backdrop we append carries the dimming. */
   [data-mobile-nav="frame"] > :first-child {
     position: absolute !important;
     inset: 0 auto 0 0 !important;
@@ -103,7 +112,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        what the owner asked for over the previous 304. Going narrower is a
        one-line change, but it starts eating content. */
     width: min(88vw, 280px) !important;
-    max-width: 92vw;
     /* 1300 is a contract with base.css: the host pins its native sidebarCol at
        z-index:1100 and paints its mid layers up to that band, so the drawer must
        sit above the host stack AND above our own backdrop at 1250 (which dims
@@ -125,13 +133,13 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        reads cleanly, and the settings dialog (width:100% of this box) stays
        pixel-flush with the drawer. */
     border-right: none !important;
-  }
-  /* The drawer's inner surface is 280px wide while the column is 88vw/320px, so
+
+    /* The drawer's inner surface is 280px wide while the column is 88vw/320px, so
      the remaining 40px showed our own column background as a vertical strip
      along the right edge (measured: content right edge 280, column 320; the
      owner reported a white bar). The inner surface owns that band instead, so
      the strip is filled by the drawer's real surface colour. */
-  /* The 40px band is a STACKING result, not a colour one: the drawer's inner
+    /* The 40px band is a STACKING result, not a colour one: the drawer's inner
      surface is only 280px wide (host markup), while our column is 320px and
      carries z-index 1300 - so the column's own background paints OVER the
      surface's right 40px. Pixel-verified from a screenshot with the drawer open:
@@ -139,8 +147,41 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      (our white column). Repainting the column with the surface's own value makes
      the seam invisible whatever the theme does; the surface underneath keeps its
      own colour for the 280px it does cover. */
-  [data-mobile-nav="frame"] > :first-child {
     background: var(--dsw-alias-bg-surface, #f9fafb);
+    /* Drawer swipe gestures (edge swipe-in / content swipe-out, see
+     docs/specs/2026-08-27-sidebar-swipe-gestures.md).
+     One rule is load-bearing for the gesture layer: dropping pan-x on the
+     drawer lets horizontal pointermove events reach the gesture code —
+     WITHOUT it the browser treats a horizontal stroke as a pan, fires
+     pointercancel and the gesture never classifies (vertical panning stays
+     intact). Start-hit is decided purely by geometry on the document
+     capture listener (START_ZONE_RATIO = 0.45 of the viewport width, ~176px
+     at 390px); there is no hotspot element (removed per audit C2,
+     2026-08-27). pinch-zoom rides along with the
+     root value so a browser-applied zoom stays undoable inside the drawer
+     too (#45); touch-action intersects down the ancestor chain, so a bare
+     pan-y here would cancel the root's pinch permission. */
+    touch-action: pan-y pinch-zoom !important;
+  }
+
+  /* Closed slot, at the host's OWN specificity. 0.1.5 added a narrow-branch
+     rule [data-dsh-frame][data-sidebar-collapsed] [data-pane="sidebar"]
+     { width:52px !important; transform:none; pointer-events:none;
+     background:transparent !important } - specificity (0,3,0), one class above
+     the rule above, so it won BOTH width and transform: the closed drawer
+     stayed a 52px transparent shell at x=0 and the only state delta left was
+     the width (52<->280), which "transition: transform" cannot animate.
+     Measured 2026-09-17: closed pane transform:none / width:52 /
+     rect [0,0,52,844], and every frame sampled across a toggle click stayed
+     transform:none - the owner's "no slide animation on click" report.
+     Matching that specificity (plus !important, since the host declaration is
+     important) restores the design's own slot (spec 2026-08-27, drawer DOM):
+     a min(88vw, 280px) column translated -110% of its own width, i.e. -308px
+     at 390px. The gesture layer never depended on this rule - it writes an
+     inline transform !important - so only the CSS-driven click paths regressed. */
+  [data-mobile-nav="frame"][data-sidebar-collapsed] > :first-child {
+    width: min(88vw, 280px) !important;
+    transform: translateX(-110%) !important;
   }
 
   /* Expanded state (frame without data-sidebar-collapsed) slides the drawer in.
@@ -156,21 +197,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     transform: none !important;
   }
 
-  /* Drawer swipe gestures (edge swipe-in / content swipe-out, see
-     docs/specs/2026-08-27-sidebar-swipe-gestures.md).
-     One rule is load-bearing for the gesture layer: dropping pan-x on the
-     drawer lets horizontal pointermove events reach the gesture code —
-     WITHOUT it the browser treats a horizontal stroke as a pan, fires
-     pointercancel and the gesture never classifies (vertical panning stays
-     intact). Start-hit is decided purely by geometry on the document
-     capture listener (START_ZONE_PX = 48px); there is no hotspot element
-     (removed per audit C2, 2026-08-27). pinch-zoom rides along with the
-     root value so a browser-applied zoom stays undoable inside the drawer
-     too (#45); touch-action intersects down the ancestor chain, so a bare
-     pan-y here would cancel the root's pinch permission. */
-  [data-mobile-nav="frame"] > :first-child {
-    touch-action: pan-y pinch-zoom !important;
-  }
 
   /* The host's own drawer handle. It renders the branded fish glyph (a 24x17
      path in a 23.16x17.04 viewBox) and the phone owner reads it as a stray
@@ -184,21 +210,27 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      both get removed). Nothing in this plugin queries that element; the drawer
      still opens from our toggle, the edge swipe, and closes by tapping the
      backdrop or swiping it away. */
-  /* Two selectors and both are needed. The host re-asserts the handle with
+  /* Two selectors and both are needed. The competitor is NOT the host's own
+     CSS: @linxin666/dsh-web-all injects, under (max-width: 768px),
      [data-dsh-frame][data-sidebar-collapsed] [data-pane="sidebar"]
-     [data-dsh-responsive-part="sidebar-toggle"] { display: inline-flex
-     !important } under (max-width: 768px) - a higher-specificity !important
-     than a plain frame-scoped rule, so matching the host's own stable hook AND
-     nesting under the frame is what actually wins. Matching it exactly only
-     TIES on specificity (both 4 attribute selectors) and ties are decided by
-     sheet order, which flips on injection timing - so the first selector mirrors
-     the host's ancestor chain too and simply out-specifies it. The hash class
-     and the label stay as fallbacks for hosts without that hook. */
-  [data-mobile-nav="frame"][data-sidebar-collapsed] [data-pane="sidebar"] [data-dsh-responsive-part="sidebar-toggle"],
-  [data-mobile-nav="frame"] [data-dsh-responsive-part="sidebar-toggle"],
-  [data-mobile-nav="frame"] [class*="hHd-Xa_toggle"]:is([aria-label*="sidebar" i], [aria-label*="侧边栏"]),
-  [data-mobile-nav="frame"] button[aria-label*="sidebar" i],
-  [data-mobile-nav="frame"] button[aria-label*="侧边栏"] {
+     [data-dsh-responsive-part="sidebar-toggle"] { pointer-events: auto;
+     display: inline-flex !important }. That is 4 attribute selectors AND
+     !important - exactly what the first selector below is - so this is NOT an
+     out-specify, it is a TIE decided by sheet order, and it holds only because
+     our sheet is injected after theirs. Measured twice, not inferred:
+     scripts/probes/cascade-conflict-probe.mjs reports both sides imp=true at
+     (0,4,0) and lists this as a reviewed order-tie; if the injection order
+     flips, the dismiss shadow returns as a visible inline-flex box with
+     pointer-events restored. Done (audit D-5 option A, 2026-09-16): every
+     selector below carries a leading html, which lifts the first one to
+     (0,4,1) and ends the tie - the outcome no longer depends on which sheet is
+     injected later. The hash class and the label stay as fallbacks for hosts
+     without that hook. */
+  html [data-mobile-nav="frame"][data-sidebar-collapsed] [data-pane="sidebar"] [data-dsh-responsive-part="sidebar-toggle"],
+  html [data-mobile-nav="frame"] [data-dsh-responsive-part="sidebar-toggle"],
+  html [data-mobile-nav="frame"] [class*="hHd-Xa_toggle"]:is([aria-label*="sidebar" i], [aria-label*="侧边栏"]),
+  html [data-mobile-nav="frame"] button[aria-label*="sidebar" i],
+  html [data-mobile-nav="frame"] button[aria-label*="侧边栏"] {
     display: none !important;
   }
 
@@ -282,7 +314,8 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      Suppress only inside the actions row — the fork's original scope. On
      this host (0.1.1-rc.2) NO tooltip renders as a visible bubble: the copy
      label is a visuallyHidden span and no client-ui package emits
-     role="tooltip". The user message bubble (gdEzaW_bubble) and the goal
+     role="tooltip". The user message bubble (Sixlwa_bubble since the host moved
+     it to dsh-client-ui-chat) and the goal
      bubble (oRe1gG_bubble) live in _userStack/_row, NOT in _actions — the
      previously unscoped selector hid every user message on touch devices
      (2026-09-06 live regression). role="tooltip" stays globally suppressed:
@@ -535,15 +568,21 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     flex: none;
     min-width: 0;
   }
-  /* ContextMeter (JObwrW_ hash family) right-cluster pinning: keep the meter
-     at its official size (28x28 trigger, 14px ring -- enlarging the ring made
-     it steal attention) and glue it to the send button. A small negative
-     right margin trims the 6px lane gap to 2px against send. Anchor on the
-     unique aria-haspopup="dialog" trigger (no other composer control uses
-     it), not the hashed class, so an upstream hash bump cannot silently
-     unhook us. Knob: margin-right trim (-4px). */
+  /* ContextMeter (JObwrW_ hash family) hugging the primary key. This single
+     value is the whole spacing knob, and because the trigger box is centred on
+     the ring ink it doubles as the ink offset:
+       6px + margin-right = the sliver before the primary key = the ink's
+       leftward shift. 0px (current) therefore shifts the ink 6px -- exactly the
+       official lane gap, with no negative-margin trick left in the chain --
+       while -6px pins the ink perfectly still and +8px was vetoed on
+       2026-09-17 as "too much" (14px). The phone owner asked for a visible
+       shift after 1px (-5px) proved imperceptible, and will re-tune this number
+       by eye: change it and nothing else moves.
+     Anchor on the unique aria-haspopup="dialog" trigger (no other composer
+     control uses it), not the hashed class, so an upstream hash bump cannot
+     silently unhook us. */
   [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"] > [class*="_root"]:has(> [class*="_trigger"][aria-haspopup="dialog"]) {
-    margin-right: -4px;
+    margin-right: 0px;
   }
   /* The model pill joins the same right cluster: its margin-left:auto absorbs
      ALL trailing slack, so the adaptive void sits between the tools lane and
@@ -556,14 +595,22 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     margin-left: auto;
     margin-right: -4px;
   }
-  /* Shrink only the trigger BOX (28 -> 24, padding zeroed) while the ring
-     ink stays at its official 14px: the dead inset per side drops from 7px
-     to 5px so the small ring no longer floats in its own button. 24x24 keeps
-     the WCAG 2.2 minimum target size. Ring size itself is intentionally
-     untouched -- enlarging it was rejected as attention-grabbing. */
+  /* Grow only the invisible trigger BOX, never the ring ink: 24x24 -> 28x34.
+     The WIDTH is capped at 28 by pure geometry, not by taste: the box is
+     centred on the ink, and the primary key's hit box begins 14px right of the
+     ink's centre, so 28 is the widest box that can reach that boundary without
+     stealing a single pixel from the destructive key (the current 1px sliver
+     is the spacing knob on the root rule above); the same arithmetic puts the
+     left edge on the model pill's edge. The 34px HEIGHT is free: the primary
+     key is already the tallest control in the lane, so the box cannot overlap
+     anything vertically and the row height does not move. Hit area 576 -> 952
+     square px (+65%) with the ink within 1px of its old spot (probe-asserted),
+     and the ring's ink stays at its official 14px -- enlarging it is rejected
+     as attention-grabbing. Knob: height can drop to 28 if the tap halo should
+     be a circle rather than a stadium. */
   [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"] > [class*="_root"]:has(> [class*="_trigger"][aria-haspopup="dialog"]) > [class*="_trigger"] {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 34px;
     padding: 0;
   }
   /* Slack-absorber priority in the trailing lane: model pill > meter > send.
@@ -604,6 +651,7 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-mobile-nav="frame"] [data-phase] header {
     padding-left: 0 !important;
     padding-right: 8px !important;
+    position: relative !important;
   }
   /* Header popovers resolve against the header, not against their 28px flow
      box. 0.1.5's background-job chip anchors its menu with
@@ -623,9 +671,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      the menu lands at x=8 y=849 — past the 844px viewport (A/B 2026-09-13).
      Scoped to the header actions slot, so the subagent lineage root inside
      the crumbs keeps its own anchored, fixed-position menu. */
-  [data-mobile-nav="frame"] [data-phase] header {
-    position: relative !important;
-  }
   [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] [class*="_root"]:not([class*="_switcherRoot"]):has(> button[class*="_trigger"]) {
     position: static !important;
   }
@@ -749,7 +794,7 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   /* Running/subagent controls keep their full status text and hit area; they
      do not give up width to the mode label. NOTE: the real subagent lineage
      root has class="ZKlsPq_root " — a TRAILING SPACE from the plugin's
-     template-literal className — so [class*="_root"] never matches it. Use
+     template-literal className — so [class$="_root"] never matches it. Use
      [class*="_root"] and exclude the switcher root ([class*="_switcherRoot"])
      so only the count/job roots get pinned (the switcher must stay shrinkable
      so its own title can ellipsize). */
@@ -821,8 +866,6 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     display: none !important;
   }
   [data-mobile-nav="frame"] [data-phase] header [data-mobile-nav="files"] {
-    order: 3;
-    flex: 0 0 28px;
     width: 28px;
   }
   /* Session log download: gone from the header row on mobile (the utilities
@@ -918,11 +961,8 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      running and idle descendants, so the guards below key on that root rather
      than the transient running-state dot — otherwise the row would reflow the
      moment agents go idle. Match roots with [class*="_root"] (the real class
-     carries a trailing space; [class*="_root"] matches nothing). */
+     carries a trailing space; [class$="_root"] matches nothing). */
   @media (max-width: 440px) {
-    [data-mobile-nav="frame"] [data-phase] header [class*="_crumbs"] {
-      padding-right: 8px;
-    }
     /* The job label is the single widest tenant of the actions lane and the
        only one whose text is already carried elsewhere (aria-label + popover).
        Truncating it to a number instead would print the wrong count for a
@@ -1063,8 +1103,8 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      Anchored structurally, not by class substring: a bare [class*="_header"]
      also matches every plugin settings card header in the options area —
      the official Plugins config cards (YyYd_a_header) and the dsh-web-ui-all
-     group cards (Kwoi6G_header / bpnj3G_header / Jh0q7G_header / jmhvDG_header /
-     rUBhvW_header, all sharing the upstream template text-align:left,
+     group cards (Kwoi6G_header / Jh0q7G_header / rUBhvW_header; the bpnj3G_/jmhvDG_
+     siblings were renamed upstream in dsh-web-all 0.3.20, verified 2026-09-18), all sharing the upstream template text-align:left,
      gap:12px, padding:14px 16px). The old broad anchor right-aligned their
      text, gutted the padding and painted a 32px gray circle behind the
      chevron (2026-09-05 sweep: 8 bleeding headers). The toolbar has two

@@ -10,6 +10,7 @@ import { createGitChipTask } from './git-chip-reparent.ts'
 import { createSettingsToolbarTask } from './settings-toolbar-reparent.ts'
 import { createOverlayTask } from './overlay-backdrop-fab.ts'
 import { createFileViewerMarkerTask } from './file-viewer-compat.ts'
+import { closeDrawerAnimated } from './sidebar-swipe.ts'
 
 // The custom client bundler cannot resolve `../` requires from src/client/effects,
 // so this mirrors the namespace id from src/client/locales.ts. Keep in sync.
@@ -433,7 +434,14 @@ export function installPhoneChrome(ctx: ClientContext): void {
  */
 export function installOverlayInteractions(ctx: ClientContext): void {
   installMobileEffect(ctx, 'dsh-web-mobile: drawer close (Escape + navigate)', () => {
-    const toggleSidebar = (): void => ctx.layout.toggleSidebar()
+    // Every non-gesture close funnels through here (backdrop tap, Escape, the
+    // nav observers, navigation taps). A close animates first - the host tears
+    // the pane's subtree and surface at the marker flip, so the slide has to
+    // land before it (closeDrawerAnimated) - while opening stays a plain toggle
+    // so the host's own .28s transform transition plays.
+    const toggleSidebar = (): void => {
+      if (!closeDrawerAnimated(ctx)) ctx.layout.toggleSidebar()
+    }
     const drawerOpen = (): boolean => {
       const frame = getFrame()
       return frame !== null && !frame.hasAttribute('data-sidebar-collapsed')

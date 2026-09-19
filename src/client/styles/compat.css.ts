@@ -107,7 +107,8 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   /* The open drawer must never sit under a sheet: while the frame is in the
      narrow-expanded state both sheets yield (later in the file than the
      open marker rule, so it wins at equal specificity). The fullscreen
-     toggle has its own drawer-open rule at the end of its section. */
+     toggle is a descendant of this column, so it is hidden with the rest of
+     the column — there is no separate drawer-open rule for it. */
   [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) [data-aionui-explorer-col],
   [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) [data-aionui-preview-col] {
     visibility: hidden !important;
@@ -402,11 +403,6 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   [data-mobile-nav="frame"] [aria-modal="true"] [class*="_header"]:not([class*="_headerActions"]) [class*="_actions"] {
     display: none !important;
   }
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_header"]:not([class*="_headerActions"]) [class*="_actions"] [class*="_action"]:not([class*="_actions"]) {
-    font-size: 13px !important;
-    padding: 6px 12px !important;
-    min-height: 0 !important;
-  }
   /* Setting rows: text on top, control below at full width. Compound
      "_row*" families are excluded: the Models page names its whole card
      list "_rows" (plus "_rowCard/_rowHead/_rowIdentity/_rowActions"), and
@@ -462,8 +458,8 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   }
 
   /* ---------- dsh-web-ui polish: drawer footer ----------
-     The injected footer actions (Files + Session log) become two equal pill
-     buttons instead of text-width capsules. */
+     The single injected footer action (the session-log download) becomes a
+     full-width pill instead of a text-width capsule. */
 
   /* The official footerActions row also hosts the remote-web-ui entry
      row (two icon buttons); without wrapping the two groups squeeze each
@@ -740,27 +736,26 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   }
 
 /* 搜索框底部间距修复 */
-[aria-modal="true"] [class*="tabSearchRow"] {
+  [aria-modal="true"] [class*="tabSearchRow"] {
   padding: 2px 4px 16px !important;
-}
+  }
 
 
-/* ===== 已安装列表：路径单行截断 ===== */
-[class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) > div > [class*="spec"] {
+  /* ===== 已安装列表：路径单行截断 ===== */
+  [class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) > div > [class*="spec"] {
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   max-width: 100% !important;
   font-size: 12px !important;
-}
-[class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) > div > [class*="nm"] {
+  }
+  [class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) > div > [class*="nm"] {
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   max-width: 100% !important;
-}
-/* ===== 已安装列表：手机端纵向重排 ===== */
-@media (max-width: 1023px) and (pointer: coarse) {
+  }
+  /* ===== 已安装列表：手机端纵向重排 ===== */
   [class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) {
     flex-wrap: wrap !important;
     align-items: center !important;
@@ -789,9 +784,8 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   [class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) > [class*="grow"] {
     order: 0 !important;
   }
-}
-/* ===== 市场卡片图片容器：横向滚动 ===== */
-[data-mobile-nav="frame"] [class*="cardShots"] {
+  /* ===== 市场卡片图片容器：横向滚动 ===== */
+  [data-mobile-nav="frame"] [class*="cardShots"] {
   display: flex !important;
   flex-wrap: nowrap !important;
   overflow-x: auto !important;
@@ -802,19 +796,19 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   max-width: 100% !important;
   gap: 8px !important;
   padding: 4px 0 !important;
-}
-[data-mobile-nav="frame"] [class*="cardShots"] > [class*="cardShot"] {
+  }
+  [data-mobile-nav="frame"] [class*="cardShots"] > [class*="cardShot"] {
   flex: 0 0 min(100%, 420px) !important;
   width: min(100%, 420px) !important;
   max-width: 100% !important;
   height: auto !important;
   display: block !important;
   object-fit: contain !important;
-}
-[data-mobile-nav="frame"] [class*="cardShots"]::-webkit-scrollbar {
+  }
+  [data-mobile-nav="frame"] [class*="cardShots"]::-webkit-scrollbar {
   height: 4px !important;
-}
-[data-mobile-nav="frame"] [class*="cardShots"]::-webkit-scrollbar-thumb {
+  }
+  [data-mobile-nav="frame"] [class*="cardShots"]::-webkit-scrollbar-thumb {
   background: var(--ds-border-color, #ccc) !important;
   border-radius: 4px !important;
 }

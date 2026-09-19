@@ -21,6 +21,10 @@
 //   8. mouse pointer (touch emulation kept on): the same right-edge drag is
 //      inert — the pointerType guard rejects mouse strokes; desktop
 //      zero-impact is additionally covered by the pointer media gate.
+//   9. the drawer footer carries no Files entry any more (only session log).
+//  10. the files panel survives the drawer overlay: the drawer owns the hit
+//      test over the panel column and the panel is still open underneath;
+//  11. dismissing the drawer (backdrop tap) leaves the panel open.
 //
 // Env: DSH_PROBE_URL (default http://127.0.0.1:3080/), DSH_PROBE_SESSION_ID
 // (REQUIRED - the opener lives in a session frame), DSH_PROBE_COOKIE
@@ -207,6 +211,71 @@ async function main() {
     await sleep(700)
     const s8 = await state()
     record(s8.panel === false && s8.collapsed === true, '8.mouse-drag-inert', `panel=${s8.panel} collapsed=${s8.collapsed}`)
+
+    // ---- 9. the drawer footer no longer offers a Files entry ----
+    // The hit test needs the drawer on screen: its closed slot sits at a
+    // negative x, where elementFromPoint returns null by definition.
+    await evaluate(`(() => { document.querySelector('${TOGGLE}')?.click(); return true })()`)
+    await waitFor(async () => await evaluate(`document.querySelector('${FRAME}')?.hasAttribute('data-sidebar-collapsed') === false`), 'drawer open for footer check', 8000)
+    await sleep(400)
+    const footer = JSON.parse(await evaluate(`(() => {
+      const actions = document.querySelector('[data-mobile-nav="drawer-actions"]')
+      const log = actions === null ? null : actions.querySelector('[data-mobile-nav="session-log"]')
+      const buttons = actions === null ? -1 : actions.querySelectorAll('button').length
+      const r = log === null ? null : log.getBoundingClientRect()
+      const hit = r === null ? null : document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      return JSON.stringify({
+        actions: actions !== null,
+        explorer: document.querySelector('[data-mobile-nav="explorer"]') !== null,
+        buttons,
+        log: log !== null,
+        logHit: hit !== null && (hit === log || log.contains(hit)),
+      })
+    })()`))
+    // explorer === false is a revive guard, not a live assertion: no src/ producer remains, so it turns red only if the entry returns.
+    record(footer.actions === true && footer.explorer === false && footer.buttons === 1 && footer.log === true && footer.logHit === true,
+      '9.footer-no-files-entry',
+      `actions=${footer.actions} explorer=${footer.explorer} buttons=${footer.buttons} log=${footer.log} logHit=${footer.logHit}`)
+    // Close with Escape rather than a second TOGGLE click: while the drawer is
+    // open the header toggle sits outside the drawer, so dsh-web-all's
+    // installMobileSidebarDismiss swallows the click — programmatic ones too —
+    // and the plugin's own handler never runs; Escape is the plugin's own
+    // working close path (docs/specs/2026-09-17-sidebar-files-coexistence-design.md §2).
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await waitFor(async () => await evaluate(`document.querySelector('${FRAME}')?.hasAttribute('data-sidebar-collapsed') === true`), 'drawer closed after footer check', 8000)
+    await sleep(600)
+
+    // ---- 10. the panel survives the drawer overlay (coexistence contract) ----
+    await touchSwipe(388, 400, 250, 400, 120)   // right-edge leftward: open the panel
+    await waitFor(async () => await evaluate(`${PANEL_OPEN_JS}`), 'panel open for coexistence', 8000)
+    await sleep(600)
+    await touchSwipe(20, 420, 210, 420, 120)    // left-edge rightward: drawer over the panel
+    await waitFor(async () => await evaluate(`document.querySelector('${FRAME}')?.hasAttribute('data-sidebar-collapsed') === false`), 'drawer over panel', 8000)
+    await sleep(400)
+    const over = JSON.parse(await evaluate(`(() => {
+      const drawer = document.querySelector('${FRAME}')?.firstElementChild
+      if (!(drawer instanceof HTMLElement)) return JSON.stringify({ drawer: false, inDrawer: false, panel: false })
+      const r = drawer.getBoundingClientRect()
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      return JSON.stringify({
+        drawer: true,
+        inDrawer: hit !== null && drawer.contains(hit),
+        panel: ${PANEL_OPEN_JS},
+      })
+    })()`))
+    record(over.drawer === true && over.inDrawer === true && over.panel === true,
+      '10.panel-survives-drawer-overlay',
+      `drawer=${over.drawer} inDrawer=${over.inDrawer} panel=${over.panel}`)
+
+    // ---- 11. the panel is still there once the drawer is dismissed ----
+    // A trusted tap on the backdrop, past the drawer column's right edge: the
+    // column is min(88vw, 280px) wide (280px at 390px), so x = 350 is outside it.
+    await touchSwipe(350, 420, 350, 420, 40)
+    await waitFor(async () => await evaluate(`document.querySelector('${FRAME}')?.hasAttribute('data-sidebar-collapsed') === true`), 'drawer dismissed', 8000)
+    await sleep(400)
+    const s11 = await state()
+    record(s11.panel === true, '11.panel-visible-after-drawer-close', `panel=${s11.panel}`)
   } finally {
     chrome.kill()
     await sleep(300)

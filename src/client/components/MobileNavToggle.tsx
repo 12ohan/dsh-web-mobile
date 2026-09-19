@@ -14,8 +14,9 @@ export interface MobileNavToggleProps extends PropsRuntime<'conversation.session
  * - toggle: opens the directory drawer on narrow screens.
  * - files: opens the file browser directly — one tap, no drawer round-trip.
  *   Which surface that is (host right sidebar vs. the third-party explorer
- *   sheet) is decided in open-files-panel.ts. (The drawer footer keeps a Files
- *   entry for the hero/blank phases where this header does not exist.)
+ *   sheet) is decided in open-files-panel.ts. The hero/blank phases have no
+ *   session header, so this control is absent there; the files entry in those
+ *   phases is the right-edge leftward swipe (sidebar-swipe.ts).
  * Hidden entirely on wide screens (CSS media query).
  */
 export function MobileNavToggle({ toggleSidebar, t }: MobileNavToggleProps) {

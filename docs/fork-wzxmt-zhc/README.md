@@ -34,7 +34,7 @@
 | fork head | v2.7.0（head commit：`feat: adapt session deletion to DSH v0.1.3-alpha.1`；本轮网络受限未拿到精确 SHA，GitHub tree API 显示 main tree = `45cb2e1`） |
 | 上游 head（对账时） | `ac7a588`（本地 main 与 origin/main 同步） |
 | fork 同步水位 | v2.6.0 已合上游 round 9（PR #41/#43/#44/#45/#46/#47 + settings 工具栏锚定）并**主动删除 compress.ts**（上游已拥有压缩）；此后上游的 PR #48（composer-keyboard-guard）fork 未同步 |
-| 宿主目标差异 | fork 会话删除重写针对 **DSH 0.1.3-alpha.1**（未发布 npm，最新公开版 0.1.2-rc.1）；本仓库实测基线 0.1.1-rc.2（全局宿主）/ 0.1.2-rc.1 |
+| 宿主目标差异 | fork 会话删除重写针对 **DSH 0.1.3-alpha.1**（未发布 npm，最新公开版 0.1.2-rc.1）；本仓库实测基线 0.1.1-rc.2（全局宿主）/ 0.1.2-rc.1（**该快照时点**；2026-09-18 现役全局宿主 0.1.5-rc.1 + client-ui 子包 0.1.5-rc.2，本文其余版本断言同属快照） |
 | patch 行 | 与主线完全相同（`id: dsh-web-mobile`）——两份不可并存安装 |
 
 ### fork 独有功能（v2.6.0 后仅剩会话删除）

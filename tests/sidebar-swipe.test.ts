@@ -9,6 +9,7 @@ import {
   followOpenTransform,
   findHorizontalScroller,
   filesZoneHit,
+  openStateStartMode,
   selectionOwnsStroke,
   startZonePxFor,
   type SwipeThresholds,
@@ -656,4 +657,16 @@ test('classifyFilesSwipe: RTL mirrors the directions', () => {
   assert.equal(filesClassify({ dx: -63, dy: 0, panelOpen: true }, true), 'files') // raw -63 = rightward-logical
   assert.equal(filesClassify({ dx: -63, dy: 0, drawerOpen: true }, true), 'close')
   assert.equal(filesClassify({ dx: -120, dy: 0 }, true), 'none') // rtl rightward, everything closed
+})
+
+test('openStateStartMode: the drawer body always owns its stroke', () => {
+  // At 390px the viewport-ratio files zone (45% from the right = x >= 214)
+  // overlaps the 280px drawer by 66px. The owner's rule (2026-09-17): touching
+  // the drawer and dragging left must close it, so inside the body the drawer
+  // family always wins; outside the body the files zone keeps its routing and
+  // its deliberate leftward 'none' verdict (2026-09-13 narrowing).
+  assert.equal(openStateStartMode(true, true), 'drawer')
+  assert.equal(openStateStartMode(true, false), 'drawer')
+  assert.equal(openStateStartMode(false, true), 'files')
+  assert.equal(openStateStartMode(false, false), 'drawer')
 })
