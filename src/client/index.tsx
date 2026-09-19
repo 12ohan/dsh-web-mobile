@@ -1,6 +1,7 @@
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { MobileNavToggle } from './components/MobileNavToggle.tsx'
 import { MobileDrawerFooter } from './components/MobileDrawerFooter.tsx'
+import { ComposerFileButton } from './components/ComposerFileButton.tsx'
 import { openFilesPanel } from './components/open-files-panel.ts'
 import { MOBILE_CSS } from './styles/index.ts'
 
@@ -241,6 +242,21 @@ export function apply(ctx: ClientContext): void {
         ctx.sessionLogDownload.download(sessionId as unknown as DownloadSessionId),
     }),
   }, MobileDrawerFooter))
+
+  // Composer file entry (0.1.6 host): the host deleted the paperclip attach
+  // button, leaving the 「文件」row inside the "+" listbox as the only file
+  // entry. Re-add a permanent one in the host's own conversation.input.left
+  // seat (inside the tools lane, beside the plus button). It triggers the
+  // host's hidden input[type=file] — the same fileInputRef.current.click()
+  // the host's own command runs — so intake validation, upload and the
+  // availability policy stay host-owned.
+  ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
+    name: 'conversation.input.left',
+    id: 'mobile-nav-file-upload',
+    order: 10,
+    locale: NS,
+    inject: () => ({}),
+  }, ComposerFileButton))
 }
 
 // Type-only augmentation imports: pull the layout / conversation / sidebar /

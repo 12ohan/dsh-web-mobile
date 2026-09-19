@@ -641,6 +641,42 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     margin-left: 0;
   }
 
+  /* --- Composer file entry (0.1.6 host) ---
+     The 0.1.6-alpha.2 host deleted the composer's paperclip attach button, so
+     the only file entry left is the 文件 row inside the "+" listbox. The
+     control is contributed to the host-declared conversation.input.left list
+     slot ("Compact controls at the left of the composer tool row"), inside the
+     tools lane beside the plus button, so only its own box is needed here:
+     28x28 like the plus button and fixed — one of the row's hit targets, never
+     part of the adaptive shrink. Its click handler triggers the host's own
+     hidden input[type=file], so intake validation and upload stay host-owned. */
+  [data-composer-card] [data-mobile-nav="file-upload"] {
+    flex: 0 0 auto !important;
+    width: 28px !important;
+    min-width: 28px !important;
+    max-width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: grid !important;
+    place-items: center;
+    border: 0 !important;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* A busy submit phase or a subagent session refuses attachments. The host
+     gates intake on canAcceptDrop (package-private), so this reads the closest
+     observable facts — input phase and subagent — and keeps the control from
+     opening a dialog the host would then reject. */
+  [data-composer-card] [data-mobile-nav="file-upload"]:disabled {
+    opacity: 0.38;
+    cursor: default;
+  }
+
   /* --- Session header on mobile ---
      Keep the host-owned metadata in one responsive row. The conversation
      title, the mode text and the running/subagent status all keep their
