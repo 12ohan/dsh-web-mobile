@@ -173,9 +173,9 @@ async function main() {
       const h = document.querySelector('header')
       return JSON.stringify({ cls: h ? h.className : null, display: h ? getComputedStyle(h).display : null })
     })()`))
-    const phoneHeaderInvisible = phoneHeader.cls === null || (phoneHeader.cls.includes('headerHidden') && phoneHeader.display === 'none')
+    const phoneHeaderInvisible = phoneHeader.cls === null || ((phoneHeader.cls.includes('headerHidden') || phoneHeader.cls.includes('headerBlank')) && phoneHeader.display === 'none')
     record(phoneHeaderInvisible,
-      '5b.hero-hidden-header-stays-invisible', phoneHeader.cls === null ? 'header not mounted' : `display=${phoneHeader.display} hidden=${phoneHeader.cls.includes('headerHidden')}`)
+      '5b.hero-hidden-header-stays-invisible', phoneHeader.cls === null ? 'header not mounted' : `display=${phoneHeader.display} hidden=${(phoneHeader.cls.includes('headerHidden') || phoneHeader.cls.includes('headerBlank'))}`)
 
     // ---- desktop scene: the same chain must stay untouched ----
     await send('Emulation.setTouchEmulationEnabled', { enabled: false })
@@ -195,7 +195,7 @@ async function main() {
       const h = document.querySelector('header')
       return JSON.stringify({ cls: h ? h.className : null, display: h ? getComputedStyle(h).display : null })
     })()`))
-    const deskHeaderInvisible = deskHeader.cls === null || (deskHeader.cls.includes('headerHidden') && deskHeader.display === 'none')
+    const deskHeaderInvisible = deskHeader.cls === null || ((deskHeader.cls.includes('headerHidden') || deskHeader.cls.includes('headerBlank')) && deskHeader.display === 'none')
     record(deskHeaderInvisible,
       '6b.desktop-hidden-header-stays-invisible', deskHeader.cls === null ? 'header not mounted' : `display=${deskHeader.display}`)
   } finally {
