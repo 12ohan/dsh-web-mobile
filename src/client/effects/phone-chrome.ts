@@ -11,6 +11,7 @@ import { createGitChipTask } from './git-chip-reparent.ts'
 import { createSettingsToolbarTask } from './settings-toolbar-reparent.ts'
 import { createOverlayTask } from './overlay-backdrop-fab.ts'
 import { createFileViewerMarkerTask } from './file-viewer-compat.ts'
+import type { PanelExit } from './panel-exit.ts'
 import { closeDrawerAnimated } from './sidebar-swipe.ts'
 
 // The custom client bundler cannot resolve `../` requires from src/client/effects,
@@ -782,8 +783,12 @@ export function installOverlayInteractions(ctx: ClientContext): void {
  * Register the shared DOM reconciler tasks. Returns a disposer that
  * unregisters every task and resets the flag, so a same-environment plugin
  * reload can rebuild the reconciler from scratch.
+ *
+ * @param panelExit - the sidebar-panel exit face (panel-exit.ts): its system-back
+ *   route is registered here so it shares this reconciler, and the FAB reads it
+ *   to switch its meaning while a panel owns the main area.
  */
-export function registerReconcileTasks(ctx: ClientContext): () => void {
+export function registerReconcileTasks(ctx: ClientContext, panelExit: PanelExit): () => void {
   if (reconcileTasksRegistered) return () => {}
   reconcileTasksRegistered = true
   const t = ctx.locale.bind(NS)
@@ -794,7 +799,8 @@ export function registerReconcileTasks(ctx: ClientContext): () => void {
     addReconcilerTask(createPreviewCloseTask()),
     addReconcilerTask(createSheetRiseTask()),
     addReconcilerTask(createStatsLineTask()),
-    addReconcilerTask(createOverlayTask(t, () => ctx.layout.toggleSidebar())),
+    addReconcilerTask(createOverlayTask(t, () => ctx.layout.toggleSidebar(), panelExit)),
+    addReconcilerTask(panelExit.task),
     addReconcilerTask(createFileViewerMarkerTask()),
   ]
   return () => {

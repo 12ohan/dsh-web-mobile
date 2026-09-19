@@ -11,6 +11,7 @@ import { installSubagentChipTouch } from './effects/subagent-chip-touch.ts'
 import { installSessionMenuDelete } from './effects/session-menu.ts'
 import { installComposerKeyboardGuard } from './effects/composer-keyboard-guard.ts'
 import { installAionuiCompat } from './effects/aionui-compat.ts'
+import { createPanelExit, installPanelRowExit } from './effects/panel-exit.ts'
 import { createRafScheduler } from './core/raf-scheduler.ts'
 import { installDebugBadge } from './debug.ts'
 import { NS, en, zh } from './i18n/locales.ts'
@@ -160,6 +161,11 @@ export function apply(ctx: ClientContext): void {
   }, 'dsh-web-mobile: installed-list-inline-styles')
 
 
+  // Leaving a sidebar panel. The host's panels replace the main area and ship
+  // no way back, so every exit route (system back, re-tapping the selected
+  // panel row, the FAB) shares this one action.
+  const panelExit = createPanelExit(ctx.layout)
+
   // Shared mobile infrastructure: frame marker ownership and the single
   // full-tree reconciler. Installed inside one effect so a plugin reload in
   // the same JS environment tears the whole reconciler down and rebuilds it.
@@ -167,7 +173,7 @@ export function apply(ctx: ClientContext): void {
     const stops = [
       installFrameController(),
       installReconciler(ctx),
-      registerReconcileTasks(ctx),
+      registerReconcileTasks(ctx, panelExit),
     ]
     return () => {
       for (const stop of stops) stop()
@@ -178,6 +184,11 @@ export function apply(ctx: ClientContext): void {
 
   // Drawer close interactions: Escape and navigation taps inside the drawer.
   installOverlayInteractions(ctx)
+
+  // Sidebar panel exit: re-tapping the already-selected panel row returns to
+  // the conversation (the system-back route is a reconciler task; both call the
+  // same action).
+  installPanelRowExit(ctx, panelExit.exit)
 
   // Session deletion, injected into each session row's ⋯ menu (beside
   // rename / fork / archive) with a confirm dialog. Mobile-only.

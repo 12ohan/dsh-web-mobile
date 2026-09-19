@@ -1635,5 +1635,46 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-row-detail] > button:first-child {
     margin-left: 32px !important;
   }
+  /* ---------- sidebar panel enter / exit (see effects/panel-exit.ts) ----------
+     A sidebar panel REPLACES the main area. Two motions, both short and
+     horizontal, matching the drawer's own rail-in (.15s, translate + fade):
+       · enter — the panel slides in from the right;
+       · exit  — the panel does NOT animate out; the conversation it hands the
+         main area back to fades in instead.
+     The asymmetry is deliberate. selectPanel(null) remounts the whole
+     conversation and that commit blocks the main thread long enough to matter
+     (measured on a phone: ~390 ms for a long session), so fading the panel out
+     first would leave the screen blank for that whole window — panel already
+     transparent, conversation not mounted yet. Keeping the panel opaque until
+     the commit means the two swap on one frame.
+     The enter rule is a CSS condition on purpose: :has() matches in the same
+     commit that swaps the main slot, so the animation is already running at the
+     element's first style resolution and there is no full-opacity frame first.
+     The exit marker is set by JS before the swap for the same reason. */
+  @keyframes dsh-web-mobile-panel-in {
+    from { opacity: 0; transform: translateX(16px); }
+  }
+  /* Deliberately NOT reusing dsh-web-mobile-fade: the exit cleanup listens on
+     animationend BY NAME, and that keyframe also runs on the backdrop and the
+     dialogs, which are frame descendants too — reusing it would end the
+     transition early. */
+  @keyframes dsh-web-mobile-panel-reveal {
+    from { opacity: 0; }
+  }
+  [data-mobile-nav="frame"]:has([class*="panelRow"][aria-current="page"]) [class*="_centerCol"] > * > * {
+    animation: dsh-web-mobile-panel-in .15s var(--ds-ease-in-out, ease-in-out) backwards;
+  }
+  [data-mobile-nav="frame"][data-mobile-panel-exit]:not(:has([class*="panelRow"][aria-current="page"])) [class*="_centerCol"] > * > * {
+    /* ease-out rather than the shared in-out curve: the panel vanishes and the
+       conversation appears on the same frame, so the fade has to come up fast
+       or the first frames read as a flash of empty background. */
+    animation: dsh-web-mobile-panel-reveal .15s cubic-bezier(0, 0, .2, 1) backwards;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-mobile-nav="frame"]:has([class*="panelRow"][aria-current="page"]) [class*="_centerCol"] > * > *,
+    [data-mobile-nav="frame"][data-mobile-panel-exit]:not(:has([class*="panelRow"][aria-current="page"])) [class*="_centerCol"] > * > * {
+      animation: none !important;
+    }
+  }
 }
 `
