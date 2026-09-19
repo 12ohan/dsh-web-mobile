@@ -21,8 +21,8 @@ export function currentSessionIdOf(list: unknown): string | undefined {
   if (typeof snapshot.current === 'string') return snapshot.current
   for (const key in snapshot.byId) {
     const summary = snapshot.byId[key]
-    // noUncheckedIndexedAccess: the index read is typed undefined even though
-    // a for-in key always exists on the object — guard is type-only.
+    // for-in guarantees the key exists, not the value — an explicitly
+    // undefined property still reaches the guard below.
     if (summary === undefined) continue
     const mainView = summary.retainedBy?.mainView
     if (typeof mainView === 'number' && mainView > 0 && typeof summary.id === 'string') return summary.id
