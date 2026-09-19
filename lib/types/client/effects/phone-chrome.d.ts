@@ -110,10 +110,10 @@ export declare function installPhoneChrome(ctx: ClientContext): void;
  * reconciliation:
  * - Escape closes the drawer (yielding to any open modal dialog, which owns
  *   its own Escape handling).
- * - Tapping a navigation target inside the drawer (session row, task board /
- *   ssh takeover entries, search results) closes the drawer so the content
- *   it opened gets the whole screen. Session-row action buttons (kebab) are
- *   excluded — they open a menu that must survive the tap.
+ * - Tapping a navigation target inside the drawer (session row, sidebar panel
+ *   row, task board / ssh takeover entries, search results) closes the drawer
+ *   so the content it opened gets the whole screen. Session-row action buttons
+ *   (kebab) are excluded — they open a menu that must survive the tap.
  *
  * The touch close always rides the synthesized click. Closing a non-row
  * target from pointerup collapsed the drawer before that click existed, and
@@ -121,6 +121,7 @@ export declare function installPhoneChrome(ctx: ClientContext): void;
  * dispatched no click at all and the target's own onClick never ran (「新会话」
  * did nothing but retract the drawer, 2026-09-13).
  */
+export declare const TAP_CLOSE_NAV_SELECTOR = "button[data-dsh-taskboard-entry], button[data-dsh-ssh-entry], [class*=\"newSession\"], [class*=\"sessionRow\"], [class*=\"searchResultRow\"], [class*=\"searchResultWorkspace\"], [class*=\"panelRow\"]";
 export declare function installOverlayInteractions(ctx: ClientContext): void;
 /**
  * Register the shared DOM reconciler tasks. Returns a disposer that

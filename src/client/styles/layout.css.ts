@@ -1345,6 +1345,35 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     max-width: none !important;
     max-height: calc(100dvh - 96px) !important;
   }
+  /* 官方 agent-team 插件（@deepseek-ai/dsh-experimental-client-ui-agent-team）的
+     TeamAction 弹层：根元素 data-team-action（VoX2oq_root，挂在 headerActions 槽
+     order 20），面板 VoX2oq_panel 是 absolute 弹层。它和上面 _menu 族栽在同一个
+     裁剪问题上 —— _headerActions 的 overflow 滚动盒把它整个裁掉（实测 390/360px
+     视口均不可见、关闭键落在视口外），但类名不含 _menu，上面那条规则救不到，
+     所以这里同款视口定位脱离裁剪。哈希前缀 VoX2oq_ 跨版本会变，按仓库约定用
+     _panel 子串匹配；不会误伤其他弹层 —— data-team-action 根标记只有 agent-team
+     插件在用，特异性 (0,5,1) 也高于 _menu 族的 (0,4,1)。代际上整条已由外层
+     header:has([class*="_headerLeading"]) 门控，pre-alpha.2 宿主不命中。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-team-action] [class*="_panel"] {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: calc(env(safe-area-inset-top, 0px) + 80px) !important;
+    bottom: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    /* 底部让位 composer 区：会话页 composer 卡顶缘实测 y=738、stats line
+       到 840（844 视口，底部区共 106px）——原 max-height 100dvh-96px 让
+       面板伸到 y=828，底部 90px 的任务列表被输入框盖住（2026-09-19 用户
+       报障）。120px = composer 区 106px + 14px 呼吸间距；键盘弹出时 dvh
+       收缩，面板随之再缩。 */
+    max-height: calc(100dvh - 200px) !important;
+    /* 面板虽被拖出头部渲染点，white-space 仍继承 0.1.6 头部的 nowrap
+       （头部整行防换行是既有决策）——手机 374px 宽 + 长任务标题时内容
+       单行撑出面板（实测 scrollWidth 541 / clientWidth 374，任务状态
+       徽标被推到面板外 x=496 处）。恢复面板内正常换行。 */
+    white-space: normal !important;
+  }
   /* 子代理谱系 chip（ZKlsPq_root）：0.1.6 把它渲染在标题面包屑内部。进子代理
      会话时面包屑变成「父会话 / 当前会话」两段 + 这个 chip，动作行就叠在一起，
      所以整块搬到「对话/轨迹」这一行的空白区里居中，并与标签文字纵向对齐。 */
@@ -1581,6 +1610,30 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   }
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > :last-child {
     padding: 0 12px 24px;
+  }
+  /* 0.1.6-alpha.2 宿主的插件管理页（dsh-client-ui-plugin-manager 渲染的
+     section[data-plugin-panel]）。FAB 是全站恒定的左上角控件（用户明确
+     要求：右下角不对，就放左上角），所以规则不做的是挪 FAB，做的是给
+     详情页的宿主返回键让位：
+     - 列表页：左上角没有任何宿主按键（实测热区为空），FAB 留在 base.css
+       原位（top:12px left:10px）即唯一的可见入口，零规则。
+     - 详情页（DetailTop 组件）：左上角是宿主返回键「返回插件列表」crumb，
+       文字实测 [24,28,70,19]，与 FAB 盒 [10,12,38,38] 左半重叠——点
+       「插件列表」会触发开抽屉而不是返回（2026-09-19 用户报障）。让
+       crumb 整体右移 32px（左缘 24 → 56 = FAB 右缘 48 + 8px 间距），
+       左上角变成「FAB 开目录 + crumb 返回」并排、各自可点。详情根的
+       data-* 标记有三种：内置插件详情 data-plugin-item-detail、市场
+       插件详情 data-plugin-row-detail、builtin 详情 data-plugin-detail
+       （实测「智能体团队」卡走的就是第三种），三条选择器并列全覆盖。
+       历史如下一版注释前文，所以第三版动的是宿主 crumb 而不是我方
+       控件。锚点全部是宿主 data-* 标记，比 css-module 哈希类
+       （X_2TxG_）稳定；pre-alpha.2 宿主没有这些标记，规则天然不命中
+       （代际门控）。crumb 右移后 detailHead（icon+actions 在行尾）仍由
+       flex 自行排布，390px 行宽充裕。 */
+  [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-detail] > button:first-child,
+  [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-item-detail] > button:first-child,
+  [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-row-detail] > button:first-child {
+    margin-left: 32px !important;
   }
 }
 `
