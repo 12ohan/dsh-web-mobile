@@ -227,3 +227,4 @@ dsh web
 - 引擎底线：`package.json` engines `node >=24.0.0`（tests 依赖 Node 原生 TS type-stripping）。
 - 宿主升级对账清单：`docs/upstream/upgrade-runbook.md`；哈希契约机读版 `docs/upstream/compat-contracts.json`，自动对账 `node scripts/cdp-compat-contracts.mjs`（无需 SESSION_ID；非 lazy MISS 才 exit 1，SKIP 按条目 `state` 手动复扫）。
 - 0.1.6-alpha.2 源码对账（2026-09-19，未升级；含五路分区子代理审查合并）：`docs/upstream/2026-09-19-dsh-0.1.6-alpha.2-compat-audit.md`（§1-§10，241 行）——sessions 服务三重移除（open/clear/SessionListState.current，6 调用点，升级前必修）、右栏 dockkit 停靠系统（最大新碰撞面）、ContextMeter 移入 dock 条、tools 行删回形针加 permission 槽、permission 治理 6 规则打空（改锚 div.modes）、qDHVXG_ 探针死针（当下就红）、headerHidden→headerBlank、26 契约普查（17 存活/1 删/8 死针）。tag↔tag 源码 diff + dist 哈希普查双通道方法见 §5；升级前必修 3 项与电池 15 项见 §10 与 runbook §6。
+- 手机端会话头部/输入框的 0.1.6-alpha.2 适配对账（2026-09-19，16 条，附可直接落地的 CSS 与落位指引）：`docs/upstream/2026-09-19-mobile-header-0.1.6-adaptation.md`。
