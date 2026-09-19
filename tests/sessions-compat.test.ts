@@ -60,5 +60,7 @@ test('clear and open are feature-detected, not assumed', () => {
   assert.match(CHROME, /sessionsCanOpen\(ctx\.sessions\)/)
   // a2 degrade: no open() -> the DOM-observer closer takes the tap, and the
   // store-subscription closer (which has no signal on a2) must NOT be armed.
-  assert.match(CHROME, /disarmCloseOnNav\(\)\n\s*armNav\(\)/)
+  // Anchored on the a2 comment: the bare closer pair also matches the
+  // pre-existing tap-fallback branch, which would make this assertion vacuous.
+  assert.match(CHROME, /a2 removed sessions\.open[\s\S]*?disarmCloseOnNav\(\)\n\s*armNav\(\)/)
 })
