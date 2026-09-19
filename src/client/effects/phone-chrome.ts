@@ -422,10 +422,10 @@ export function installPhoneChrome(ctx: ClientContext): void {
  * reconciliation:
  * - Escape closes the drawer (yielding to any open modal dialog, which owns
  *   its own Escape handling).
- * - Tapping a navigation target inside the drawer (session row, task board /
- *   ssh takeover entries, search results) closes the drawer so the content
- *   it opened gets the whole screen. Session-row action buttons (kebab) are
- *   excluded — they open a menu that must survive the tap.
+ * - Tapping a navigation target inside the drawer (session row, sidebar panel
+ *   row, task board / ssh takeover entries, search results) closes the drawer
+ *   so the content it opened gets the whole screen. Session-row action buttons
+ *   (kebab) are excluded — they open a menu that must survive the tap.
  *
  * The touch close always rides the synthesized click. Closing a non-row
  * target from pointerup collapsed the drawer before that click existed, and
@@ -433,6 +433,8 @@ export function installPhoneChrome(ctx: ClientContext): void {
  * dispatched no click at all and the target's own onClick never ran (「新会话」
  * did nothing but retract the drawer, 2026-09-13).
  */
+export const TAP_CLOSE_NAV_SELECTOR =
+  'button[data-dsh-taskboard-entry], button[data-dsh-ssh-entry], [class*="newSession"], [class*="sessionRow"], [class*="searchResultRow"], [class*="searchResultWorkspace"], [class*="panelRow"]'
 export function installOverlayInteractions(ctx: ClientContext): void {
   installMobileEffect(ctx, 'dsh-web-mobile: drawer close (Escape + navigate)', () => {
     // Every non-gesture close funnels through here (backdrop tap, Escape, the
@@ -464,9 +466,7 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       const drawer = drawerRoot()
       if (drawer === null || !drawer.contains(target)) return false
       if (target.closest('[class*="sessionRow"] button') !== null) return false
-      return target.closest(
-        'button[data-dsh-taskboard-entry], button[data-dsh-ssh-entry], [class*="newSession"], [class*="sessionRow"], [class*="searchResultRow"], [class*="searchResultWorkspace"]',
-      ) !== null
+      return target.closest(TAP_CLOSE_NAV_SELECTOR) !== null
     }
     // Touch path for session/search rows: never close the drawer from pointer
     // events. Closing at pointerup (or deferring the close) races the browser's
