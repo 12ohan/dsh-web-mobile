@@ -422,6 +422,35 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
     width: 100% !important;
     max-width: none !important;
   }
+  /* Models provider editor: a CLOSED <details> ("_customized", the customized
+     models section) must not paint its body. This engine paints the ~1500px
+     model catalog of the closed details as a ghost layer anyway: it overlays
+     the editor's own action rows (Fetch/Cancel/Apply/Add model) and the
+     provider rows BEFORE the editor row in DOM order (those paint under the
+     ghost and lose hit-testing), while rows after it paint above. Result
+     (owner report 2026-09-19): providers cannot be deleted, "fetch available
+     models" does nothing — every tap lands on whatever row overlaps the
+     ghost. The host layout is computed for the collapsed details (editor
+     217px, rows 903px), so the fix is to restore what the browser should do
+     on its own: hide the body while the details is closed. Tapping the
+     summary then opens it for real (details 33 → 1532px, rows re-flow,
+     every button hittable — verified in place before this rule was written). */
+  [aria-modal="true"] details[class*="_customized"]:not([open]) > [class*="_customizedBody"] {
+    display: none !important;
+  }
+  /* Owner dialog footers (_w1urq family: the provider delete confirm, the
+     workspace rename dialog, ...): the footer buttons keep white-space
+     normal, so any width squeeze — a narrow viewport, a long provider name,
+     Android font scaling (owner report 2026-09-19, verified at 320px with a
+     1.3x font bump) — wraps the label inside the fixed 36px row where the
+     second line clips. Keep each label on one line and let the footer wrap
+     whole buttons to a second row instead. */
+  [role="dialog"][aria-modal="true"] [class*="_footer"] {
+    flex-wrap: wrap !important;
+  }
+  [role="dialog"][aria-modal="true"] [class*="_footer"] button[class*="_button"] {
+    white-space: nowrap !important;
+  }
   /* Appearance mode group: give the cube row a consistent bordered
      segmented look (the official borders differ per state). */
   [aria-modal="true"] [class*="_cubeRow"] > * {

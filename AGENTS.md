@@ -180,6 +180,8 @@ dsh web
 - `包改名边界`
 - `字号轴`
 - `两个 closer`
+- `ghost details`
+- `dialog footer 按钮`
 
 ## Testing & QA
 
