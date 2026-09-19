@@ -25,6 +25,7 @@
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { MOBILE_QUERY, TOUCH_QUERY, installMobileEffect } from './phone-chrome.ts'
+import { currentSessionIdOf, sessionsCanClear } from '../core/sessions-compat.ts'
 
 // Mirrored from src/client/locales.ts: the custom client bundler cannot
 // resolve `../` requires from effects/. Keep in sync.
@@ -226,7 +227,7 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
         if (noButton !== null) noButton.disabled = true
         yesButton.textContent = navT('deletePending')
         if (errorLine !== null) errorLine.hidden = true
-        const wasCurrent = ctx.sessions.list.getSnapshot().current === sessionId
+        const wasCurrent = currentSessionIdOf(ctx.sessions.list.getSnapshot()) === sessionId
         try {
           const response = await fetch('/api/mobile-nav.session.delete', {
             method: 'POST',
@@ -243,7 +244,7 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
           return
         }
         closeDialog()
-        if (wasCurrent) ctx.sessions.clear()
+        if (wasCurrent && sessionsCanClear(ctx.sessions)) ctx.sessions.clear()
         // Repull the baseline so the deleted row disappears. Must be called AS
         // A METHOD on ctx.sessions: refresh() reads `this.manager`, and an
         // extracted reference would throw "this is undefined" — the failure
