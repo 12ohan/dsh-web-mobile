@@ -13,7 +13,7 @@
 | `layout.css.ts:893-897` `header > :first-child > :last-child{display:none}` | 0.1.5 这里藏的是会话日志胶囊，a2 的 `:last-child` 变成 `_headerCorner` → **右侧栏展开按钮被一起隐藏**（它是手机上打开右侧栏的唯一入口） |
 | `layout.css.ts:675-677` `header[class*="_headerHidden"]{display:none}` | a2 改名 `headerBlank` 且 blank header 不再 `display:none`（与 `docs/upstream/2026-09-19-dsh-0.1.6-alpha.2-compat-audit.md` §10.2 C-1/E-2 同一条） |
 
-其余 13 条按 a2 的实际 DOM 重新落锚（§2）。这些规则在 0.1.5-rc 宿主上**不命中**（选择器不存在），对本仓库现役宿主是惰性的。
+其余 13 条按 a2 的实际 DOM 重新落锚（§2）。**代际门控（2026-09-19 复查修正）**：四类 a2 专属类（`_headerLeading/_crumbCurrent/_crumbSeg/_headerCorner`）之外的锚（`_titleCluster/_crumbs/_headerActions/_headerUtilities/tablist/QsffPG_/ZKlsPq_` 及 `:first-child` 结构链）在 0.1.5-rc 宿主上同样存在——初审「这些规则在 rc 宿主不命中」的说法不成立。因此**本块每条选择器都带 `header:has([class*="_headerLeading"])` 存在性门控**：整个块在 pre-alpha.2 宿主上是死规则，rc 宿主继续由既有实测规则治理，rc.6 行为与 main 按构造等价；反之，与 a2 新块冲突的旧规则（`position:static` 钳制）补 `:not(:has(...))` 排除门控，让新块在 a2 上不被旧高特异性声明压死。
 
 ## 2. 适配清单（16 条）
 
@@ -34,7 +34,7 @@
 | 12 | 头部弹层点开像没反应 | 弹层左缘跟着 chip 走 → 336px 面板被推出视口；绝对定位面板还会被 `headerActions` 的 `overflow:auto` 裁掉 | 统一改视口定位：`position:fixed; left:8px; right:8px; top:calc(safe-area + 80px)` | 实测菜单 `[8,80,344,40]`、完全在视口内 |
 | 13 | 标签 ≥3 时 chip 与标签重叠 | 居中区左边界写死 104px（＝「对话/轨迹」两段宽） | `:has()` 按标签数切换：≥3 时不再居中、改右靠（`right:8px`；有 jobs 时 `126px`） | 合成第三标签：chip `185.7 → 267.4`、与标签不重叠；拆掉后回 `185.7` |
 | 14 | 标题下面多出一条灰色滑条 | 第 4/5 条让面包屑可横滑（`overflow-x:auto`，`scrollWidth-clientWidth=88`），WebView 就画出原生滚动条 | 整个会话头部统一 `::-webkit-scrollbar{display:none}`（本机 `CSS.supports('scrollbar-width','none')===false`，标准属性无效） | 像素实测滑条 `x=40.0~89.5`、高 7.8、拇指宽 ≈50（＝100×100/188）；改后浏览器不再绘制 |
-| 15 | 输入卡片中间一大块空白（文字在顶部、按钮在底部） | **宿主自身**样式：`.uV2eYG_card{padding-top:8px; gap:12px}` + `.uV2eYG_row{padding:2px 8px 6px}`；单行输入时 98px 卡片里 29px 是纯空白 | 只压纵向：卡片 `padding-top:2px / gap:4px`、行 `padding:0 8px`、编辑器 `min-height:28px / padding-top:2px` | 卡片 98→**70**、编辑器 36→28、按钮行 42→34、文字底→按钮顶 29→**10px** |
+| 15 | 输入卡片中间一大块空白（文字在顶部、按钮在底部） | **宿主自身**样式：`.uV2eYG_card{padding-top:8px; gap:12px}` + `.uV2eYG_row{padding:2px 8px 6px}`；单行输入时 98px 卡片里 29px 是纯空白 | 只压纵向：卡片 `padding-top:2px / gap:4px`、行 `padding:0 8px`、编辑器 `min-height:28px / padding-top:2px` | 卡片 98→**78**、编辑器 36→32、按钮行 42→36、文字底→按钮顶 29→**19px**（moderate 档真机读数，与 CSS 注释对齐；早期读数 70/28/34/10 为调音前测值） |
 | 16 | 标签行右缘越过 header 8px，使 118px 预留有 8px 落在屏外 | 宿主标签行满宽且 `content-box`，`padding-right` 把它顶到 `x=8..368` | 标签行补 `box-sizing: border-box` | 盒子 `[8,44,344,25]`；`header.scrollWidth-clientWidth` **8 → 0**；带 jobs 时预留 118px 下仍为 0 |
 
 ## 3. 与既有体系冲突检查（AGENTS.md:208）
@@ -475,13 +475,16 @@
 4. **对照实验**：验证滚动条抑制时同页造两个合成滚动容器（一个在 `body`、一个在头部），前者 `offsetHeight-clientHeight=8`、后者 `=0`，证明规则生效且未影响页面其它部分。
 5. **不变量**：`header.scrollWidth-clientWidth`（溢出）与各 chip 的 `rect` 在开/关菜单、增删 chip 前后应回到基线（本次实测均可还原，无脏状态）。
 
-## 6. 待裁定（3 点）
+## 6. 裁定记录（原「待裁定」，2026-09-19 已裁）
 
-1. **#8 的代际冲突**：a2 下 `layout.css.ts:893-897` 的 `:last-child` 会误伤 `_headerCorner`，建议改锚。
-2. **#9/#10 的取向**：chip「搬出文档流 + 绝对定位」与既有「留流内钉宽 + 拥挤隐藏标签」应择一，避免两套并存。
-3. **#12 的弹层定位**：既有"钳制 + 包含块两半"与本文 `position:fixed` 视口定位择一。
+1. **#8 的代际冲突**：已按建议改锚——新块以 `:last-child[class*="_headerCorner"]`（(0,5,1)）压过旧 `:last-child` 藏匿规则（(0,4,1)），corner 在 a2 放出、rc.6 的会话日志胶囊继续被旧规则藏。
+2. **#9/#10 的取向**：**a2 取「搬出文档流 + 绝对定位」体系，rc 保留「留流内钉宽 + 拥挤隐藏标签」体系**。旧 `position:static` 钳制规则补 `:not(:has([class*="_headerLeading"]))` 排除门控（初审实测：旧规则特异性 (0,6,2) 高于新绝对定位 (0,4,1)，不打门控时 static 在 a2 也赢，#9 修复失效）；旧钉宽/拥挤三档的残余声明在 a2 上要么被新规则 `!important` 压过、要么前提（chip 在行内）已不成立，不再另加门控。
+3. **#12 的弹层定位**：a2 取 `position:fixed` 视口定位（新规则特异性更高，a2 上覆盖旧钳制）；旧「钳制 + 包含块两半」规则原样保留给 rc.6（其在 rc.6 上是实测 [46,77,336,73] 的承载）。
+
+另：空头部隐藏在 a2 补了新锚——a2 把 `headerHidden` 改名 `headerBlank` 且不再自带 `display:none`，新增 `header[class*="headerBlank"]{display:none}` 与旧规则并列覆盖两代；探针 5b/6b 断言同步接受两类名。
 
 ## 7. 未覆盖
 
-- 本文读数全部来自 0.1.6-alpha.2 真机；**没有**在 rc.6 宿主上验证过这些规则的观感（它们本就为 a2 而写）。
-- 后台任务 chip 在本插件链路里**没有自然生产者**（持久版 bash 不登记 job；后台子代理是 `continuable` 不是 job），故 #9 用**真类名合成**验证；真实出现时的表现仍建议顺手看一眼。
+- 本文读数全部来自 0.1.6-alpha.2 真机；rc.6 宿主上**按构造**不受影响（全块 `_headerLeading` 存在性门控），但未在 rc.6 真机上逐条复测观感——门控的意义正是让这不必要。
+- 后台任务 chip 在本插件链路里**没有自然生产者**（持久版 bash 不登记 job；后台子代理是 `continuable` 不是 job），故 #9 用**真类名合成**验证；**复查发现合成 fixture 未带 `> button[class*="_trigger"]` 子节点，复现不出旧 static 规则的互压**——已用 `:not` 排除门控修掉（§6.2），真实出现时的表现仍建议顺手看一眼。
+- 对角双钮（toggle/files）几何为静态推算（中心对齐 top 2px），未经真机像素复测。
