@@ -653,6 +653,21 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     padding-right: 8px !important;
     position: relative !important;
   }
+  /* The hero phase's empty header must stay hidden on phones. The host hides
+     it via the headerHidden class at (0,1,0), but its own session-controller
+     sheet re-shows the conversation header as a grid at <=768px —
+     [data-dsh-frame] [data-dsh-responsive-part="conversation-header"] with
+     display grid at (0,2,0) — and that beats the hide on the very element
+     carrying both classes. Result measured 2026-09-19 at 390px: an empty 85px
+     header paints only its 1px border-bottom (--dsw-alias-border-l3) as a stray
+     gray hairline under the status bar (pixel-scanned at y=84-85,
+     rgb(224,224,224)); desktop keeps display none and no line. Our (0,3,1)
+     re-hide needs no !important: the grid rule's display is a normal
+     declaration and our style tag loads last. The header carries no children in
+     hero (drawer entry is the FAB), so hiding it frees the dead 85px too. */
+  [data-mobile-nav="frame"] [data-phase] header[class*="_headerHidden"] {
+    display: none;
+  }
   /* Header popovers resolve against the header, not against their 28px flow
      box. 0.1.5's background-job chip anchors its menu with
      position:absolute; top:calc(100% + 5px) inside .QsffPG_root

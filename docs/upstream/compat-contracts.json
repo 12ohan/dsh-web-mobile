@@ -16,7 +16,7 @@
     { "id": "thirdparty-search-13px", "kind": "hash", "needle": "-NprXq_", "owner": "third-party", "lazy": true, "state": "打开对应搜索 UI 后复扫", "note": "iOS 16px 下限覆盖对象" },
     { "id": "hero-composer-stack", "kind": "hash", "needle": "wSkVaW_", "owner": "dsh-client-ui-conversation", "lazy": false, "note": "多 token class 子串匹配实证样例" },
     { "id": "session-log-dialog", "kind": "hash", "needle": "_dialog_w1urq_22", "owner": "dsh-web-frontend", "lazy": false, "note": "CDP 假阴性防护（substring 扫描）；旧 _dialog_15u5s_22 已改名（0 命中），后缀 _22 是模块序号" },
-    { "id": "official-plugins-card", "kind": "hash", "needle": "YyYd_a_", "owner": "dsh-web-frontend", "lazy": true, "state": "打开设置→Plugins 后复扫", "note": "官方 Plugins 配置卡头" },
+    { "id": "official-plugins-card", "kind": "hash", "needle": "YyYd_a_", "owner": "dsh-web-frontend", "lazy": true, "state": "打开设置→Plugins 后复扫", "note": "官方 Plugins 配置卡头；0.1.6-alpha.2 删除 PluginCard.tsx 该族全灭（新卡头族 pbvGtq_/UYsYFG_/uedTFq_），卡头复活时改认领新族" },
     { "id": "group-card-1", "kind": "hash", "needle": "Kwoi6G_", "owner": "dsh-web-ui-all", "lazy": false, "note": "该哈希现只在 dsh-web-all 的**样式表选择器**里（HIT 来自 cssText，不代表有元素渲染：2026-09-18 实测该页零卡头）；0.1.5-rc.2 + dsh-web-all 0.3.20 实测 Web Plugins 页零 [class*=_header] 渲染（全 modal 62 节点，只有工具栏）——该页形态已不存在，卡头复活时复扫并认领新哈希" },
     { "id": "group-card-2", "kind": "hash", "needle": "bpnj3G_", "owner": "dsh-web-ui-all", "lazy": true, "state": "0.1.5-rc.2 + dsh-web-all 0.3.20 实测 Web Plugins 页零 [class*=_header] 渲染（全 modal 62 节点，只有工具栏）——该页形态已不存在，卡头复活时复扫并认领新哈希" },
     { "id": "group-card-3", "kind": "hash", "needle": "Jh0q7G_", "owner": "dsh-web-ui-all", "lazy": false, "note": "同 group-card-1：HIT 来自样式表选择器而非渲染" },
@@ -24,7 +24,7 @@
     { "id": "group-card-5", "kind": "hash", "needle": "rUBhvW_", "owner": "dsh-web-ui-all", "lazy": false, "note": "同 group-card-1：HIT 来自样式表选择器而非渲染" },
     { "id": "workspace-session-row", "kind": "hash", "needle": "_sessionRow", "owner": "dsh-client-ui-workspace", "lazy": true, "state": "桌面宽度（≥1024px）工作区面板渲染后复扫；rc.2 抽屉是 rail 变体不渲染行", "note": "会话删除菜单注入的行锚点（session-menu.ts），YDXeBa_sessionRow 子串命中" },
     { "id": "workspace-menu-item", "kind": "hash", "needle": "_itemLabel", "owner": "dsh-client-ui-workspace", "lazy": true, "state": "桌面点会话行 ⋯ 菜单后复扫", "note": "菜单克隆模板（_itemIcon/_itemLabel 配对）；签名=恰 3 项 rename/fork/archive" },
-    { "id": "workspace-group-section", "kind": "hash", "needle": "_groupSection", "owner": "dsh-client-ui-workspace", "lazy": true, "state": "桌面宽度工作区面板渲染后复扫", "note": "重名标题组内位置消歧（resolveSessionId），qDHVXG_groupSection 子串命中" },
+    { "id": "workspace-group-section", "kind": "hash", "needle": "_groupSection", "owner": "dsh-client-ui-workspace", "lazy": true, "state": "桌面宽度工作区面板渲染后复扫", "note": "重名标题组内位置消歧（resolveSessionId）；子串命中，归属哈希两代均为 bhn1Oq_groupSection（旧记 qDHVXG_ 有误，全树 0 命中，2026-09-19 修正）" },
     { "id": "marker-lexical-composer", "kind": "marker", "needle": "[data-composer-input]", "owner": "dsh-client-ui-conversation", "lazy": true, "state": "0.1.2-rc.1+ 才存在；0.1.1-rc.2 缺席属正常", "note": "Lexical composer 编辑面 marker" },
     { "id": "marker-conversation-overlay", "kind": "marker", "needle": "[data-conversation-composer-overlay]", "owner": "dsh-client-ui-trajectory/conversation", "lazy": true, "state": "活跃 conversation.view（含轨迹 tab）", "note": "通用 overlay 属性，非 file-viewer 专属" }
   ]

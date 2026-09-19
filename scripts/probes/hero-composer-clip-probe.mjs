@@ -162,6 +162,20 @@ async function main() {
     const pinned = p.pluginRules.filter((r) => /(^|;)\s*height\s*:/.test(r.css))
     record(pinned.length === 0, '5.no-plugin-rule-pins-the-chain',
       pinned.length === 0 ? `${p.pluginRules.length} plugin rule(s) match, none declare height` : pinned.map((r) => `${r.label}<-${r.sel}{${r.css}}`).join(' | '))
+    // 5b — the hero phase's empty header (headerHidden) must never paint. The
+    // host's own session-controller grid rule (<=768px) used to beat the host
+    // hide and left a stray 1px border-bottom under the status bar (the owner's
+    // "gray line at the top of the hero screen"). The plugin re-hides it in the
+    // mobile branch. Some hosts never mount the header at all (older engines
+    // take a different branch), which satisfies the contract a fortiori: the
+    // assertion is "absent or display:none", not "present".
+    const phoneHeader = JSON.parse(await evaluate(`(() => {
+      const h = document.querySelector('header')
+      return JSON.stringify({ cls: h ? h.className : null, display: h ? getComputedStyle(h).display : null })
+    })()`))
+    const phoneHeaderInvisible = phoneHeader.cls === null || (phoneHeader.cls.includes('headerHidden') && phoneHeader.display === 'none')
+    record(phoneHeaderInvisible,
+      '5b.hero-hidden-header-stays-invisible', phoneHeader.cls === null ? 'header not mounted' : `display=${phoneHeader.display} hidden=${phoneHeader.cls.includes('headerHidden')}`)
 
     // ---- desktop scene: the same chain must stay untouched ----
     await send('Emulation.setTouchEmulationEnabled', { enabled: false })
@@ -174,6 +188,16 @@ async function main() {
       desk.pluginRules.map((r) => `${r.label}<-${r.sel}`).join(' | ') || 'no plugin rule matches the chain')
     record(desk.scroll.scrollH <= desk.scroll.clientH, '6.desktop-no-overflow',
       `clientH=${desk.scroll.clientH} scrollH=${desk.scroll.scrollH}`)
+    // 6b — desktop keeps the host's own hide (our mobile rule must not be what
+    // the desktop relies on, nor contradict it). Same "absent or display:none"
+    // contract as 5b.
+    const deskHeader = JSON.parse(await evaluate(`(() => {
+      const h = document.querySelector('header')
+      return JSON.stringify({ cls: h ? h.className : null, display: h ? getComputedStyle(h).display : null })
+    })()`))
+    const deskHeaderInvisible = deskHeader.cls === null || (deskHeader.cls.includes('headerHidden') && deskHeader.display === 'none')
+    record(deskHeaderInvisible,
+      '6b.desktop-hidden-header-stays-invisible', deskHeader.cls === null ? 'header not mounted' : `display=${deskHeader.display}`)
   } finally {
     chrome.kill()
     await sleep(300)

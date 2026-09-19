@@ -175,6 +175,21 @@ export const BASE_CSS = `
   body:has([data-mobile-nav="frame"]:not([data-sidebar-collapsed])) [role="menu"] {
     z-index: 1400 !important;
   }
+  /* Host modal dialogs (workspace rename, and any future dialog of the same
+     shape) portal to a direct body child that carries the stacking context:
+     body > div._root_w1urq_2 { position: fixed; z-index: 1000 } wrapping
+     [role="dialog"][aria-modal="true"] (_dialog_w1urq_22, inner z-index: 1 —
+     raising the dialog itself is useless, it only sorts inside that root).
+     Measured 2026-09-19: with the drawer open (column z 1300) the workspace
+     Rename dialog sat entirely under it and needed the drawer closed first.
+     Raise the portal root, not the dialog, and only while the drawer is open —
+     the closed-drawer and desktop stacks keep the host's own ordering. Our own
+     delete card is untouched: its role sits on the body child itself, so
+     :has(>) never matches it. */
+  body:has([data-mobile-nav="frame"]:not([data-sidebar-collapsed]))
+    > div:has(> [role="dialog"][aria-modal="true"]) {
+    z-index: 1400 !important;
+  }
   [data-mobile-nav="delete-dialog-backdrop"] {
     z-index: 1400 !important;
   }
