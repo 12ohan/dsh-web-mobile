@@ -451,10 +451,16 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     /* Must not clip the model dropdown; the model trigger clips its own label. */
     overflow: visible;
   }
-  /* PermissionSelect / plan controls share the tools lane. Let the
-     permission label use the remaining tools width, while the lower-priority
-     plan slot keeps an icon-sized target instead of stealing model width. */
-  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > :first-child > :nth-child(2) {
+  /* Permission / plan controls share the tools lane inside a2's 'div.modes'
+     container (class survives as 'css.modes'; audit doc §10.1 / E-1). The
+     positional anchor '> :first-child > :nth-child(2)' was already off-target
+     on rc.2 (second child = the paperclip button) and dies entirely on a2
+     (second child = the hidden file input), so the series re-anchors on the
+     modes container itself and is intentionally inert on hosts without one.
+     The permission label uses the remaining tools width, while the
+     lower-priority plan slot keeps an icon-sized target instead of stealing
+     model width. */
+  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_modes"] {
     flex: 0 1 auto;
     min-width: 0;
     max-width: none;
@@ -463,14 +469,14 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        overflow hidden crops it. The trigger label clips its own text. */
     overflow: visible;
   }
-  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > :first-child > :nth-child(2) > [class*="_trigger"] {
+  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_modes"] > [class*="_trigger"] {
     flex: 1 1 auto;
     min-width: 28px;
     max-width: 100%;
     display: flex !important;
     overflow: hidden;
   }
-  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > :first-child > :nth-child(2) > [class*="_trigger"] > [class*="_triggerLabel"] {
+  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_modes"] > [class*="_trigger"] > [class*="_triggerLabel"] {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -481,20 +487,20 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      not force them into an icon-sized box: their child button would overflow
      that wrapper and paint over PermissionSelect. Keep the wrapper intrinsic;
      the model lane below is the one that sacrifices width. */
-  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > :first-child > :nth-child(2) > :not([class*="_trigger"]) {
+  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_modes"] > :not([class*="_trigger"]) {
     flex: 0 1 auto;
     min-width: 34px;
     max-width: max-content;
     overflow: visible;
   }
-  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > :first-child > :nth-child(2) > [class*="_wrap"] > [class*="_chip"] {
+  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_modes"] > [class*="_wrap"] > [class*="_chip"] {
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap !important;
   }
   @container dsh-mobile-composer (max-width: 359px) {
-    [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > :first-child > :nth-child(2) > [class*="_trigger"] > [class*="_triggerLabel"] {
+    [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_modes"] > [class*="_trigger"] > [class*="_triggerLabel"] {
       display: none !important;
     }
   }
