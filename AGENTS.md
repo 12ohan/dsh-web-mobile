@@ -114,6 +114,7 @@ dsh web
 
 - **Bug 定位先报告、确认后再修（用户要求，2026-09-19）**：需要跟踪定位的 bug——多步调查、根因不明、现象与成因相距远的那种——定位到根因后**不要立刻动手修**，先给出清晰报告：症状、根因、证据链、影响范围、拟议修复（有取舍时列选项），等用户确认再执行。一眼即明的简单修复不在此列。
 - **用户协作偏好自动入库（用户要求，2026-09-19）**：用户在对话中提出的协作偏好/工作流要求（如上一条这类），**当场写进本文件对应节**，不必等用户点名「写进 AGENTS.md」；入库后在回复里提一句写到了哪里。记忆只做跨会话备份，不能替代本文件。
+- **宿主升级必须用户单独确认（用户要求，2026-09-19）**：默认只做源码/静态对账，**不动宿主**；alpha 通道一律不上机（隐藏 bug 风险 + 会话格式迁移不可逆）。真要升级先备份 `~/.dsh/sessions`，升级后按 runbook 电池验收。
 
 ## Conventions
 
@@ -203,7 +204,7 @@ dsh web
 - 不要用 Playwright route 拦截插件 `client.js` 并 fulfill 空 body 做 A/B 实验：空响应被缓存后 boot 会报「loaded without registering」并挂起。A/B 用 `git show <commit>:lib/client.js > lib/client.js` 换文件。
 - **设备仿真验证优先用 Playwright MCP（本机已装），脚本化回归走原生 CDP**：MCP 自带 Chromium 能起真浏览器打 `127.0.0.1` 的 DSH Web，`browser_run_code_unsafe` 里 `browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })` + 复制 cookie + `addInitScript` 写 `localStorage['dsh.sessions.current']` 就是一台手机；**被桌面布局隐藏的元素必须用 `document.querySelector(sel).click()`，`page.click()` 的可见性检查必失败**；`~/tmp/pw-dsh-tmp` 需先存在，且无 `setSafeAreaInsets`。`playwright-core` 在 android 抛 `Unsupported platform`，所以仓库内脚本一律原生 CDP（`scripts/cdp-probe.mjs` 的 `createCdpClient`）。完整步骤/坑 → `docs/maintenance/pitfalls.md` §探针运行环境。
 - **Termux 上 headless chromium 必须给可写的 `TMPDIR` 与 `XDG_RUNTIME_DIR`**（指到 `~/tmp` 下自建目录），否则 ProcessSingleton 建 socket 失败、CDP 端口永不上线；探针的 `DSH_PROBE_CHROME` 可用 `chromium-browser`（2026-09-18 契约探针整跑实测），异常时直指真实 ELF；临时脚本/截图放 `~/tmp/` 用完清理。完整命令与 cookie TTL → `docs/maintenance/pitfalls.md` §探针运行环境。
-- Validate compatible third-party versions when exercising integrations（2026-09-04 实装）：`@linxin666/dsh-web-all` 0.3.20、`@linxin666/dsh-client-ui-market` 0.3.20（独立的 `dshmarket` 包已不在 profile）、`dsh-meme` 0.1.39、`@ychris12138/dsh-usage-stats` 0.3.1、`@changfenhuang/dsh-genui` 0.10.0（宿主 `@deepseek-ai/dsh` 不在 profile node_modules 内，按 `dsh --version` 读）。以 `~/.dsh/profiles/web/node_modules/<pkg>/package.json` 的实装版本为准（profile package.json 里是 `^` 范围，会静默升 minor），升级后回来对账。
+- Validate compatible third-party versions when exercising integrations（2026-09-19 修正）：**判据是 `~/.dsh/profiles/web/cordis.patch.yml` 的行启用状态，不是 node_modules 里装没装**——2026-09-19 实测 25+ 行全部 `disabled: true`（market/usage-stats/genui/task-board/pet/ssh/skin-center…），唯一启用的 web-all 行是 git-graph；包在树里 ≠ DOM 在场。当前实装：`dsh-web-mobile`、`@dsh-external/seshat`、`@linxin666/dsh-web-all`（仅 git-graph 行）。@omdsh-dev/dsh-genui 与 @changfenhuang/dsh-genui 包逐字节相同（迁移副车）。行状态变更后先重跑 `docs/debug/settings-market-debug-map.md` §5。
 - **外部贡献合并前必须过「与既有体系冲突」检查**（#47 教训，2026-09-06 补课）：外部贡献者不知道仓库已有什么——PR #47 的 iOS floor 方案与仓库既有 16px 下限体系（misc.css `html[data-mobile-nav-ios]` 门控）冗余且会引入第二次 viewport 改写。合并 fork/PR 前先盘点与本改动同域的既有机制（viewport 所有权、16px 下限、手势让位、marker 契约清单、composer 固定控件三件套），逐一判断贡献是冗余、冲突还是互补；冗余部分砍掉、冲突部分以仓库体系为准，互补才并入。
 
 ## Maintenance
@@ -225,3 +226,4 @@ dsh web
 - CI：`.github/workflows/ci.yml`——verify → test:core → build → `git diff --exit-code lib`（lib 新鲜度门）。**本地照抄这条会假绿**：它比的是**工作区↔索引**，`git add` 之后恒真，源码没提交也能过（本分支出过两个只装 `lib/` 的提交）。本地正确判据＝源码与 `lib/` 同一提交 → 再 `pnpm build` → `git diff --exit-code HEAD -- lib`；另加 `git status --porcelain --ignored lib` 必须为空（`git diff` 看不见未跟踪孤儿产物，而 tsc 从不清理 outDir）。**推 `fix/*` 分支不触发任何 CI**（workflow 只监听 main + PR），所以「推上去了」≠「被检查过」。
 - 引擎底线：`package.json` engines `node >=24.0.0`（tests 依赖 Node 原生 TS type-stripping）。
 - 宿主升级对账清单：`docs/upstream/upgrade-runbook.md`；哈希契约机读版 `docs/upstream/compat-contracts.json`，自动对账 `node scripts/cdp-compat-contracts.mjs`（无需 SESSION_ID；非 lazy MISS 才 exit 1，SKIP 按条目 `state` 手动复扫）。
+- 0.1.6-alpha.2 源码对账（2026-09-19，未升级）：`docs/upstream/2026-09-19-dsh-0.1.6-alpha.2-compat-audit.md`——ContextMeter 移入 composer 下方 dock 条、tools 行删回形针加 permission 槽、SlotFactoryMap 架构（两槽位存活）、profile-resolution 重构（link: 依赖高危）。tag↔tag 源码 diff + dist 哈希普查双通道方法见该文档 §5。
