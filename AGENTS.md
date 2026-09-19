@@ -110,6 +110,10 @@ dsh web
 - Third-party compatibility is implemented through scoped DOM markers, stable `data-*` attributes, `MutationObserver`, and carefully scoped class/text anchors. Never modify third-party source packages.
 - Authoritative design docs: `docs/specs/2026-08-27-sidebar-swipe-gestures.md` (gesture parameters/state machine) and `docs/audits/2026-08-27-sidebar-swipe-latent-defects.md` (gesture defect baseline).
 
+## Workflow
+
+- **Bug 定位先报告、确认后再修（用户要求，2026-09-19）**：需要跟踪定位的 bug——多步调查、根因不明、现象与成因相距远的那种——定位到根因后**不要立刻动手修**，先给出清晰报告：症状、根因、证据链、影响范围、拟议修复（有取舍时列选项），等用户确认再执行。一眼即明的简单修复不在此列。
+
 ## Conventions
 
 - Keep the host/client split intact; the host half stays minimal (`apply()` installs response compression + the session-delete endpoint, nothing else).
