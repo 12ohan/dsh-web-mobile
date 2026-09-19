@@ -2,8 +2,13 @@
 // adaptation 2026-09-06, decision A "预备式收尾" 2026-09-07).
 //
 // Host-generation reality (CDP-verified): on 0.1.1-rc.2 the mobile drawer
-// renders the workspace section as the icon RAIL (qDHVXG_rail, empty
-// qDHVXG_listArea) — no session rows and no ⋯ menus at 390px or 768px. The
+// renders the workspace section as the icon RAIL (bhn1Oq_rail, empty
+// bhn1Oq_listArea) — no session rows and no ⋯ menus at 390px or 768px. The
+// hash was qDHVXG_ up to 0.1.3 but the installed rc.2 ships bhn1Oq_ (2026-09-19
+// dead-needle fix; the same hash spans rc.2 and 0.1.6-alpha.2). A bare
+// `[class*="_rail"]` substring was rejected: it collides with rails in four
+// other packages (attachment/cordis/settings-general/sidebar). On a rehash the
+// tripwire turns red — re-pin to the new hash.
 // fork's injection surface (session rows with menus) only renders in the
 // ≥1024px desktop panel on rc.2, and renders inside the drawer on 0.1.3.
 // The client effect is touch-gated (TOUCH_QUERY, pointer: coarse at every
@@ -146,8 +151,8 @@ async function main() {
 
     // ---- 5. UPGRADE TRIPWIRE: rc.2 drawer renders the rail variant, zero session rows ----
     const reality = await evaluate(`(() => {
-      const area = document.querySelector('[class*="qDHVXG_listArea"]')
-      const railRoot = document.querySelector('[class*="qDHVXG_rail"]')
+      const area = document.querySelector('[class*="bhn1Oq_listArea"]')
+      const railRoot = document.querySelector('[class*="bhn1Oq_rail"]')
       return { listChildren: area ? area.children.length : -1, railPresent: railRoot !== null, rows: document.querySelectorAll('[class*="_sessionRow"]').length, menus: document.querySelectorAll('[role="menu"]').length }
     })()`)
     record(reality.railPresent === true && reality.listChildren === 0 && reality.rows === 0 && reality.menus === 0,
