@@ -3,6 +3,7 @@ import { consumeIfGestured, isStrokeLocked } from './gesture-guard.ts'
 import { findSessionIdInFiber, isTapWithinSlop, reactFiberOf } from './session-row-fiber.ts'
 import { createReconcilerCore } from '../core/reconciler-core.ts'
 import type { ReconcilerTask } from '../core/reconciler-core.ts'
+import { currentSessionIdOf, sessionsCanOpen } from '../core/sessions-compat.ts'
 import { createPreviewCloseTask, createSheetRiseTask } from './aionui-compat.ts'
 import { createStatsLineTask } from './stats-line.ts'
 import { createPreviewFullscreenTask } from './preview-fullscreen.ts'
@@ -568,7 +569,7 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       if (!isTapWithinSlop(touchDownAt, { x: event.clientX, y: event.clientY }, TAP_NAV_SLOP_PX)) return null
       const id = findSessionIdInFiber(reactFiberOf(row), isKnownSessionId)
       if (id === null) return null
-      return ctx.sessions.list.getSnapshot().current === id ? null : id
+      return currentSessionIdOf(ctx.sessions.list.getSnapshot()) === id ? null : id
     }
 
     // Close the drawer once the navigation we started ourselves lands (#49).
@@ -596,7 +597,7 @@ export function installOverlayInteractions(ctx: ClientContext): void {
         if (drawerOpen()) toggleSidebar()
       }
       closeOnNavUnsub = ctx.sessions.list.subscribe(() => {
-        if (ctx.sessions.list.getSnapshot().current !== id) return
+        if (currentSessionIdOf(ctx.sessions.list.getSnapshot()) !== id) return
         window.setTimeout(fire, 0)
       })
     }
@@ -731,8 +732,19 @@ export function installOverlayInteractions(ctx: ClientContext): void {
             // this one navigation (the observer on the selected-title change,
             // the subscription on the landing) and race to toggle twice.
             disarmNav()
-            closeOnNavigation(tappedId)
-            ctx.sessions.open(tappedId)
+            if (sessionsCanOpen(ctx.sessions)) {
+              closeOnNavigation(tappedId)
+              ctx.sessions.open(tappedId)
+            } else {
+              // a2 removed sessions.open (retain-model navigation) — the
+              // store-subscription closer above watches `current`, which a2
+              // no longer publishes, so arming it would only leak a
+              // subscription that can never fire. Degrade to the DOM
+              // observer: the row's own onClick still navigates where the
+              // browser dispatches it (audit doc §10.1 / F1).
+              disarmCloseOnNav()
+              armNav()
+            }
           }
         }
         return

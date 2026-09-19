@@ -1,6 +1,7 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconDownloadOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NS } from '../i18n/locales.ts'
+import { currentSessionIdOf } from '../core/sessions-compat.ts'
 
 /** Full props for the sidebar footer action entry. */
 export interface MobileDrawerFooterProps extends PropsRuntime<'sidebar.footer.action'>, PropsLocale<typeof NS> {
@@ -22,7 +23,7 @@ export interface MobileDrawerFooterProps extends PropsRuntime<'sidebar.footer.ac
  * Contract: docs/specs/2026-09-17-sidebar-files-coexistence-design.md
  */
 export function MobileDrawerFooter({ useSessions, downloadSessionLog, t }: MobileDrawerFooterProps) {
-  const sessionId = useSessions((state) => state.current)
+  const sessionId = useSessions((state) => currentSessionIdOf(state))
   return (
     <div data-mobile-nav="drawer-actions">
       <button
