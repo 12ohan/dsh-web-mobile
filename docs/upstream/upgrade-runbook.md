@@ -85,3 +85,13 @@ for f in scripts/probes/*.mjs; do node "$f" || echo "FAIL $f"; done
 - 未守卫哈希候选 `_search/_searchInline/_searchBox`：升级后用 CDP 普查复核（见 AGENTS.md 哈希子串匹配条目）。
 - 桌面隐藏块清单：新增任何 `data-mobile-nav` 注入控件必须同步进 misc.css 隐藏块（dispose 竞态防线）。
 - 连续跑探针前先 `pgrep -c chrom` 清点残留 headless（泄漏会拖垮后续 boot）。
+
+## 6. 0.1.6-alpha.2 已知连带失效（2026-09-19 静态对账，五路分区审查）
+
+> 完整证据链（file:line 级）见 `2026-09-19-dsh-0.1.6-alpha.2-compat-audit.md` §10。升级前必修 3 项应在此清单确认完成后才升级：
+
+1. **sessions 服务形状三重移除**（a2 删 `open()`/`clear()`/`SessionListState.current`+`currentAddress`，共 6 调用点）——未修则导出 pill 恒 disabled、#49 导航回归、tap-fallback TypeError。修法：feature-detect 降级 `armNav()` + `currentSessionIdOf()` 分代 helper（回退 `retainedBy.mainView` 推导）。
+2. **permission 治理系列 6 规则打空**（layout.css.ts:457-499，rc.2 期已错位）——改锚 `div.modes`。
+3. **session-delete-probe qDHVXG_ 死针**（installed rc.2 即红，与升级无关）——改 `_listArea`/`_rail` 子串。
+
+升级时必修：headerHidden→headerBlank（layout.css.ts:668 + hero-composer-clip-probe 5b/6b 双死，补 headerBlank 空槽规则）；plugin-card 探针 YyYd_a_ 断言（EXPECTED_FAILURES 或改 pbvGtq_ 族）；flock 写锁注意（a2 新增 `session.lock` 跨进程锁，删除会话前确认无其他 DSH 实例在跑，否则 rm 绕锁致他实例写孤儿 inode）。
