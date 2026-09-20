@@ -1146,8 +1146,17 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-mobile-nav="toggle"] {
     top: 6px !important;
   }
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerLeading"]:empty {
-    display: none !important;
+   /* 空座位不判空、只塌宽：a2 槽位渲染器永远在 headerLeading 里挂一个
+      [data-slot] 包装元素（display:contents、0×0），:empty 与 :not(:has(*))
+      两种「空」判定都恒不命中（宿主自己的 :empty 规则同样失效），而
+      display:none 又会在某代真的渲染控件时误藏真控件。这里不判定空不空，
+      只把第三方误标进来的预留 padding 塌掉——web-all 兼容层按 0.1.5 结构
+      把本座位误标成 session-title-cluster，注入 padding-inline-end:44px，
+      座位于是 0 内容 + 44 padding = 44px 死占（实测 390px：座位
+      [40,22,44,0]、titleCluster 被顶到 x=84）。padding 归零后空座位 = 0×0，
+      真有内容的宿主也不受影响（内容盒照常渲染）。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerLeading"] {
+    padding: 0 !important;
   }
   /* 0.1.6 的新头部里，titleRow 的第一个孩子是新增的空座位
      headerLeading（macOS 桌面控件，安卓上渲染 null）。插件按 0.1.5 老结构
@@ -1160,6 +1169,22 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     min-width: 0 !important;
     gap: 0 !important;
   }
+   /* 第三方兼容层（@linxin666/dsh-web-all 的 web-ui-compat 行）按 0.1.5 结构
+      把本代 titleCluster 误标成 session-utilities，给里面所有按钮注入
+      min-width/min-height:44px + flex:none：toggle/files、模式/团队/面包屑
+      按钮全被顶成 44 —— toggle (8,6,44,44) 中心 28、files (338,2,44,44)
+      中心 24、标题带中心 22 三心不齐；files 加宽后越过 headerActions 流右缘
+      6px（338 < 344）。宿主 0.1.6-alpha.2 自身没有任何 44px 下限（全包
+      grep 零命中），这里把外来下限归零：控件回到各自设计尺寸（toggle 28
+      来自 base.css、files 36 来自下面的 a2 专条、chips/面包屑回宿主自然
+      高度），三心回到 20，titleCluster 的 min-height:40 !important 重新
+      主导行高。QsffPG/ZKlsPq 两个状态 chip 用 :not 明确豁免：它们的
+      25px 下限由后面 min-height:25px !important 专条供给，特异性 (0,4,1)
+      低于本条 (0,7,1)，不豁免会被顺手压掉，不靠书写顺序。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_titleCluster"] :is(button, [role="button"]):not([class*="QsffPG_root"] button):not([class*="ZKlsPq_root"] button) {
+    min-width: 0 !important;
+    min-height: 0 !important;
+  }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_titleCluster"] {
     display: flex !important;
     flex-wrap: nowrap !important;
@@ -1171,6 +1196,12 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     gap: 0 6px !important;
     justify-content: flex-start !important;
     align-items: center !important;
+    /* 簇溢出守卫，随断点 A 无条件化并入本显示规则（原为独立条）：极端
+       字体下 crumbs 触地板后的残余溢出保持可横滑，不依赖 web-all 垫片
+       （缺席时簇溢出默认 visible，会压画到 corner 按钮上）；内容放得下时
+       本声明完全惰性。x:auto 把 y 也算成 auto，簇内容高 ≤40px 恒不纵溢
+       无实害；findHorizontalScroller 对 overflow-x 容器让位。 */
+    overflow-x: auto !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_titleCluster"] > [class*="_crumbs"] {
     /* 标题改成自适应：面包屑条吃掉动作区之外的剩余宽度，标题多长就显示多少，
@@ -1232,7 +1263,26 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     justify-content: flex-start !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerActions"] {
-    flex: 0 1 auto !important;
+    /* 断点 A（用户拍板 2026-09-19，全移动档无条件生效）：动作行不参与收缩，
+       chips 按自然宽渲染，收缩职责全数交还 crumbs 滑动窗口当避震器。
+       根因链：内容是字体相对的、预算是固定像素的——headless（CJK
+       fallback 字体）文字窄、真机（另叠加 Android fontScale）文字宽，
+       flex:0 1 auto 按 basis 比例收缩时行内唯一无下限的项是模式 label
+       （min-width:0），真机截成「创造…」「Agent Te…」而 headless 全字。
+       为什么无条件化：首版用 min-width:377 分档（按 390 假设视口的 k≈1.2
+       破坏点推演），真机 diag 读数证伪——设备实测视口 360、dpr 3.5
+       （vivo V2425A，Android 16，Chrome 151），整台设备落在档位之下，A 档
+       从未绘制、旧收缩机制照跑、芯片照压；同一读数里无门的 stats 规则真机
+       验证生效、A 档未生效，对照坐实是分档包裹死档而非声明无效。目标任何
+       手机宽度芯片全字、极端窄屏靠滑窗降级不靠截断——分档与目标矛盾，删，
+       flex 直接并入本几何规则唯一声明。新几何：lane 停缩后行内唯一可缩项
+       是 crumbs（flex 1 1 auto，地板 72px；窗口帽 max-width:100px 是字体
+       无关盒子，窗内 pan-x 滑动保证长标题可读），避震容量 = crumbs 自然
+       宽−72（根会话约 28px、子代理会话双窗最多 128px；360 真机肥字体
+       k>1.22 时 crumbs 触地板、残余走 cluster 横滑）。级联核查：本规则是
+       全档唯一 flex 来源、无其他 flex 分量；rc 代 840 行是普通权重且
+       prelude 不同（无 :has 门），被本条 importance 压制，无 order-tie。 */
+    flex: 0 0 auto !important;
     width: auto !important;
     max-width: none !important;
     min-height: 36px !important;
@@ -1246,6 +1296,19 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerActions"]::-webkit-scrollbar {
     display: none;
+  }
+  /* stats 行左端「N 轮」被裁且不可达（用户真机两帧 + headless 390 复现）：
+     宿主 bOPqQW_root 是 justify-content:center 的横向滚动容器，内容溢出
+     49px（scrollWidth 333 / clientWidth 284）时两侧对称各裁 ~50px——右侧
+     scrollLeft 最大 49 可达，左侧起点 x=-34 是负坐标、scrollLeft 恒 ≥0
+     永不可达，center+overflow 经典陷阱。改 flex-start 后溢出全落在右侧，
+     滑动全程可达；取舍：内容放得下时行内从宿主的居中变左对齐（视觉差异
+     仅空隙分布），功能缺陷（指标永久丢一段）优先。特异性 (0,3,0) 带
+     !important 胜宿主 (0,1,0) 普通声明，与书写顺序无关；data-mobile-nav=
+     "stats" 是 stats-line 效果打的稳定标记，无哈希、跨宿主代际可用。
+     本条置于 ①嵌套块外：裁切陷阱与断点 A 的档位无关，全移动宽度生效。 */
+  [data-mobile-nav="frame"] [data-phase] [data-mobile-nav="stats"] {
+    justify-content: flex-start !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-mobile-nav="files"] {
     width: 36px !important;
@@ -1301,6 +1364,19 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([class*="QsffPG_root"]) [role="tablist"] {
     padding-right: 118px !important;
+  }
+   /* Agent Team chip（VoX2oq_root，data-team-action）被 rc 代 pin 规则钉死
+      （flex 0 0 auto + order 2，实测 98.7px），动作行里唯一可缩的模式 chip
+      被压到 56.2px（390px 实测「创造模式」只剩「创造…」）。模式 chip 是
+      手机端唯一的模式切换入口（pitfalls ⑤：必须保字），团队 chip 的完整
+      文字在自己的面板里有承载（点开即达），所以让它先让：保持 order:2
+      不变（创造在前、团队在后的次序不能翻），只把不可缩改成可缩，并加
+      44px 收缩下限（数值可调）保住图标点击区；内部省略号窗口由 rc 代的
+      > button / > button > * 规则继续供给。特异性 (0,5,1) 高于 pin 规则
+      (0,4,1)，且 !important，不依赖书写顺序；:has 门控保证 rc 宿主不命中。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-team-action][class*="_root"] {
+    flex: 0 1 auto !important;
+    min-width: 44px !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerActions"] [class*="QsffPG_root"] {
     position: absolute !important;
@@ -1397,8 +1473,13 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     max-width: min(32vw, 116px) !important;
     flex: 0 0 auto !important;
   }
-  /* 后台任务 chip 也在标签行时，往左让出它那一格，仍保持居中。 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([class*="QsffPG_root"]) [class*="ZKlsPq_root"] {
+  /* 后台任务 chip 也在标签行时，聚合 chip 往左让出它那一格，仍保持居中。
+     :not(_switcherRoot)：switcher 变体不参与让位——它由下面的专属定位规则
+     右锚 right:8，若被本族 right:126 拖走，179.4 宽会横穿 tab 带（取证
+     实测 84.6..264 盖住轨迹/记忆两 tab；headless 中任务已结束但
+     QsffPG_root 仍在 DOM，:has 命中幽灵元素）；聚合态不受影响，让位语义
+     原样保留。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([class*="QsffPG_root"]) [class*="ZKlsPq_root"]:not([class*="_switcherRoot"]) {
     right: 126px !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="ZKlsPq_root"] > button {
@@ -1417,14 +1498,14 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      两个变体并列，兼容「tab 是 tablist 直接子按钮」与「tab 被容器包裹」两种渲染；
      两条变体均 (0,5,2)（带 QsffPG 的二次覆盖规则为 (0,6,2)），高于上面两条既有规则，
      不依赖书写顺序。 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([role="tablist"] button:nth-of-type(3)) [class*="ZKlsPq_root"],
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([role="tablist"] > button:nth-child(3)) [class*="ZKlsPq_root"] {
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([role="tablist"] button:nth-of-type(3)) [class*="ZKlsPq_root"]:not([class*="_switcherRoot"]),
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([role="tablist"] > button:nth-child(3)) [class*="ZKlsPq_root"]:not([class*="_switcherRoot"]) {
     left: auto !important;
     right: 8px !important;
     margin: 0 !important;
   }
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([role="tablist"] button:nth-of-type(3)):has([class*="QsffPG_root"]) [class*="ZKlsPq_root"],
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([role="tablist"] > button:nth-child(3)):has([class*="QsffPG_root"]) [class*="ZKlsPq_root"] {
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([role="tablist"] button:nth-of-type(3)):has([class*="QsffPG_root"]) [class*="ZKlsPq_root"]:not([class*="_switcherRoot"]),
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([role="tablist"] > button:nth-child(3)):has([class*="QsffPG_root"]) [class*="ZKlsPq_root"]:not([class*="_switcherRoot"]) {
     right: 126px !important;
   }
   /* 真机反馈：「标题下面多了一条灰色滑条」。第 4/5 条为了让长标题能左右拖着看，
@@ -1447,15 +1528,103 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     width: 0 !important;
     height: 0 !important;
   }
+  /* 单子代理运行态的 switcher 变体（宿主 SubagentHeaderLineage variant=
+     "switcher"，根类是「基类 + 修饰类」双类 ZKlsPq_root ZKlsPq_switcherRoot，
+     挂在 crumbs 内同一 lineage 槽位，a2 bundle line 615 实锤）：pin 规则按
+     设计排除 _switcherRoot（切换器必须保持可缩），于是它从我方链里继承了
+     零溢出约束——宿主 trigger 上限 max-width:244px 大于我方根帽 116px，
+     根又没有 overflow，trigger 连同标题从右锚定的根左缘向右画出最多
+     128px：真机 390 上文字冲到 ≈389、越过条带右缘 374，省略号点也在视口
+     外，看起来像「无省略号」。聚合态「N 个子代理」类表不含 _switcherRoot，
+     不被本条命中（结构锚区分，文本无关）。修法：根帽提到 min(46vw,180px)
+     （数值可调，给运行中标题比计数 chip 更多余地）+ 根 overflow 收口 +
+     trigger max-width:100%，让宿主自带的 title 省略号链（flex:1 +
+     min-width:0 + ellipsis）在根内收口；svg 宿主自带 flex:none，⋮⋮/箭头
+     图标与省略号共存；菜单是 position:fixed，不受根 overflow 裁剪，点击
+     不受损。特异性与上面 ZKlsPq_root 规则同类同权 (0,4,1)，靠书写在后接管
+     switcher 变体；h8S2Va 旧代是否有同名修饰类未取证，a2 (ZKlsPq_) 已实测
+     对号。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_switcherRoot"] {
+    max-width: min(46vw, 180px) !important;
+    overflow: hidden !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_switcherRoot"] > button {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  /* switcher 定位（用户拍板 2026-09-19：右靠 + 与 tab 基线对齐）：基础规则
+     把 switcher 与聚合 chip 一起居中/让位，取证实测 179.4 宽被推到
+     84.6..264，整个压进 tab 带（tab 按钮 y 44-76、中心 y=60）盖住轨迹/
+     记忆两 tab。本条用双类结构锚（聚合态类表无 _switcherRoot，零误伤）
+     把 switcher 拉回右缘 8px 惯例位；top:48 使 25 高中心 60.5 ≈ tab 中心
+     60，完成基线对齐——基础规则的 bottom:0 因 top+height+bottom 全非 auto
+     过约束，按 spec 忽略 bottom、top 执政，行为确定。right:8 能落地靠上
+     一条 yield 规则的 :not(_switcherRoot)（否则幽灵 QsffPG 在场时
+     right:126 特异性更高会把 right:8 压掉，实测右缘 264 即此因）。
+     360 真机推演：右锚后左缘 360−8−180=172 > tabs 端 ~126，46px 空隙，
+     与 QsffPG 同场时本条让位取消后二者同靠右——QsffPG 真在场时由
+     findHorizontalScroller/后续实测定去留（数值 48/8/180 均可调）。菜单
+     position:fixed 独立定位层，不受本条影响（取证已证）。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="ZKlsPq_root"][class*="_switcherRoot"] {
+    left: auto !important;
+    right: 8px !important;
+    top: 48px !important;
+  }
+  /* 聚合 chip 右锚（用户拍板 2026-09-19：中置的子代理元素应右靠）：与
+     switcher 同款右靠 + 基线（top:48 → 25 高中心 60.5 ≈ tab 中心 60；
+     bottom:0 过约束被忽略、top 执政）。聚合 ~97 宽右锚后 285..382，无
+     QsffPG 时零碰撞（tabs 端 ≤170）。:not(_switcherRoot) 把变体让给上面
+     switcher 专属规则，二者匹配集不相交、无 order-tie。共场（QsffPG 在
+     场）由既有 QsffPG yield 族接管（right:126 → 聚合 166.6..264）：126
+     沿用 yield 族既有几何——按旧代 84 宽 chip（268..352）定的安全距，
+     同时覆盖用户实测 31 窄态（349-380）；示例值 right:44 只够窄态、84 宽
+     态会叠，不采纳。yield 的幽灵副作用（任务结束后聚合停在 264）无
+     tab/QsffPG 重叠，属无害惰性，彻底解（JS 可见性标记）留 effects
+     车道。聚合 max-width min(32vw,116) 沿用基础规则不动；数值 48/8 可
+     调。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="ZKlsPq_root"]:not([class*="_switcherRoot"]) {
+    left: auto !important;
+    right: 8px !important;
+    top: 48px !important;
+  }
   /* 谱系 chip 里的文字（子代理标题 /「N 个子代理」）给一个规矩的省略号窗口：
      不要裁成半个字，也不要靠滚动去够剩下的字。 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="ZKlsPq_root"] span {
+   /* :not([class*="_separator"])：rc 代有 (0,4,1) !important 的
+      [class*="_crumbs"] [class*="_separator"] display:none 规则，专门隐藏
+      谱系计数前的「/」（小屏上它读起来像多出一层面包屑层级）；本条原来
+      同为 (0,4,1) !important 且书写在后，同特异性后到先得把 separator
+      顶回 display:block（实测 390px separator [269.1,·,5.5,25] 实绘可见）。
+      加 :not 把 separator 从本条管辖范围摘掉，隐藏权交还 rc 代那条。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="ZKlsPq_root"] span:not([class*="_separator"]) {
     display: block !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
     min-width: 0 !important;
     max-width: 100% !important;
+  }
+   /* composer 模型选择 chip（dsh-client-ui-model-selection，样式哈希
+      _7KE1Ra_）：宿主用 @container (width<=360px) 在窄容器里只留图标
+      （triggerLabel/triggerEffort display:none）。390px 手机上 composer 卡
+      实测 356px 宽，恒触发这条查询 → 模型名永久不可读。手机档恢复 label
+      显示；宽度由 max-width:min(360px,45cqw) + min-width:0 + ellipsis
+      自己管，挤压时先缩的是 effort（flex-shrink:1000）。_7KE1Ra_ 是本代
+      model-selection 的样式哈希，包不在则整条死规则，无需另加代际门；
+      注意裸 [class*=_triggerLabel] 会误伤 permission-presets /
+      settings-general 包的同名片段，必须带哈希前缀。 */
+  [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_triggerLabel"] {
+    display: inline !important;
+  }
+  /* 模型 chip 宽度预算，⑦ 同链收尾：宿主 trigger 的 max-width
+     min(360px,45cqw) 在 390 真机容器 356px 下只给 label+icon+effort+chevron
+     留 ~160px，模型名真机省略成「GLM-5.3-Fla…」（headless 字体窄恰好放得
+     下，同一盲区）。放宽到 60cqw（356 容器实测 213px），effort 标签有宿主
+     自带 flex-shrink:1000 先让位，模型名拿满宽。容器 >360 的平板档 45cqw
+     本就 >160 不绑定，放宽只落在窄容器档。特异性 (0,3,0) 带 !important 胜
+     宿主 (0,1,0) 普通声明；_7KE1Ra_ 哈希本身即代际门（包不在整条死规则）。
+     60 数值可调。 */
+  [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_trigger"] {
+    max-width: min(360px, 60cqw) !important;
   }
   /* --- Settings dialog on mobile ---
      Desktop: 800px two-column flex (188px nav + content). Mobile: a

@@ -96,6 +96,14 @@ async function main() {
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
   const client = createCdpClient(ws);
   await client.send('Page.enable'); await client.send('Runtime.enable');
+  // Authenticated instances answer 401 without a cookie (mint one with
+  // .local-tests/mint-cookie.mjs, pass it as DSH_PROBE_COOKIE=name=value).
+  if (process.env.DSH_PROBE_COOKIE) {
+    const raw = process.env.DSH_PROBE_COOKIE;
+    const eq = raw.indexOf('=');
+    await client.send('Network.enable');
+    await client.send('Network.setCookie', { name: raw.slice(0, eq), value: raw.slice(eq + 1), url: URL_ });
+  }
 
   await client.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `localStorage.setItem('dsh.sessions.current', ${JSON.stringify(JSON.stringify({ sessionId: SESSION }))})`,
@@ -108,7 +116,7 @@ async function main() {
     const s = await client.evaluate(`({ ready: document.readyState === 'complete', href: location.href })`);
     return s.ready && s.href.startsWith(URL_) ? s : null;
   });
-  await waitFor('composer active', async () => {
+  const composerActive = await waitFor('composer active', async () => {
     return client.evaluate(`(() => {
       const ph = document.querySelector('[data-phase]');
       const card = document.querySelector('[data-composer-card]');
@@ -118,7 +126,38 @@ async function main() {
       const ph2 = ta ? ta.getAttribute('placeholder') : '';
       return ph2 && ph2.indexOf('Choose workspace') < 0 ? true : null;
     })()`);
-  }, 150000);
+  }, 30000).catch(() => false);
+  if (!composerActive) {
+    // 0.1.6-alpha.2: a fresh headless profile lacks the workspace
+    // authorization the host needs to auto-restore the saved session, so the
+    // page parks in the hero phase. Restore through the drawer UI (FAB ->
+    // first NON-selected session row), retried like header-files-pin-probe.
+    await sleep(6000);
+    await client.evaluate(`(() => { const f = document.querySelector('[data-mobile-nav="fab"]'); if (f) f.click(); return true })()`);
+    await sleep(1500);
+    await waitFor('drawer session rows', async () => {
+      return client.evaluate(`(() => {
+        const rows = [...document.querySelectorAll('[role="treeitem"]')];
+        return rows.some((el) => /sessionRow/.test(el.className) && el.getBoundingClientRect().width > 0);
+      })()`);
+    }, 15000);
+    const tryRowsSrc = `(() => {
+      const rows = [...document.querySelectorAll('[role="treeitem"]')].filter((el) => /sessionRow/.test(el.className) && el.getBoundingClientRect().width > 0);
+      const target = rows.find((el) => !/selected/.test(el.className)) || rows[0];
+      if (target) { target.click(); return rows.length }
+      return 0
+    })()`;
+    if ((await client.evaluate(tryRowsSrc)) === 0) throw new Error('no drawer session rows to restore (0.1.6 headless needs one)');
+    let restored = false;
+    for (let attempt = 0; attempt < 3 && !restored; attempt++) {
+      restored = await waitFor('active phase after drawer restore', async () => {
+        return client.evaluate(`document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'active'`);
+      }, 20000).catch(() => false);
+      if (!restored && attempt < 2) await client.evaluate(tryRowsSrc);
+    }
+    if (!restored) throw new Error('active phase after drawer restore timeout (3 rows tried)');
+    await sleep(1500);
+  }
 
   // 进子代理视图(与 running 探针同款:点 Switch subagent 选菜单行)。
   const switcherInfo = await waitFor('subagent switcher', async () => {
@@ -171,6 +210,25 @@ async function main() {
     }, 30000);
     fails.push(...assertSnap(`idle-subagent#${attempt}`, snap));
     await sleep(400);
+  }
+
+  // task-3 T1b: lineage chip geometry in the idle subagent view — the rc
+  // generation hide rule owns the leading "/" separator again (it resurfaced
+  // visible on 0.1.6-alpha.2, task-3 audit 2026-09-19), and the chip stays
+  // absolutely pinned at right:8 on the tab row.
+  const chip = await client.evaluate(`(() => {
+    const root = document.querySelector('[class*="ZKlsPq_root"]');
+    const sep = document.querySelector('[class*="ZKlsPq_separator"]');
+    if (!root) return null;
+    const b = root.getBoundingClientRect();
+    return { right: Math.round(b.right), y: Math.round(b.y), h: Math.round(b.height), vw: innerWidth, sep: sep ? getComputedStyle(sep).display : 'absent' };
+  })()`);
+  if (!chip) {
+    fails.push('lineage chip absent in idle subagent view');
+  } else {
+    if (chip.sep !== 'none') fails.push(`lineage separator visible: display=${chip.sep}`);
+    if (Math.abs(chip.right - (chip.vw - 8)) > 1) fails.push(`lineage chip not pinned right:8: right=${chip.right} expected ${chip.vw - 8}`);
+    console.log(`lineage chip: rect right=${chip.right} (vw-8=${chip.vw - 8}) y=${chip.y} h=${chip.h} separator=${chip.sep}`);
   }
   chrome.kill('SIGKILL');
   if (fails.length) { console.error(`RESULT FAIL (${fails.length} failures)`); process.exit(1); }
