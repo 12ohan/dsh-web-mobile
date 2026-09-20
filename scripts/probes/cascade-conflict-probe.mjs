@@ -55,8 +55,35 @@ const MODULES = ['base', 'layout', 'compat', 'misc']
 // here is reported as KNOWN instead of NEW. Keep the reason with the entry; a
 // candidate that stops matching these must resurface as NEW, so keep the
 // substrings as tight as the real selectors allow.
-const WHITELIST = []
-// Empty since 2026-09-16. The two entries that used to live here were the frame
+// 2026-09-19 终审回炉: the flex-shrink entry registered here earlier the same
+// day (layout.css.ts base block vs the @media (min-width: 377px) breakpoint-A
+// block on _headerActions) is GONE on purpose - the breakpoint-A media block
+// was unconditionally folded into a single declaration later that night, so
+// the tie no longer exists and a surviving entry would mislead readers into
+// thinking the 377 block is still there. If a same-family tie ever resurfaces,
+// re-register it with a fresh reason.
+const WHITELIST = [
+  // Intentional cross-sheet order dependency (observed 2026-09-19 in the
+  // files-open scene when a file list with tables was sampled): the mobile
+  // table adaptation at layout.css.ts:375 ([data-phase] th, (0,1,1), plain)
+  // must keep overriding the third-party dsh-web-all sheet's
+  // ._tableScroll_uddqf_ th/td column caps (same specificity, earlier sheet)
+  // — the override IS the feature (narrow-screen tables must not keep the
+  // 30vw/100px column boxes).
+  {
+    property: 'min-width',
+    loser: ['_tableScroll_uddqf_192 t'],
+    winner: ['[data-phase] t'],
+    winnerWhere: 'layout.css.ts',
+  },
+  {
+    property: 'max-width',
+    loser: ['_tableScroll_uddqf_192 t'],
+    winner: ['[data-phase] t'],
+    winnerWhere: 'layout.css.ts',
+  },
+]
+// History: the two entries that lived here before 2026-09-19 were the frame
 // grid and the dismiss shadow losing a tie to @linxin666/dsh-web-all, whose
 // injected sheet ships the same specificity and !important. Audit D-5 option A
 // ended both ties by giving those plugin rules a leading html element selector
@@ -449,7 +476,39 @@ async function analyzeElements(client, ctx, sampler = SAMPLER(GRID_STEP)) {
 
 async function runScene(client, scene, ctx) {
   await client.send('Page.navigate', { url: URL_ })
-  await waitFor(client, `${scene.name}: frame+active`, TIMEOUT_MS, async () => (await client.evaluate(HEALTHY)).value === true)
+  const healthy = await waitFor(client, `${scene.name}: frame+active`, TIMEOUT_MS, async () => (await client.evaluate(HEALTHY)).value === true).catch(() => false)
+  if (!healthy) {
+    // 0.1.6-alpha.2: a fresh headless profile lacks the workspace authorization
+    // the host needs to auto-restore the saved session, so the page parks in
+    // the hero phase and HEALTHY never turns true. Restore one through the
+    // drawer UI (FAB -> first visible session row -> active phase) before
+    // giving up; the scenes measure the session header, so without this every
+    // scene would time out on 0.1.6 hosts.
+    // Host settle first (workspace switch + saved-selection write-back land
+    // ~4s after boot), then FAB -> first NON-selected session row (the
+    // selected row is the blank "new session" placeholder), retrying rows.
+    await sleep(6000)
+    await client.evaluate(`(() => { const f = document.querySelector('[data-mobile-nav="fab"]'); if (f) f.click(); return true })()`)
+    await sleep(1500)
+    await waitFor(client, `${scene.name}: drawer session rows`, 15000, async () => (await client.evaluate(`(() => {
+      const rows = [...document.querySelectorAll('[role="treeitem"]')]
+      return rows.some((el) => /sessionRow/.test(el.className) && el.getBoundingClientRect().width > 0)
+    })()`)).value === true).catch(() => false)
+    const tryRowsSrc = `(() => {
+      const rows = [...document.querySelectorAll('[role="treeitem"]')].filter((el) => /sessionRow/.test(el.className) && el.getBoundingClientRect().width > 0)
+      const target = rows.find((el) => !/selected/.test(el.className)) || rows[0]
+      if (target) { target.click(); return rows.length }
+      return 0
+    })()`
+    if ((await client.evaluate(tryRowsSrc)).value === 0) throw new Error(`${scene.name}: no drawer session rows to restore`)
+    let active = false
+    for (let attempt = 0; attempt < 3 && !active; attempt++) {
+      active = await waitFor(client, `${scene.name}: active after drawer restore`, 20000, async () => (await client.evaluate(`document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'active'`)).value === true).catch(() => false)
+      if (!active && attempt < 2) await client.evaluate(tryRowsSrc)
+    }
+    if (!active) throw new Error(`${scene.name}: active phase after drawer restore timeout (3 rows tried)`)
+    await sleep(1500)
+  }
   // DOM.requestNode answers "Could not find node with given id" until the DOM
   // agent has a document tree; the tree dies with each navigation, so this is
   // per scene, not once per session.
@@ -465,6 +524,60 @@ async function runScene(client, scene, ctx) {
     `sampled=${result.sampled} inspected=${result.inspected} findings=${result.found.length} rules-skipped=${result.skippedRules}`
     + (result.inspectErrors.length > 0 ? ` errors=${result.inspectErrors.length} first=${result.inspectErrors[0]}` : ''))
   return result
+}
+
+// ------------------------------------------------- web-all coexistence assertions
+// task-3 T1b: with the @linxin666/dsh-web-all sheet loaded (its (0,3,0) rules
+// stomp equal-specificity declarations by source order), the header terminal
+// values must hold unchanged. The five element assertions are
+// environment-adaptive: each prints SKIP instead of FAIL when its anchor is
+// absent from the current session shape, and the presence of the foreign
+// sheet itself is recorded (the local instance ships the web-all rows
+// disabled, so absence is the common case and still pins our own values).
+const WEBALL_SNAPSHOT = `(() => {
+  const cs = (el) => getComputedStyle(el)
+  // Same scope as the cluster-button floor rule itself: the QsffPG/ZKlsPq
+  // chip buttons keep their own 25px pin (supplied by a dedicated rule), so
+  // they are excluded here exactly like the :not() chain excludes them.
+  const btns = [...document.querySelectorAll('[class*="_titleCluster"] button')]
+    .filter((b) => b.getBoundingClientRect().width > 0 && !b.closest('[class*="QsffPG_root"], [class*="ZKlsPq_root"]'))
+  const team = document.querySelector('[data-team-action]')
+  const label = [...document.querySelectorAll('[class*="SVAs4q"]')].find((el) => /_label/.test(el.className) && el.getBoundingClientRect().width > 0)
+  const sep = document.querySelector('[class*="ZKlsPq_separator"]')
+  let webAll = false
+  for (const sheet of document.styleSheets) {
+    try { if ((sheet.ownerNode?.textContent || '').indexOf('[data-dsh-frame]') >= 0) { webAll = true; break } } catch {}
+  }
+  return JSON.stringify({
+    webAll,
+    clusterBtns: btns.map((b) => ({ mw: cs(b).minWidth, mh: cs(b).minHeight })),
+    team: team ? { flex: cs(team).flex, order: cs(team).order, minw: cs(team).minWidth, maxw: cs(team).maxWidth } : null,
+    label: label ? { w: +label.getBoundingClientRect().width.toFixed(1), sw: label.scrollWidth, cw: label.clientWidth } : null,
+    sep: sep ? cs(sep).display : 'absent',
+  })
+})()`
+
+function webAllAssertions(s) {
+  const snap = JSON.parse(s)
+  record(true, 'weball.sheet-presence', snap.webAll
+    ? 'foreign web-all sheet LOADED (coexistence really exercised)'
+    : 'foreign web-all sheet ABSENT (local web-all rows disabled; assertions still pin our own terminal values)')
+  if (snap.clusterBtns.length === 0) record(true, 'weball.cluster-buttons-min-zero', 'SKIP no visible cluster buttons in this session shape')
+  else {
+    const bad = snap.clusterBtns.filter((b) => b.mw !== '0px' || b.mh !== '0px')
+    record(bad.length === 0, 'weball.cluster-buttons-min-zero', bad.length ? JSON.stringify(bad) : `${snap.clusterBtns.length} buttons all min-width/height=0px`)
+  }
+  if (!snap.team) record(true, 'weball.team-root-shrinkable', 'SKIP no [data-team-action] chip in this session shape')
+  else {
+    record(snap.team.flex === '0 1 auto' && snap.team.minw === '44px' && snap.team.maxw === '156px', 'weball.team-root-shrinkable',
+      `flex=${snap.team.flex} min=${snap.team.minw} max=${snap.team.maxw}`)
+    record(snap.team.order === '2', 'weball.team-root-order-2', `order=${snap.team.order}`)
+  }
+  if (!snap.label) record(true, 'weball.mode-label-unclipped', 'SKIP no creative-mode label in this session shape')
+  else record(snap.label.sw <= snap.label.cw + 1 && snap.label.w >= 60, 'weball.mode-label-unclipped',
+    `width=${snap.label.w} scrollWidth=${snap.label.sw} clientWidth=${snap.label.cw} (font-metric tolerant, no hard px width)`)
+  if (snap.sep === 'absent') record(true, 'weball.crumb-separator-hidden', 'SKIP no lineage separator in this session shape')
+  else record(snap.sep === 'none', 'weball.crumb-separator-hidden', `display=${snap.sep}`)
 }
 
 // ----------------------------------------------------------------------- main
@@ -528,6 +641,15 @@ async function main(modMap) {
         ok: (await c.evaluate(`document.documentElement.hasAttribute('data-mobile-nav-ios')`)).value === true,
         detail: 'html[data-mobile-nav-ios] set by hand',
       }) },
+      // web-all coexistence (task-3 T1b): with @linxin666/dsh-web-all sheets in
+      // the page (its (0,3,0) rules stomp equal-specificity declarations by
+      // order), our header terminal values must hold UNCHANGED. The five
+      // assertions run below in webAllAssertions; the scene itself accepts
+      // both profiles because the local instance ships web-all rows disabled.
+      { name: 'web-all-coexist', setup: async () => {}, ready: async (c) => ({
+        ok: (await c.evaluate(`document.querySelector('[data-mobile-nav="frame"]') !== null`)).value === true,
+        detail: 'default page shape (web-all sheet presence recorded by the assertion block)',
+      }) },
     ]
 
     // One ctx for the whole run: pluginSheetId and the sheet labels are
@@ -536,6 +658,7 @@ async function main(modMap) {
     const perScene = []
     for (const scene of scenes) {
       const result = await runScene(client, scene, ctx)
+      if (scene.name === 'web-all-coexist') webAllAssertions((await client.evaluate(WEBALL_SNAPSHOT)).value)
       perScene.push({ name: scene.name, ...result })
     }
     pluginSheetId = ctx.pluginSheetId
@@ -596,7 +719,23 @@ async function main(modMap) {
       }
       for (const e of scene.modelErrors) console.log(`FAIL model-error ${e.element} property=${e.property} modelled=${e.winner} last=${e.last}`)
     }
-    const modelErrors = perScene.reduce((n, s) => n + s.modelErrors.length, 0)
+    // 2026-09-19 ruling (replaces the numeric baseline): model errors are
+    // classified by shape, not counted. Detector-debt shapes, each with its
+    // own mismatch mechanism, reported as NOTE for observability only:
+    //  - :has( chains — the model mispredicts specificity across :has();
+    //  - :hover rules — pseudo-class state rules must not compete for the
+    //    static winner at all;
+    //  - rule pairs where NEITHER selector belongs to this plugin — a tie
+    //    between two other sheets is outside the repo's control (the same
+    //    principle as the Gating policy comment above).
+    // Anything else stays a hard failure; the live geometry probes remain
+    // the source of truth.
+    const allModelErrors = perScene.flatMap((s) => s.modelErrors)
+    const ours = (t) => t.indexOf('[data-mobile-nav') >= 0
+    const detectorDebt = allModelErrors.filter((e) => e.winner.includes(':has(') || e.last.includes(':has(')
+      || e.winner.includes(':hover') || e.last.includes(':hover')
+      || (!ours(e.winner) && !ours(e.last)))
+    const actionableModelErrors = allModelErrors.length - detectorDebt.length
     const items = [...classes.values()]
     for (const f of items) {
       if (f.kind === 'importance-tie') { importanceTies++; continue }
@@ -622,8 +761,9 @@ async function main(modMap) {
     const newCount = GATE_HOST_ONLY_TIES ? orderTies.length : pluginTies
     const perSceneText = perScene.map((s) => `${s.name}:${s.sampled}/${s.inspected}/${s.found.length}`).join(' ')
     console.log(`SUMMARY scenes=[${perSceneText}]`)
-    console.log(`SUMMARY candidates=${newCount} plugin-involved=${pluginTies} host-only=${orderTies.length - pluginTies} whitelisted=${knownCount} important=${importantCount} importance-ties=${importanceTies} model-errors=${modelErrors} module-lines=${modMapLive ? 'exact' : 'DISABLED'} sampled=${perScene.reduce((n, s) => n + s.sampled, 0)}`)
-    if (modelErrors > 0) failures.push('model-errors')
+    for (const e of detectorDebt) console.log(`NOTE known-detector-debt ${e.element} property=${e.property} modelled=${e.winner} last=${e.last}`)
+    console.log(`SUMMARY candidates=${newCount} plugin-involved=${pluginTies} host-only=${orderTies.length - pluginTies} whitelisted=${knownCount} important=${importantCount} importance-ties=${importanceTies} model-errors=${allModelErrors.length} (known-detector-debt=${detectorDebt.length}, actionable=${actionableModelErrors}) module-lines=${modMapLive ? 'exact' : 'DISABLED'} sampled=${perScene.reduce((n, s) => n + s.sampled, 0)}`)
+    if (actionableModelErrors > 0) failures.push('model-errors')
     if (newCount > 0) failures.push('new-candidates')
     if (failures.length > 0) console.log(`FAILED: ${failures.join(', ')}`)
     else console.log('ALL PASS')

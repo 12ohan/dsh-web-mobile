@@ -44,7 +44,7 @@ export function installDebugBadge(ctx: ClientContext): void {
         return `${el.getAttribute('data-sidebar-right-panel')} pad ${getComputedStyle(el).paddingTop} rect ${Math.round(b.top)},${Math.round(b.left)} ${Math.round(b.width)}x${Math.round(b.height)}`
       }
       return [
-        `build 20260914 (right-panel safe-area)`,
+        `build 20260919 (diag chips)`,
         `URL ${location.pathname}${location.search}`,
         `W ${innerWidth} x ${innerHeight} dpr ${devicePixelRatio}`,
         `mq≤1023 ${matchMedia(MOBILE_QUERY).matches}  mq≥1024 ${matchMedia(DESKTOP_QUERY).matches}`,
@@ -92,6 +92,7 @@ export function installDebugBadge(ctx: ClientContext): void {
     const payload = (): string => [
       read(),
       `rects toggle ${marker('[data-mobile-nav="toggle"]')} files ${marker('[data-mobile-nav="files"]')} header ${marker('[data-phase] header')} titleCluster ${marker('[class*="_titleCluster"]')}`,
+      `chips crea ${marker('[class*="SVAs4q_"]')} team ${marker('[data-team-action]')} model ${marker('[class*="_7KE1Ra_trigger"]')} crumbs ${marker('[class*="_crumbs"]')} crumbCurrent ${marker('[class*="_crumbCurrent"]')}`,
       `ua ${navigator.userAgent}`,
       `screen ${screen.width}x${screen.height} standalone ${matchMedia('(display-mode: standalone)').matches}`,
       `vv ${visualViewport === null ? 'n/a' : `${Math.round(visualViewport.width)}x${Math.round(visualViewport.height)}@${Math.round(visualViewport.offsetTop)}`}`,

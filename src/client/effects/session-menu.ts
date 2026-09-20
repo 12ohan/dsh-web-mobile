@@ -97,7 +97,7 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       const sessions = ctx.sessions.list.getSnapshot()
       const workspaces = ctx.workspaces.list.getSnapshot()
       const archived = new Set(workspaces.archivedSessionIds)
-      const candidates = sessions.ids.filter(id => {
+      const candidates = sessions.ids.filter((id: string) => {
         const summary = sessions.byId[id]
         return summary !== undefined && !summary.blank && summary.displayTitle === title && !archived.has(id)
       })
@@ -110,13 +110,13 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       const headerTitle = group
         .querySelector<HTMLElement>(':scope > [class*="_projectRow"] [class*="_title"]')
         ?.textContent?.trim()
-      const owned = new Set(workspaces.items.flatMap(workspace => workspace.sessionIds))
+      const owned = new Set(workspaces.items.flatMap((workspace: { sessionIds: readonly string[] }) => workspace.sessionIds))
       const workspace = headerTitle === undefined
         ? undefined
-        : workspaces.items.find(candidate => candidate.title === headerTitle)
+        : workspaces.items.find((candidate: { title: string; sessionIds: readonly string[] }) => candidate.title === headerTitle)
       const workspaceIds: readonly string[] = workspace === undefined ? [] : workspace.sessionIds
       const groupIds: readonly string[] = workspace === undefined
-        ? sessions.ids.filter(id => !owned.has(id) && !archived.has(id) && sessions.byId[id] !== undefined)
+        ? sessions.ids.filter((id: string) => !owned.has(id) && !archived.has(id) && sessions.byId[id] !== undefined)
         : workspaceIds.filter(id => !archived.has(id) && sessions.byId[id] !== undefined)
       const sameTitleGroupIds = groupIds.filter(id => sessions.byId[id]?.displayTitle === title)
       const rows = [...group.querySelectorAll<HTMLElement>(':scope > [class*="_sessionRow"]')]
