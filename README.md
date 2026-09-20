@@ -16,13 +16,11 @@
 
 **dsh-web-mobile** 是 DeepSeek Harness Web UI 的移动端适配插件——让 DSH 在手机竖屏下也能好好用：
 
-- **侧栏变抽屉**：手机竖屏下侧栏收进 overlay 抽屉，会话区全宽，点会话行自动收起；屏幕左缘右滑呼出、抽屉内右滑收起
 - **弹窗变浮层**：设置、文件树、预览改成底部 sheet，触屏好点
 - **状态栏避让**：刘海安全区、深/浅主题、双击缩放都处理
 - **输入区不打架**：权限胶囊、模型名、切换菜单在窄屏下不重叠
 - **长会话不卡流量**：宿主返回的大 JSON（会话历史等）自动 gzip/brotli 压缩，手机端加载明显提速
 - **平板也管**：768–1023px 触屏设备限宽居中，≥1024px 触屏大平板的会话行 ⋯ 菜单仍带「删除会话」；桌面端（鼠标指针）任何宽度都是完全 no-op，窄窗口/系统缩放也不会误启移动 UI
-- **诊断方便**：`?mobile-nav-debug=1` 显示悬浮诊断条（视口 / 浮层状态 / JS 错误）
 
 ---
 
@@ -34,7 +32,9 @@
 
 ## 更新内容
 
-### 未发布
+### v3.0.0 (兼容 0.1.6-alpha.2)
+
+- 建议 dsh 0.1.5 之前的版本使用本插件的 2.4.1 更好
 
 **新功能**
 
@@ -144,10 +144,7 @@ pnpm build
 
 ## 贡献与工程
 
-- **先读 [AGENTS.md](AGENTS.md)**：带注释的仓库树、每条 Pitfall 的紧凑不变式与完整档案（`docs/maintenance/pitfalls.md`）。
-- 本地门：`pnpm verify`（typecheck）→ `pnpm test:core`（单测）→ `pnpm build`；`lib/` 随源码入库，漏构建会被 CI 的 `git diff --exit-code lib` 新鲜度门拦下。
-- 回归探针：`scripts/probes/` 20 个锚点可单跑（会话删除探针兼作宿主升级绊线）；主探针 `pnpm smoke:cdp`、手势门 `scripts/cdp-swipe-failures.mjs`、iOS 放大守卫 `scripts/cdp-zoom-probe.mjs`（CDP 环境参数见 AGENTS.md）。
-- 设计文档在 `docs/specs/`；宿主升级对账走 `docs/upstream/`——`node scripts/cdp-compat-contracts.mjs` 一键核对 CSS module 哈希是否漂移。
+欢迎大家的 issue 和 PR，我会尽可能地进行解决!
 
 ## License
 
