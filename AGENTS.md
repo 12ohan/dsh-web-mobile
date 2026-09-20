@@ -227,6 +227,8 @@ dsh web
 
 ## 维护入口
 
+- **GitHub Release 文案规格（用户要求，2026-09-20）**：Release notes 照 v2.4.1/v2.3.0 文章体例，不许直接贴 README 段落——`## vX.Y.Z · 一句话摘要` 开头 + 导语段（本版是什么、桌面 no-op 承诺、旧宿主回退建议）+ `### 安装`（DSHA 一句 + npm 代码块 + GitHub 直装行 + 旧名迁移提示）+ `### 新功能` / `### 修复`（`**症状**：根因 + 修法` 句式）+ `### 兼容`（宿主代际范围 + 已实装验证的第三方版本号）+ `### 完整提交`（提交少时逐条 short-hash；大版本列里程碑提交，收尾必带 `compare/vA...vB` 完整变更对比链接）。
+
 - 回归探针：`scripts/probes/`（20 个回归锚点，node:builtin-only，可单跑；主探针 `pnpm smoke:cdp` 与手势门 `cdp-swipe-failures.mjs` 见 Commands）。
 - CSS 表面审查（发现清单 + 施工任务 + 再审查协议 + 完整修复链）：`docs/audits/2026-09-15-css-surface-audit.md`；结构检测器 `node scripts/css-structure-check.mjs`（基线 0 fatal / 2 info，2026-09-16 实测）——**已接入 `test:core`**（`tests/css-structure.test.ts`，2026-09-16），所以缩进错位/重复媒体查询/选择器拆分回归会红。
 - 设计 spec：`docs/specs/`（权威设计文档随仓库走）；`.local-tests/` 探针原稿、`docs/superpowers/` 与 `docs/debug/settings-market-debug-map.md` 仍是本地不入库。
