@@ -36,3 +36,46 @@ test('varyWithAcceptEncoding appends without clobbering, preserving key casing',
   assert.equal(mixed.Vary, 'Origin, Accept-Encoding')
   assert.equal(mixed.vary, undefined)
 })
+
+test('patched end() replays neither the encoding argument nor callback source (issue #78)', async () => {
+  // Raw-socket assertions: fetch/undici tolerate a few trailing bytes, so
+  // read the declared length against the actual framed body directly.
+  const { installResponseCompression } = await import('../src/compress.ts')
+  const http = await import('node:http')
+  const { gunzipSync } = await import('node:zlib')
+  const restore = installResponseCompression()
+  const payload = JSON.stringify({ data: 'x'.repeat(8 * 1024) })
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    if (req.url === '/two-arg') {
+      res.end(payload, 'utf8')
+    } else {
+      res.write(payload)
+      res.end(function done() {})
+    }
+  })
+  try {
+    await new Promise<void>((resolveListen) => server.listen(0, resolveListen))
+    const port = (server.address() as { port: number }).port
+    const read = (path: string) => new Promise<{ status: number; headers: Record<string, string | string[]>, body: Buffer }>((resolve, reject) => {
+      http.get({ host: '127.0.0.1', port, path, headers: { 'accept-encoding': 'gzip' } }, (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks) }))
+      }).on('error', reject)
+    })
+    // end(data, 'utf8'): nothing but the compressed payload may be written.
+    const twoArg = await read('/two-arg')
+    assert.equal(twoArg.headers['content-encoding'], 'gzip')
+    assert.equal(twoArg.body.byteLength, Number(twoArg.headers['content-length']), 'body bytes must equal the declared content-length')
+    assert.equal(gunzipSync(twoArg.body).toString(), payload, 'the payload round-trips without the encoding string appended')
+    // end(callback): the callback must not leak as body data.
+    const withCb = await read('/with-callback')
+    assert.equal(withCb.headers['content-encoding'], 'gzip')
+    assert.equal(withCb.body.byteLength, Number(withCb.headers['content-length']))
+    assert.equal(gunzipSync(withCb.body).toString(), payload, 'callback source text must never reach the body')
+  } finally {
+    server.close()
+    restore()
+  }
+})
