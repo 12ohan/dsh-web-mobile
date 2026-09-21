@@ -1856,5 +1856,63 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
       animation: none !important;
     }
   }
+
+  /* ---------- DSHA 集成层：预设 chip 布局（宿主 @deepseek-ai/dsh-client-ui-agent-preset
+     的 DSHA 补丁标记 .dsha-preset-header-anchor / [data-dsha-agent-preset]）。
+     按 CSS 宽分两档，自动切换：
+     ① 结构修正：图标与下拉箭头都是 position:absolute; left:0，会双双叠在
+        「标准模式」文字上。这是宿主 DOM 决定的 bug，**任何手机档都要修** ——
+        否则换到 768–1023 的平板/折叠屏就复现同一处叠字。
+     ② 按 360px 实测钉出来的调优值（left 归零、团队 chip 在场时预设名 4 字上限）：
+        只在「真·手机」档（CSS 宽 ≤ 767px，对齐上游 768px 平板档边界）生效；
+        768–1023 保留上游手机 UI 的排布，不套这台手机的魔数。
+     非 DSHA 宿主上没有这些标记，整块天然不命中（死规则）。 ---------- */
+  [data-mobile-nav="frame"] [data-phase] header .dsha-preset-header-anchor {
+    order: 1;
+    width: max-content;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: min(40vw, 130px);
+    margin-left: auto;
+  }
+  [data-mobile-nav="frame"] [data-phase] header .dsha-preset-header-anchor [data-dsha-agent-preset="header"] {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    max-width: 100%;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 6px;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+  }
+  [data-mobile-nav="frame"] [data-phase] header .dsha-preset-header-anchor [data-dsha-agent-preset="header"] > svg {
+    position: static !important;
+    transform: none !important;
+    flex: 0 0 auto;
+  }
+  [data-mobile-nav="frame"] [data-phase] header .dsha-preset-header-anchor [data-dsha-agent-preset="header"] > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* ② 真·手机档（CSS 宽 ≤ 767px）才生效的调优值。 */
+  @media (max-width: 767px) and (pointer: coarse) {
+    [data-mobile-nav="frame"] [data-phase] header .dsha-preset-header-anchor {
+      /* 宿主 cubgiG_menuAnchor 带 left:-8px（原本是给弹层对位用的），
+         手机上和标题窗口右缘叠 2px；这里把它拉回 0，整体右移 8px。 */
+      left: 0 !important;
+    }
+    /* 智能体团队 Web 开启后头部多一个 Agent Team chip；预设名超过 4 个字就会
+       把它挤掉（实测 6 个字时 Agent Team 被裁成「Agent Te」并压住文件按钮）。
+       此时把预设名收成 4 个字 + 省略号 —— 完整名字在预设菜单里点开即达。 */
+    [data-mobile-nav="frame"] [data-phase] header:has([data-team-action]) .dsha-preset-header-anchor [data-dsha-agent-preset="header"] > span {
+      max-width: 4em;
+    }
+  }
 }
 `

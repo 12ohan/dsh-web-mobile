@@ -467,6 +467,12 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       const drawer = drawerRoot()
       if (drawer === null || !drawer.contains(target)) return false
       if (target.closest('[class*="sessionRow"] button') !== null) return false
+      // DSHA_SESSION_INTERACTION_V1：宿主把「单击=选中、双击=打开」拆成了两步
+      // （data-dsha-session-select 标记 + dsha-session-open 事件）。上游的
+      // 「点行即关抽屉」会在第一次单击就把抽屉收掉，双击永远到不了。
+      // 这些行改由 dsha-session-open 事件关闭（见下方 document 监听）。
+      // 非 DSHA 宿主没有这个标记，这一条天然不命中。
+      if (target.closest('[data-dsha-session-select]') !== null) return false
       return target.closest(TAP_CLOSE_NAV_SELECTOR) !== null
     }
     // Touch path for session/search rows: never close the drawer from pointer
@@ -757,6 +763,12 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       // the tap's click, and the target's onClick would never run.
     }
 
+    // DSHA 宿主在「真正打开会话」时才派发 dsha-session-open（单击只选中），
+    // 所以抽屉的关闭挂在这个事实上，而不是挂在点击上。
+    const onDshaSessionOpen = (): void => {
+      if (drawerOpen()) toggleSidebar()
+    }
+    document.addEventListener('dsha-session-open', onDshaSessionOpen)
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('click', onDrawerClick, true)
     document.addEventListener('pointerdown', onDrawerPointerDown, true)
@@ -769,6 +781,7 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       disarmCloseOnNav()
       touchDownAt = null
       clearPress()
+      document.removeEventListener('dsha-session-open', onDshaSessionOpen)
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('click', onDrawerClick, true)
       document.removeEventListener('pointerdown', onDrawerPointerDown, true)
