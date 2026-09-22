@@ -38,7 +38,7 @@
   │  ├─ cdp-swipe-probe/failures · cdp-zoom-probe · cdp-compat-contracts (.mjs)
   │  ├─ css-structure-check.mjs ← CSS 结构检测器（已接入 test:core）
   │  └─ probes/              ← 20 个回归锚点（builtin-only，可单跑）
-  ├─ tests/                  ← 22 个 .test.ts（node --test，type-stripping 直跑）
+  ├─ tests/                  ← 23 个 .test.ts（node --test，type-stripping 直跑）
   ├─ docs/
   │  ├─ specs/               ← 8 篇权威设计文档（入库）
   │  ├─ audits/ · maintenance/pitfalls.md · upstream/（runbook + compat-contracts.json + host-jank-feedback.md）· fork-wzxmt-zhc/
@@ -140,7 +140,7 @@ dsh web
 
 ## Pitfalls
 
-- **52 个坑的索引：名字 = 触发词 = 锚点**。每条原文在 `docs/maintenance/pitfalls.md` 末尾「2026-09-18 迁入原文」节，锚点 `### <名字>`，顺序与下面一一对应。**动手改某块代码前，先按名字读对应条目**——里面是踩过的坑、最硬铁律、实测数据、探针断言与被否决方案；不看就改等于重踩。
+- **53 个坑的索引：名字 = 触发词 = 锚点**。每条原文在 `docs/maintenance/pitfalls.md` 末尾「2026-09-18 迁入原文」节，锚点 `### <名字>`，顺序与下面一一对应。**动手改某块代码前，先按名字读对应条目**——里面是踩过的坑、最硬铁律、实测数据、探针断言与被否决方案；不看就改等于重踩。
 - 本文件只放名字，正文一律进 `docs/`（见 Maintenance「体积门槛」）：新增坑位 = 名字加进下面清单 + 原文写进该档并补 `### 同名` 锚点。
 
 - `手势层`
@@ -195,11 +195,12 @@ dsh web
 - `dialog footer 按钮`
 - `composer 文件入口`
 - `代际门控`
+- `谓词复用与豁免`
 
 ## Testing & QA
 
 - **设置/插件市场调试地图**：`docs/debug/settings-market-debug-map.md` —— 设置区与市场 UI 的 DOM 层级图、入口链路、CSS module 哈希对照表（VOzbGW_/eGUBIq_/hHd-Xa_…）、compat 干预点索引与 CDP 取证 SOP。排查该区域布局/弹层问题先读它，不要重新摸索层级。（此文档仅本地保留，已加入 .gitignore 不随仓库上传。）
-- Automated gates: `pnpm verify` (typecheck) and `pnpm test:core`（22 个测试文件，glob 覆盖 `tests/` 全部）. `pnpm build` additionally exercises the custom client bundler. Use `git diff --check` for whitespace hygiene.
+- Automated gates: `pnpm verify` (typecheck) and `pnpm test:core`（23 个测试文件，glob 覆盖 `tests/` 全部）. `pnpm build` additionally exercises the custom client bundler. Use `git diff --check` for whitespace hygiene.
 - There is no linter, formatter, or coverage setup; the CI workflow (`.github/workflows/ci.yml`) additionally runs the lib freshness gate `git diff --exit-code lib`.
 - After source/layout changes, install the linked plugin in a real DSH Web profile, restart `dsh web`, and check both sides of the breakpoint:
   - **Narrow phone (~390px):** rail hidden; drawer/FAB/backdrop open and close; Escape; session-row action menus do not close the drawer; settings remains usable; Files opens explorer/preview sheets; session-log/footer actions work; preview fullscreen opens and resets.
@@ -209,6 +210,7 @@ dsh web
 - **真机读数通道（2026-09-14）**：`?mobile-nav-debug=1` 除了页面徽章，还会把同一份读数 POST 到本机监听器（默认 `http://127.0.0.1:3199/diag`，`?beacon=<url>` 可覆盖）——「看不到设备屏幕」时用它取证：本机起一个把 body 追加到 `~/tmp/mobile-nav-diag.jsonl` 的小服务即可，页面侧无需人工念数字/截图（截图也读不了，模型无图像输入）。payload 含 `build` 标记、`framePad`（= 解析后的 `env(safe-area-inset-top)`，headless 恒 0）、`rightPanel` 形态/padding/rect、`toggle`/`files`/`header`/`titleCluster` 的 rect、UA 与 visualViewport。no-cors + 文本 body 是简单请求（无预检），没有监听器时静默失败。
 - Playwright 验证 DSH Web 移动端布局必须用**全新 browser context**，并通过 `addInitScript` 写入 `localStorage['dsh.sessions.current'] = JSON.stringify({sessionId})`；复用长活 context 会出现「fence-only」假象（见 Pitfalls「bundle 校验」）。点 backdrop 关抽屉时默认点元素中心会被抽屉盖住，改用 `page.mouse.click(x, y)` 点抽屉右侧露出区域。
 - 不要用 Playwright route 拦截插件 `client.js` 并 fulfill 空 body 做 A/B 实验：空响应被缓存后 boot 会报「loaded without registering」并挂起。A/B 用 `git show <commit>:lib/client.js > lib/client.js` 换文件。
+- **认证 token 向用户索要（用户要求，2026-09-21）**：需要认证访问本机 dsh web（浏览器审查、HTTP 取证）时，**先向用户要 token**（重启输出的 `?token=…` URL 即可用），**不要自行跑 `.local-tests/mint-cookie.mjs` 铸 cookie**——mjs 路径依赖签名文件与路径正确，容易卡死；仅在用户明说可用时才作后备。
 - **设备仿真验证优先用 Playwright MCP（本机已装），脚本化回归走原生 CDP**：MCP 自带 Chromium 能起真浏览器打 `127.0.0.1` 的 DSH Web，`browser_run_code_unsafe` 里 `browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })` + 复制 cookie + `addInitScript` 写 `localStorage['dsh.sessions.current']` 就是一台手机；**被桌面布局隐藏的元素必须用 `document.querySelector(sel).click()`，`page.click()` 的可见性检查必失败**；`~/tmp/pw-dsh-tmp` 需先存在，且无 `setSafeAreaInsets`。`playwright-core` 在 android 抛 `Unsupported platform`，所以仓库内脚本一律原生 CDP（`scripts/cdp-probe.mjs` 的 `createCdpClient`）。完整步骤/坑 → `docs/maintenance/pitfalls.md` §探针运行环境。
 - **Termux 上 headless chromium 必须给可写的 `TMPDIR` 与 `XDG_RUNTIME_DIR`**（指到 `~/tmp` 下自建目录），否则 ProcessSingleton 建 socket 失败、CDP 端口永不上线；探针的 `DSH_PROBE_CHROME` 可用 `chromium-browser`（2026-09-18 契约探针整跑实测），异常时直指真实 ELF；临时脚本/截图放 `~/tmp/` 用完清理。完整命令与 cookie TTL → `docs/maintenance/pitfalls.md` §探针运行环境。
 - Validate compatible third-party versions when exercising integrations（2026-09-19 修正）：**判据是 `~/.dsh/profiles/web/cordis.patch.yml` 的行启用状态，不是 node_modules 里装没装**——2026-09-19 实测 25+ 行全部 `disabled: true`（market/usage-stats/genui/task-board/pet/ssh/skin-center…），唯一启用的 web-all 行是 git-graph；包在树里 ≠ DOM 在场。当前实装：`dsh-web-mobile`、`@dsh-external/seshat`、`@linxin666/dsh-web-all`（仅 git-graph 行）。@omdsh-dev/dsh-genui 与 @changfenhuang/dsh-genui 包逐字节相同（迁移副车）。行状态变更后先重跑 `docs/debug/settings-market-debug-map.md` §5。
