@@ -26,9 +26,10 @@ CSS module 哈希是包版本的函数；下列前缀是本插件选择器/探�
 
 本表已有机读版与自动对账探针（2026-09-18 复跑：`total=26 hit=17 skip=4 miss=5 green=no`，exit 1）：
 
-- 数据：`docs/upstream/compat-contracts.json`（26 条，其中 11 条 `lazy`＝状态门控/懒加载条目）
+- 数据：`docs/upstream/compat-contracts.json`（28 条，其中 11 条 `lazy`＝状态门控/懒加载条目）
 - 执行：`node scripts/cdp-compat-contracts.mjs`（无需 `DSH_PROBE_SESSION_ID`，非 lazy 的 MISS 才 exit 1；SKIP/MISS 条目按其 `state` 提示手动复扫）
 **2026-09-18 现状：`total=26 hit=20 skip=6 miss=0 green=yes`（exit 0）。**
+**2026-09-23：0.1.7-alpha.2 静态对账见 `2026-09-23-dsh-0.1.7-alpha.2-compat-audit.md`** —— 28 条里 16 条两版逐字一致、8 条状态/运行时门控、3 条属第三方 dsh-web-all、1 条死哈希已改结构化 marker；**插件代码 0 处需要改**。
 
 - **首批 5 条 MISS 的真因是上游改名（针已死），不是「该场景没渲染」**——全盘普查（`grep -rlF` 扫全局 dsh 与 profile 的 node_modules）：`qDHVXG_` / `gdEzaW_` / `_dialog_15u5s_22` / `bpnj3G_` / `jmhvDG_` **各 0 命中**；替代物已定位并回填：`wSkVaW_headerActions`（conversation）、`Sixlwa_bubble`（气泡已迁 `dsh-client-ui-chat`；goal 气泡 `oRe1gG_` 属 `dsh-client-ui-goal`）、`_dialog_w1urq_22`（web-frontend）。
 - `group-card-1/3/5` 虽然 HIT，但**命中来自 dsh-web-all 的样式表选择器，不代表有元素渲染**（见下条）——这三条只是「样式表还在」的证据。

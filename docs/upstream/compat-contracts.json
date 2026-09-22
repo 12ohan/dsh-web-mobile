@@ -119,12 +119,13 @@
       "note": "多 token class 子串匹配实证样例"
     },
     {
-      "id": "session-log-dialog",
-      "kind": "hash",
-      "needle": "_dialog_w1urq_22",
+      "id": "host-modal-portal-root",
+      "kind": "marker",
+      "needle": "body > div:has(> [role=\"dialog\"][aria-modal=\"true\"])",
       "owner": "dsh-web-frontend",
-      "lazy": false,
-      "note": "CDP 假阴性防护（substring 扫描）；旧 _dialog_15u5s_22 已改名（0 命中），后缀 _22 是模块序号"
+      "lazy": true,
+      "state": "打开任意宿主模态（如工作区重命名）后复扫",
+      "note": "本插件只按结构化锚点提升 z-index（body > div:has(> [role=dialog][aria-modal])），旧哈希 _dialog_w1urq_22/_root_w1urq_2 在 0.1.7-alpha.1 与 alpha.2 上均已消失（2026-09-23 静态对账）⇒ 由死哈希改成结构化 marker"
     },
     {
       "id": "official-plugins-card",
