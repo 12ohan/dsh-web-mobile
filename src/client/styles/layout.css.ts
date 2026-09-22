@@ -881,45 +881,53 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      it sat flush against the bezel (measured: tablist x=0, first tab 0..30
      while the title starts at 40). Give it the same left inset as the toggle so
      the two rows read as one column. */
-  [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_tabs"] {
-    padding-left: 8px !important;
-    /* 2026-09-23 店主："标题和下面『对话』中间的空白有点多"。
-       宿主给这条页签条 margin-top:10px，页签按钮自己还带 padding-bottom:9px
-       （给选中下划线留位），两行文字之间就空出一条。收紧：
-       margin 归零（真机 4 → 0）+ 下划线贴到 5px（页签条 36 → 31px）。
-       ⚠ 选择器必须用**后代**：页签条外面套了一层 display:contents 的 div
-       （真机链：div.wSkVaW_tabs < div[0..0] < header.wSkVaW_header），
-       所以原来的「header > [class*="wSkVaW_tabs"]」是条死规则 —— padding-left
-       从来没生效过（现按后代写，值仍是实测的 8px，视觉不变）。 */
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-  }
-  [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_tabs"] [class*="wSkVaW_tab"] {
-    padding-bottom: 5px !important;
-  }
-  /* 真机诊断：页签条的 margin-top 计算值是 4px，但把 document.styleSheets 里
-     所有能读的规则拿来和它 matches()，命中的 margin/padding 规则是 **0 条**
-     —— 说明这 4px 来自一张读不到 cssRules 的表（跨源，App 自己注入的样式表），
-     普通 !important 平级打不过它。所以这里加码：前缀 html + 钉住 header.wSkVaW_header，
-     特异性抬到 (0,5,1)，实测能压过（页签条 4 → 0）。 */
-  html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_tabs"] {
-    margin-top: -4px !important;
-  }
-  /* 真机读数：头部的 grid-template-rows 被钉成固定的 40px 36px（宿主自己没写行高，
-     是 DSHA 那张表给的），于是标题行、页签行都各留一截死空间。改成 auto：两行各自
-     贴住内容，标题行按 36px 的预设 chip 走、页签行由页签按钮撑开。 */
-  /* 标题行实测 40px 高，而里面最高的东西是 36px 的预设 chip（"标准模式"）——
-     多出来的 4px 是死空间。让行高回到内容高度（用 auto + min-height:0，
-     不写死 36：将来标题簇里出现更高的东西（子代理谱系等）也不会被裁）。 */
-  html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_titleRow"] {
-    height: auto !important;
-    min-height: 0 !important;
-  }
-  /* 页签按钮文字上方还有 6px 空白（按钮被容器撑到 32px 高、文字居中）：去掉上内边距，
-     下内边距 5px 已在上面钉住（下划线位置不变）。 */
-  html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_tab"] {
-    padding-top: 0 !important;
-    align-self: flex-end !important;
+  /* ---------- 手机档专属：头部留白收紧（≤767px + coarse）----------
+     数值是照 360×754 真机量的（页签条 margin-top -4 / 页签下划线 5px /
+     页签按钮去上内边距、靠底对齐 / 标题行回到内容高度）。**只对真·手机档生效**：
+     768–1023 的平板档保持上游手机 UI 的排布，不套这台手机的魔数
+     （仓库既有惯例，见文件末尾的 DSHA 预设块）。
+     真机读数（修前 → 修后）：头部 77 → 67px、标题↔页签文字间距 22 → 15px。 */
+  @media (max-width: 767px) and (pointer: coarse) {
+    [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_tabs"] {
+      padding-left: 8px !important;
+      /* 2026-09-23 店主："标题和下面『对话』中间的空白有点多"。
+         宿主给这条页签条 margin-top:10px，页签按钮自己还带 padding-bottom:9px
+         （给选中下划线留位），两行文字之间就空出一条。收紧：
+         margin 归零（真机 4 → 0）+ 下划线贴到 5px（页签条 36 → 31px）。
+         ⚠ 选择器必须用**后代**：页签条外面套了一层 display:contents 的 div
+         （真机链：div.wSkVaW_tabs < div[0..0] < header.wSkVaW_header），
+         所以原来的「header > [class*="wSkVaW_tabs"]」是条死规则 —— padding-left
+         从来没生效过（现按后代写，值仍是实测的 8px，视觉不变）。 */
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+    }
+    [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_tabs"] [class*="wSkVaW_tab"] {
+      padding-bottom: 5px !important;
+    }
+    /* 真机诊断：页签条的 margin-top 计算值是 4px，但把 document.styleSheets 里
+       所有能读的规则拿来和它 matches()，命中的 margin/padding 规则是 **0 条**
+       —— 说明这 4px 来自一张读不到 cssRules 的表（跨源，App 自己注入的样式表），
+       普通 !important 平级打不过它。所以这里加码：前缀 html + 钉住 header.wSkVaW_header，
+       特异性抬到 (0,5,1)，实测能压过（页签条 4 → 0）。 */
+    html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_tabs"] {
+      margin-top: -4px !important;
+    }
+    /* 真机读数：头部的 grid-template-rows 被钉成固定的 40px 36px（宿主自己没写行高，
+       是 DSHA 那张表给的），于是标题行、页签行都各留一截死空间。改成 auto：两行各自
+       贴住内容，标题行按 36px 的预设 chip 走、页签行由页签按钮撑开。 */
+    /* 标题行实测 40px 高，而里面最高的东西是 36px 的预设 chip（"标准模式"）——
+       多出来的 4px 是死空间。让行高回到内容高度（用 auto + min-height:0，
+       不写死 36：将来标题簇里出现更高的东西（子代理谱系等）也不会被裁）。 */
+    html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_titleRow"] {
+      height: auto !important;
+      min-height: 0 !important;
+    }
+    /* 页签按钮文字上方还有 6px 空白（按钮被容器撑到 32px 高、文字居中）：去掉上内边距，
+       下内边距 5px 已在上面钉住（下划线位置不变）。 */
+    html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_tab"] {
+      padding-top: 0 !important;
+      align-self: flex-end !important;
+    }
   }
   /* NOTHING extra here on purpose. The header's own padding is already forced
      to 0 above, and the title row carries padding-left:40px of its own, so the
@@ -1177,10 +1185,20 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
        y=20 = 圆形按钮中心），压标题行会把文字顶得比按钮高（2026-09-14 已踩过）。
        页签按钮的 32px 地板同理下到 26px（文字 16px + 下划线留 5px），
        页签条的下沿随之从 76 收到 66。 */
-    grid-template-rows: minmax(36px, auto) minmax(26px, auto) !important;
+    grid-template-rows: minmax(36px, auto) minmax(32px, auto) !important;
   }
   [data-mobile-nav="frame"] [data-phase] header [role="tab"] {
-    min-height: 26px !important;
+    min-height: 32px !important;
+  }
+  /* 手机档专属（≤767px + coarse）：页签行地板 32 → 26（下划线收到 5px 后仍够点）。
+     平板档保留 32px 的既有值，不跟手机一起压。 */
+  @media (max-width: 767px) and (pointer: coarse) {
+    [data-mobile-nav="frame"] [data-phase] header:has(> *) {
+      grid-template-rows: minmax(36px, auto) minmax(26px, auto) !important;
+    }
+    [data-mobile-nav="frame"] [data-phase] header [role="tab"] {
+      min-height: 26px !important;
+    }
   }
   /* The title cluster reserves its last 44px for that empty utilities seat.
      The lane's right edge must stay clear of the Files opener's HIT BOX,

@@ -1,4 +1,4 @@
-import type { IconDownloadOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ReactElement } from 'react'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**
@@ -12,22 +12,25 @@ import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
  * React 渲染时直接抛「Element type is invalid」（0.1.7 真机上回形针/下载/文件夹/侧栏四个图标
  * 就是这么坏掉的）。
  *
- * 所以这里按「运行时哪个存在用哪个」取名，并且**只用类型导入**引旧名：
- * 类型层面 CI 一定过（锁文件里有 `…16`），运行时层面两代都能拿到真组件。
- * 两代都没有时返回一个空组件，宁可少画一个图标，也不让整个组件树炸掉。
+ * 所以这里按「运行时哪个存在用哪个」取名。宿主下次改命名，只需往候选数组里补一个名字。
  *
- * 宿主再改命名时，只需在这里补一个新名字进数组。
+ * 两点刻意的设计：
+ * 1. 图标组件的类型**本地定义**（`HostIcon`），不引宿主导出的类型面 —— 不同代的
+ *    primitives 类型面不同，而且能不能解析到取决于环境（CI 能、探针环境不能），
+ *    引用它会让生成的 `.d.ts` 不稳定（实测：本机退化成 `any`、CI 是真类型，
+ *    直接顶掉 `lib is fresh` 这道闸）。
+ * 2. 两代都没有时返回空组件，宁可少画一个图标，也不让整个组件树炸掉。
  */
 
-/** 图标组件类型（取锁文件里一定存在的旧名作为形状来源）。 */
-type IconComponent = typeof IconDownloadOutline16
+/** 宿主图标组件的形状（各代 props 一致：size / className）。 */
+export type HostIcon = (props: { size?: number; className?: string }) => ReactElement | null
 
 /** 命名缺失时的兜底：渲染成空，绝不抛错。 */
-const missingIcon = (() => null) as unknown as IconComponent
+const missingIcon: HostIcon = () => null
 
 /** 按候选名字顺序在宿主模块里寻找图标组件。 */
-const pickIcon = (names: readonly string[]): IconComponent => {
-  const table = primitives as unknown as Record<string, IconComponent | undefined>
+const pickIcon = (names: readonly string[]): HostIcon => {
+  const table = primitives as unknown as Record<string, HostIcon | undefined>
   for (const name of names) {
     const found = table[name]
     if (found !== undefined) return found
@@ -35,14 +38,14 @@ const pickIcon = (names: readonly string[]): IconComponent => {
   return missingIcon
 }
 
-/** ⌄ 输入区文件入口（回形针）。 */
-export const IconPaperclip = pickIcon(['IconPaperclipOutlineRegular', 'IconPaperclipOutline16'])
+/** 输入区文件入口（回形针）。 */
+export const IconPaperclip: HostIcon = pickIcon(['IconPaperclipOutlineRegular', 'IconPaperclipOutline16'])
 
 /** 抽屉页脚的会话日志导出。 */
-export const IconDownload = pickIcon(['IconDownloadOutlineRegular', 'IconDownloadOutline16'])
+export const IconDownload: HostIcon = pickIcon(['IconDownloadOutlineRegular', 'IconDownloadOutline16'])
 
 /** 会话头部的目录抽屉开关。 */
-export const IconPanelLeft = pickIcon(['IconPanelLeftOutlineRegular', 'IconPanelLeftOutline16'])
+export const IconPanelLeft: HostIcon = pickIcon(['IconPanelLeftOutlineRegular', 'IconPanelLeftOutline16'])
 
 /** 会话头部的 Files/右侧栏入口。 */
-export const IconFolderOpen = pickIcon(['IconFolderOpenOutlineRegular', 'IconFolderOpenOutline16'])
+export const IconFolderOpen: HostIcon = pickIcon(['IconFolderOpenOutlineRegular', 'IconFolderOpenOutline16'])
