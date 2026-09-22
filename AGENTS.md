@@ -22,7 +22,7 @@
   │     ├─ index.tsx         ← 浏览器半区入口（3 slots）
   │     ├─ debug.ts          ← ?mobile-nav-debug=1 诊断徽章
   │     ├─ components/       ← MobileNavToggle / MobileDrawerFooter / ComposerFileButton / open-files-panel.ts
-  │     ├─ core/             ← reconciler-core.ts（零 import）+ raf-scheduler.ts · css-rules.ts · sessions-compat.ts · layout-compat.ts
+  │     ├─ core/             ← reconciler-core.ts（零 import）+ raf-scheduler.ts · css-rules.ts · sessions-compat.ts · layout-compat.ts · icon-compat.ts（宿主图标跨代命名兼容）
   │     ├─ effects/          ← 16 个效果模块：phone-chrome · sidebar-swipe ·
   │     │                       gesture-guard · subagent-chip-touch · composer-keyboard-guard ·
   │     │                       composer-plus-toggle ·

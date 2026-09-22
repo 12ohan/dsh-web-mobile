@@ -1,5 +1,5 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconFolderOpenOutlineRegular, IconPanelLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconFolderOpen, IconPanelLeft } from '../core/icon-compat.ts'
 import { NS } from '../i18n/locales.ts'
 import { openFilesPanel } from './open-files-panel.ts'
 
@@ -32,7 +32,7 @@ export function MobileNavToggle({ toggleSidebar, t }: MobileNavToggleProps) {
         title={t('open')}
         onClick={() => toggleSidebar()}
       >
-        <IconPanelLeftOutlineRegular size={16} />
+        <IconPanelLeft size={16} />
       </button>
       <button
         type="button"
@@ -41,7 +41,7 @@ export function MobileNavToggle({ toggleSidebar, t }: MobileNavToggleProps) {
         title={t('files')}
         onClick={toggleExplorer}
       >
-        <IconFolderOpenOutlineRegular size={16} />
+        <IconFolderOpen size={16} />
       </button>
     </>
   )
