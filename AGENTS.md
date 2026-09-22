@@ -23,9 +23,9 @@
   │     ├─ debug.ts          ← ?mobile-nav-debug=1 诊断徽章
   │     ├─ components/       ← MobileNavToggle / MobileDrawerFooter / ComposerFileButton / open-files-panel.ts
   │     ├─ core/             ← reconciler-core.ts（零 import）+ raf-scheduler.ts · css-rules.ts · sessions-compat.ts · layout-compat.ts · icon-compat.ts（宿主图标跨代命名兼容）
-  │     ├─ effects/          ← 16 个效果模块：phone-chrome · sidebar-swipe ·
+  │     ├─ effects/          ← 17 个效果模块：phone-chrome · sidebar-swipe ·
   │     │                       gesture-guard · subagent-chip-touch · composer-keyboard-guard ·
-  │     │                       composer-plus-toggle ·
+  │     │                       composer-plus-toggle · model-menu-anchor ·
   │     │                       file-viewer-compat · aionui-compat · stats-line ·
   │     │                       git-chip-reparent · settings-toolbar-reparent · preview-fullscreen ·
   │     │                       overlay-backdrop-fab · panel-exit · session-menu · session-row-fiber
@@ -39,7 +39,7 @@
   │  ├─ cdp-swipe-probe/failures · cdp-zoom-probe · cdp-compat-contracts (.mjs)
   │  ├─ css-structure-check.mjs ← CSS 结构检测器（已接入 test:core）
   │  └─ probes/              ← 21 个回归锚点（builtin-only，可单跑）
-  ├─ tests/                  ← 24 个 .test.ts（node --test，type-stripping 直跑）
+  ├─ tests/                  ← 26 个 .test.ts（node --test，type-stripping 直跑）
   ├─ docs/
   │  ├─ specs/               ← 8 篇权威设计文档（入库）
   │  ├─ audits/ · maintenance/pitfalls.md · upstream/（runbook + compat-contracts.json + host-jank-feedback.md）· fork-wzxmt-zhc/

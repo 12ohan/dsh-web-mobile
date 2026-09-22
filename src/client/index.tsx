@@ -11,6 +11,7 @@ import { installSubagentChipTouch } from './effects/subagent-chip-touch.ts'
 import { installSessionMenuDelete } from './effects/session-menu.ts'
 import { installComposerKeyboardGuard } from './effects/composer-keyboard-guard.ts'
 import { installComposerPlusToggle } from './effects/composer-plus-toggle.ts'
+import { installModelMenuAnchor } from './effects/model-menu-anchor.ts'
 import { installAionuiCompat } from './effects/aionui-compat.ts'
 import { createPanelExit, installPanelRowExit } from './effects/panel-exit.ts'
 import { createRafScheduler } from './core/raf-scheduler.ts'
@@ -220,6 +221,9 @@ export function apply(ctx: ClientContext): void {
   // dismissed keyboard (upstream keepFocus focuses the editor on mousedown).
   installComposerKeyboardGuard(ctx)
   installComposerPlusToggle(ctx)
+  // Model/reasoning menu portals to <body>; the CSS centering rule died with the
+  // portal move, so re-anchor it on the trigger here (owner report: opens far left).
+  installModelMenuAnchor(ctx)
 
   installPhoneChrome(ctx)
 
