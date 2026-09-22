@@ -79,3 +79,66 @@ test('patched end() replays neither the encoding argument nor callback source (i
     restore()
   }
 })
+
+test('patched write() replays buffered callbacks fire-once, in order, after end (issue #80)', async () => {
+  const { installResponseCompression } = await import('../src/compress.ts')
+  const http = await import('node:http')
+  const restore = installResponseCompression()
+  const fired: string[] = []
+  const payload = JSON.stringify({ data: 'y'.repeat(8 * 1024) })
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.write(payload, function firstWrite() { fired.push('first') })
+    res.write(payload, function secondWrite() { fired.push('second') })
+    res.end(function endCallback() { fired.push('end') })
+  })
+  try {
+    await new Promise<void>((resolveListen) => server.listen(0, resolveListen))
+    const port = (server.address() as { port: number }).port
+    await new Promise<void>((resolve, reject) => {
+      http.get({ host: '127.0.0.1', port, headers: { 'accept-encoding': 'br' } }, (res) => {
+        res.resume()
+        res.on('end', () => resolve())
+      }).on('error', reject)
+    })
+    // Write callbacks replay right after the real end(); the end callback
+    // fires on Node's finish event — one bounded beat covers both.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    assert.deepEqual(fired, ['first', 'second', 'end'])
+  } finally {
+    server.close()
+    restore()
+  }
+})
+
+test('buffered strings honor the write()/end() encoding, e.g. latin1 (issue #80)', async () => {
+  const { installResponseCompression } = await import('../src/compress.ts')
+  const http = await import('node:http')
+  const { gunzipSync } = await import('node:zlib')
+  const restore = installResponseCompression()
+  // 'é' is 0xE9 in latin1 but 0xC3 0xA9 in utf8 — a >4KB run makes the
+  // silent re-encoding visible in the decompressed byte stream.
+  const latin1Chunk = 'é'.repeat(4 * 1024)
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.write(latin1Chunk, 'latin1')
+    res.end('é', 'latin1')
+  })
+  try {
+    await new Promise<void>((resolveListen) => server.listen(0, resolveListen))
+    const port = (server.address() as { port: number }).port
+    const out = await new Promise<{ headers: Record<string, string | string[]>, body: Buffer }>((resolve, reject) => {
+      http.get({ host: '127.0.0.1', port, headers: { 'accept-encoding': 'gzip' } }, (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve({ headers: res.headers, body: Buffer.concat(chunks) }))
+      }).on('error', reject)
+    })
+    assert.equal(out.headers['content-encoding'], 'gzip')
+    const expected = Buffer.concat([Buffer.from(latin1Chunk, 'latin1'), Buffer.from('é', 'latin1')])
+    assert.equal(gunzipSync(out.body).equals(expected), true, 'decompressed bytes must be latin1, not silently re-encoded utf8')
+  } finally {
+    server.close()
+    restore()
+  }
+})
