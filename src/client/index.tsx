@@ -10,6 +10,7 @@ import { installSidebarSwipe } from './effects/sidebar-swipe.ts'
 import { installSubagentChipTouch } from './effects/subagent-chip-touch.ts'
 import { installSessionMenuDelete } from './effects/session-menu.ts'
 import { installComposerKeyboardGuard } from './effects/composer-keyboard-guard.ts'
+import { installComposerPlusToggle } from './effects/composer-plus-toggle.ts'
 import { installAionuiCompat } from './effects/aionui-compat.ts'
 import { createPanelExit, installPanelRowExit } from './effects/panel-exit.ts'
 import { createRafScheduler } from './core/raf-scheduler.ts'
@@ -45,6 +46,15 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-web-mobile: dictionaries')
 
   ctx.effect(() => {
+    // 先清掉可能残留的同 id 样式表。
+    // 2026-09-23：app 的 P8 自愈会把 client.js 换回上游版、页面里也随之挂着
+    // **上游那份 CSS**；我们重新部署产物后，只 append 不清旧的话，页面里那份旧表
+    // 仍然压在上面（实测：开关/权限图标/头部留白改完"看着没生效"）。
+    // 本插件是原地热重载（不整页刷新），所以这一步必须自己保证"页面里的样式表
+    // 就是当前产物里的这一份"。
+    for (const stale of document.querySelectorAll('style[data-plugin-css="dsh-web-mobile/mobile.css"]')) {
+      stale.remove()
+    }
     const tag = document.createElement('style')
     tag.dataset.plugin = 'dsh-web-mobile'
     tag.dataset.pluginCss = 'dsh-web-mobile/mobile.css'
@@ -209,6 +219,7 @@ export function apply(ctx: ClientContext): void {
   // iOS: tapping the composer's send/stop/+ buttons must not re-raise the
   // dismissed keyboard (upstream keepFocus focuses the editor on mousedown).
   installComposerKeyboardGuard(ctx)
+  installComposerPlusToggle(ctx)
 
   installPhoneChrome(ctx)
 

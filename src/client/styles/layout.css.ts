@@ -229,8 +229,18 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   html [data-mobile-nav="frame"][data-sidebar-collapsed] [data-pane="sidebar"] [data-dsh-responsive-part="sidebar-toggle"],
   html [data-mobile-nav="frame"] [data-dsh-responsive-part="sidebar-toggle"],
   html [data-mobile-nav="frame"] [class*="hHd-Xa_toggle"]:is([aria-label*="sidebar" i], [aria-label*="侧边栏"]),
-  html [data-mobile-nav="frame"] button[aria-label*="sidebar" i],
-  html [data-mobile-nav="frame"] button[aria-label*="侧边栏"] {
+  /* The label-only fallbacks MUST stay scoped to the seats the host's own
+     drawer handle can live in. Unscoped they match by aria-label substring,
+     and the session row's ⋯ carries 会话“<title>”的操作 — so any session
+     whose title contains 侧边栏 (or "sidebar") lost its ⋯ menu entirely
+     (2026-09-22 phone repro: title 侧边栏不见了 → rowActions button
+     display:none, row height unchanged, time shifted right by the 16px the
+     button would have taken). Anchor them to the frame's leading seat and to
+     the header's leading cell instead. */
+  html [data-mobile-nav="frame"] [data-conversation-header-leading] button[aria-label*="sidebar" i],
+  html [data-mobile-nav="frame"] [data-conversation-header-leading] button[aria-label*="侧边栏"],
+  html [data-mobile-nav="frame"] [data-shell-leading] button[aria-label*="sidebar" i],
+  html [data-mobile-nav="frame"] [data-shell-leading] button[aria-label*="侧边栏"] {
     display: none !important;
   }
 
@@ -416,7 +426,10 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     container-type: inline-size;
     container-name: dsh-mobile-composer;
     flex-wrap: nowrap;
-    gap: 6px;
+    /* 2026-09-23 店主："每个功能键隔的空间太多"。真机实测间距主要不是 gap（6px）
+       而是各控件自己的内边距；这里 gap 收到 3px，配合下面模型 chip 的 padding
+       收紧，把右簇焊成一团。 */
+    gap: 3px;
     padding-left: 6px;
     padding-right: 6px;
     /* The dropdown menu is absolutely positioned inside this row; any
@@ -438,7 +451,10 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > :first-child {
     flex: 0 1 auto;
     min-width: 0;
-    gap: 6px;
+    /* 2026-09-23 店主第三轮："左边那三个功能区挨得太近了，隔开一点点"。
+       权限控件收窄 16px 后，📎 跟着整体左移、贴到了 ⌄ 上（实测墨迹间距只剩 ~3px）。
+       工具道 gap 单列放宽到 8px（右簇仍 3px，保持焊在一起）。 */
+    gap: 8px;
     /* The permission dropdown (Menu, side: top) pops upward from inside the
        tools lane; overflow hidden here would crop it, same as the row. Text
        ellipsis is handled by the trigger label itself. */
@@ -447,7 +463,7 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"] {
     flex: 1 1 auto;
     min-width: 0;
-    gap: 6px;
+    gap: 3px;
     /* Must not clip the model dropdown; the model trigger clips its own label. */
     overflow: visible;
   }
@@ -465,7 +481,8 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     flex: 0 1 auto;
     min-width: 0;
     max-width: none;
-    gap: 4px;
+    /* 2026-09-23 店主："左边那个权限的也缩一点点"：容器 gap 4→0。 */
+    gap: 0;
     /* The permission Menu list (side: top) pops upward out of this lane;
        overflow hidden crops it. The trigger label clips its own text. */
     overflow: visible;
@@ -476,6 +493,10 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     max-width: 100%;
     display: flex !important;
     overflow: hidden;
+    /* 权限 trigger 自带内边距 + flex gap（图标与 ⌄ 之间），图标化后都是浪费：
+       2026-09-23 按店主"缩一点点"归零（真机 44px 盒 → ~34px）。 */
+    padding: 0 !important;
+    gap: 0 !important;
   }
   [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_tools"] > [class*="_modes"] > [class*="_trigger"] > [class*="_triggerLabel"] {
     flex: 1 1 auto;
@@ -505,6 +526,26 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
       display: none !important;
     }
   }
+  /* 权限触发器（宿主 dsh-client-ui-permission-presets，样式哈希 iWlSmW_）自身带
+     padding:0 4px 0 8px + gap:4px —— 与模型 chip 同款浪费（左 8px 是给文字留的）。
+     2026-09-23 店主："左边那个权限的也缩一点点"。注意：它外面套了一层
+     display:contents 包装（真机探针：modes[55,44] > div[contents] > root[55,44]），
+     所以「_modes > _trigger」这类直接子代锚点命不中（上一版改了没反应），
+     必须用哈希后代锚点；哈希变了整条自动失效，不会误伤别家。 */
+  [data-mobile-nav="frame"] [data-phase] [class*="iWlSmW_trigger"] {
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+  /* 2026-09-23 店主："权限的图标有点小，稍微大一点点，不然左边轻右边重"。
+     宿主把图标包在 _triggerIcon 里、自己写死 14px（iWlSmW_triggerIcon svg
+     的 width/height 都是 14px），与 + / 📎 的 16px 不齐。只放大那个包装里的
+     svg：⌄ 箭头不在 _triggerIcon 内，不会被一起放大。盒子 28×28 不变（16 仍有余量）。
+     注意：本文件是模板字符串，注释里**不能出现反引号**（会劈开 CSS）。 */
+  [data-mobile-nav="frame"] [data-phase] [class*="iWlSmW_triggerIcon"] svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
   /* Model selector: flexible and shrinkable, but never clipped.
      The root must be overflow:visible so the dropdown menu can render.
      The trigger itself clips the label text. */
@@ -574,6 +615,28 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"] > [class*="_root"] {
     flex: none;
     min-width: 0;
+  }
+  /* --- 右簇贴右：2026-09-23 重新对锚（模型胶囊改"只留图标"后暴露的旧账）---
+     宿主把右簇（模型座位 standardControls / 麦克风 activity / 发送 primary）
+     放进可增长的 trailing 车道，靠"某个成员带 margin-left:auto"把整簇顶到右缘。
+     插件原来把吸收器挂在模型 root 上：
+       > [class*="_trailing"] [class*="_root"]:has(> [class*="_trigger"][aria-haspopup="menu"])
+     但 0.1.7 的祖先链变成了
+       trailing > standardControls(flex item) > div[display:contents] > _root > _trigger
+     于是 root 只是 standardControls **内部**的 flex item，auto 外边距落在一个
+     内容宽度的盒子里 ⇒ 等于失效。真机探针实测三者 ml 全 = 0px，就是铁证。
+     2026-09-23 之前胶囊很宽、把车道填满，看不出来；胶囊一收成图标，右簇立刻
+     塌到左边（发送 x≈316 → 224，右边空出 ~76px，店主一眼看出"位置被移了"）。
+     修法：把吸收器改锚到「车道的第一个 flex item」，并只在模型座位在场时生效
+     —— 那时宿主那条把 primary 的 auto 清零的规则也在生效，避免两个 auto 平分
+     空隙；模型不在场（子代理视图）照旧由 primary 自己的 auto 收尾。
+     justify-content: flex-end 是兜底：万一首个 child 是 display:none，auto
+     无处可挂时仍能贴右（此时无 auto 外边距，flex-end 才起作用）。 */
+  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"]:has([class*="_trigger"][aria-haspopup="menu"]) {
+    justify-content: flex-end;
+  }
+  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"]:has([class*="_trigger"][aria-haspopup="menu"]) > :first-child {
+    margin-left: auto;
   }
   /* ContextMeter (JObwrW_ hash family) hugging the primary key. This single
      value is the whole spacing knob, and because the trigger box is centred on
@@ -652,13 +715,26 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      hidden input[type=file], so intake validation and upload stay host-owned. */
   [data-composer-card] [data-mobile-nav="file-upload"] {
     flex: 0 0 auto !important;
-    width: 28px !important;
-    min-width: 28px !important;
-    max-width: 28px !important;
-    height: 28px !important;
-    min-height: 28px !important;
+    /* 2026-09-23 店主："触发点有点小，没那么容易点" ⇒ 盒子 28×28 → 34×34
+       （面积 +47%），再由下面的 ::after 向外扩 4px（最终命中区约 42×42）。
+       **图标位置不变**：盒宽 +6 后 margin-left 从 -10 收到 -13，图标中心原地不动；
+       高度对齐发送键的 34px，行高不受影响。 */
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
     padding: 0 !important;
-    margin: 0 !important;
+    position: relative !important;
+    /* 左移 10px + 图标 14→16px（2026-09-23，店主："太往右了、有点小"）：
+       工具道现在是 [+][⚠⌄][📎]，宿主给 modes 控件留了较宽的尾部留白，📎 看着
+       离左边一截。与参考图逐像素对齐（以 + 为锚点）：参考 📎 墨迹 107..117 CSS，
+       我们原先是 114..123；而墨迹高度 48 vs 参考 54 物理 px ⇒ 图标 14 偏小，
+       换成宿主通用的 16（+ / ⚠ 都是 16）。28px 盒 + 16px 图标居中 ⇒ 墨迹左缘
+       = 盒左缘 + 8.85，故盒左缘取 98 ⇒ margin-left: -10px（吃掉 6px gap 后再
+       压进 modes 尾部留白 4px，不碰它的墨迹：chevron 墨迹止于 ~91）。
+       这一个数值就是"往左多少"的旋钮，可按眼睛调，别动别的。 */
+    margin: 0 0 0 -11px !important;
     display: grid !important;
     place-items: center;
     border: 0 !important;
@@ -667,6 +743,30 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     color: inherit;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+  }
+  /* 按下/悬停反馈：宿主其它按钮（加号常驻、模型与权限触发器按下）都有灰胶囊，
+     只有我们这个是纯透明、也没有 :active —— 店主 2026-09-23："文件上传那个图标
+     怎么没有胶囊？"（点了没反应）。用宿主自己的 hover token，视觉与官方一致。 */
+  /* 可见胶囊只在 ::before 上画 28×28 的圆（与加号同尺寸，店主："胶囊有点太大"），
+     按钮盒子仍是 34×34 + ::after 外扩 —— 命中区大、看起来小，两者解耦。 */
+  [data-composer-card] [data-mobile-nav="file-upload"]::before {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 999px;
+    background: transparent;
+    transition: background .12s ease;
+  }
+  [data-composer-card] [data-mobile-nav="file-upload"]:hover::before,
+  [data-composer-card] [data-mobile-nav="file-upload"]:active::before {
+    background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06));
+  }
+  /* 命中区外扩：::after 属于按钮本身，一起参与命中测试，视觉完全不变。 */
+  [data-composer-card] [data-mobile-nav="file-upload"]::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 12px;
   }
   /* A busy submit phase or a subagent session refuses attachments. The host
      gates intake on canAcceptDrop (package-private), so this reads the closest
@@ -781,8 +881,45 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      it sat flush against the bezel (measured: tablist x=0, first tab 0..30
      while the title starts at 40). Give it the same left inset as the toggle so
      the two rows read as one column. */
-  [data-mobile-nav="frame"] [data-phase] header > [class*="wSkVaW_tabs"] {
+  [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_tabs"] {
     padding-left: 8px !important;
+    /* 2026-09-23 店主："标题和下面『对话』中间的空白有点多"。
+       宿主给这条页签条 margin-top:10px，页签按钮自己还带 padding-bottom:9px
+       （给选中下划线留位），两行文字之间就空出一条。收紧：
+       margin 归零（真机 4 → 0）+ 下划线贴到 5px（页签条 36 → 31px）。
+       ⚠ 选择器必须用**后代**：页签条外面套了一层 display:contents 的 div
+       （真机链：div.wSkVaW_tabs < div[0..0] < header.wSkVaW_header），
+       所以原来的「header > [class*="wSkVaW_tabs"]」是条死规则 —— padding-left
+       从来没生效过（现按后代写，值仍是实测的 8px，视觉不变）。 */
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_tabs"] [class*="wSkVaW_tab"] {
+    padding-bottom: 5px !important;
+  }
+  /* 真机诊断：页签条的 margin-top 计算值是 4px，但把 document.styleSheets 里
+     所有能读的规则拿来和它 matches()，命中的 margin/padding 规则是 **0 条**
+     —— 说明这 4px 来自一张读不到 cssRules 的表（跨源，App 自己注入的样式表），
+     普通 !important 平级打不过它。所以这里加码：前缀 html + 钉住 header.wSkVaW_header，
+     特异性抬到 (0,5,1)，实测能压过（页签条 4 → 0）。 */
+  html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_tabs"] {
+    margin-top: -4px !important;
+  }
+  /* 真机读数：头部的 grid-template-rows 被钉成固定的 40px 36px（宿主自己没写行高，
+     是 DSHA 那张表给的），于是标题行、页签行都各留一截死空间。改成 auto：两行各自
+     贴住内容，标题行按 36px 的预设 chip 走、页签行由页签按钮撑开。 */
+  /* 标题行实测 40px 高，而里面最高的东西是 36px 的预设 chip（"标准模式"）——
+     多出来的 4px 是死空间。让行高回到内容高度（用 auto + min-height:0，
+     不写死 36：将来标题簇里出现更高的东西（子代理谱系等）也不会被裁）。 */
+  html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_titleRow"] {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  /* 页签按钮文字上方还有 6px 空白（按钮被容器撑到 32px 高、文字居中）：去掉上内边距，
+     下内边距 5px 已在上面钉住（下划线位置不变）。 */
+  html [data-mobile-nav="frame"] [data-phase] header.wSkVaW_header [class*="wSkVaW_tab"] {
+    padding-top: 0 !important;
+    align-self: flex-end !important;
   }
   /* NOTHING extra here on purpose. The header's own padding is already forced
      to 0 above, and the title row carries padding-left:40px of its own, so the
@@ -1035,19 +1172,28 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      with and without this block. */
   [data-mobile-nav="frame"] [data-phase] header:has(> *) {
     min-height: 0 !important;
-    grid-template-rows: minmax(36px, auto) minmax(32px, auto) !important;
+    /* 2026-09-23 二轮：页签行地板 32 → 26（店主："标题和下面『对话』中间空白有点多"）。
+       标题行地板保持 36 —— 它下面的文字要跟 top:6 的圆形按钮对齐（实测文字中心
+       y=20 = 圆形按钮中心），压标题行会把文字顶得比按钮高（2026-09-14 已踩过）。
+       页签按钮的 32px 地板同理下到 26px（文字 16px + 下划线留 5px），
+       页签条的下沿随之从 76 收到 66。 */
+    grid-template-rows: minmax(36px, auto) minmax(26px, auto) !important;
   }
   [data-mobile-nav="frame"] [data-phase] header [role="tab"] {
-    min-height: 32px !important;
+    min-height: 26px !important;
   }
-  /* The title cluster reserves its last 44px for that empty utilities seat,
-     while our Files opener only paints a 28px band at right:8 — so 18px of the
-     reservation is dead space the title lane can have. Trimming it to 26px
-     hands the title 18px back (measured at 390px with a lineage chip present:
-     crumb 64 -> 82px) and still clears the opener by 8px (actions right edge
-     346 against button left edge 354, with the button keeping its hit test). */
+  /* The title cluster reserves its last 44px for that empty utilities seat.
+     The lane's right edge must stay clear of the Files opener's HIT BOX,
+     otherwise the opener eats the trailing chips' taps. The pre-2026-09-22
+     value (26px, a width optimisation) only cleared at the 390px test width:
+     measured at 360x754 (dpr 4) the Agent Team chip ran to x=334 while the
+     opener's 36px box started at x=316 — an 18px overlap, so tapping the
+     chip's tail opened the Files panel. The reference phone UI shows the lane
+     ending at ~314 with the opener box at 316..352, i.e. the full 44px seat
+     plus 2px of breathing room, so restore that instead of narrowing the
+     opener: 46px clears the 36px box at right:8 by 2px at every width. */
   [data-mobile-nav="frame"] [data-phase] header [class*="wSkVaW_titleCluster"] {
-    padding-right: 26px !important;
+    padding-right: 46px !important;
   }
   /* Header crowding on narrow phones.
      Three tenants want the same row: the session title, the mode chip and the
@@ -1156,7 +1302,15 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
       [40,22,44,0]、titleCluster 被顶到 x=84）。padding 归零后空座位 = 0×0，
       真有内容的宿主也不受影响（内容盒照常渲染）。 */
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerLeading"] {
+    /* 不能塌掉左侧座位本身：上面那条（> :first-child）给本座位留了
+       padding-left:32px 作面板开关的座位，而 padding: 0 !important 是
+       简写，会把它一并清零。两条规则特异性同为 (0,4,1)，按源序本块在后
+       ⇒ 简写胜出，座位塌成 0×0、网格第一列 0px、标题直接压到 left:8 的
+       面板按钮上（真机实测 2026-09-22，360x754@4：crumbs x=8、
+       toggle 8,6 28x28；真机 DOM 规则枚举确认胜出者就是本块）。
+       NOTE: 本文件整体是 JS 模板字符串，注释里绝不能出现反引号。 */
     padding: 0 !important;
+    padding-left: 32px !important;
   }
   /* 0.1.6 的新头部里，titleRow 的第一个孩子是新增的空座位
      headerLeading（macOS 桌面控件，安卓上渲染 null）。插件按 0.1.5 老结构
@@ -1314,11 +1468,20 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     width: 36px !important;
     height: 36px !important;
     flex: 0 0 36px !important;
-    /* Mirror the toggle's raised seat (top:6px for a 28px control -> centre
-       y=20): the host keeps the old top:12px rule alive on alpha.2, and a
-       36px box at top:12 puts this centre 10px below the toggle's (review
-       2026-09-19). top:2px re-aligns both centres. */
+    /* Keep the 36px seat the reference phone UI shows (opener box 316..352 at
+       360px, icon 326..342): it is the geometry the lane's 46px reservation
+       above is tuned against. Mirror the toggle's centre (top:6px for a 28px
+       control -> centre y=20) by lifting the taller box to top:2px. */
     top: 2px !important;
+  }
+  /* 新宿主把「右侧栏入口」放进了 titleRow 的 headerCorner。手机上市宿右侧栏
+     就是 Files 面板，所以它和插件的文件按钮是同一个面板的两个入口；而它带
+     margin-right:-16px，36px 盒子在 360px 视口下会从文件按钮右侧漏出一角
+     （2026-09-22 实测：corner [332,2 36x36]、图标 343..358 外露，被视口裁切），
+     与参考图"右上角只有一个文件夹图标"不一致，也与插件自己的文件按钮重复。
+     只针对标题行内的 corner，老一代宿主（corner 是唯一入口）不受影响。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="wSkVaW_titleRow"] > [class*="_headerCorner"] {
+    display: none !important;
   }
   /* 右上角换人：0.1.6 把「右侧栏展开按钮」放进了 headerCorner，而插件的
      老规则「header > :first-child > :last-child 显示 none」在 0.1.5
@@ -1603,28 +1766,52 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     min-width: 0 !important;
     max-width: 100% !important;
   }
-   /* composer 模型选择 chip（dsh-client-ui-model-selection，样式哈希
-      _7KE1Ra_）：宿主用 @container (width<=360px) 在窄容器里只留图标
-      （triggerLabel/triggerEffort display:none）。390px 手机上 composer 卡
-      实测 356px 宽，恒触发这条查询 → 模型名永久不可读。手机档恢复 label
-      显示；宽度由 max-width:min(360px,45cqw) + min-width:0 + ellipsis
-      自己管，挤压时先缩的是 effort（flex-shrink:1000）。_7KE1Ra_ 是本代
-      model-selection 的样式哈希，包不在则整条死规则，无需另加代际门；
-      注意裸 [class*=_triggerLabel] 会误伤 permission-presets /
-      settings-general 包的同名片段，必须带哈希前缀。 */
-  [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_triggerLabel"] {
-    display: inline !important;
+  /* composer 模型选择 chip（dsh-client-ui-model-selection，样式哈希
+     _7KE1Ra_）。2026-09-23 改档：真·手机档一律**只留图标**
+     （IconDataOutlineRegular），模型名与 effort 不再常驻 —— 官方新加的语音
+     按钮吃掉宽度后「图标+名字」把动作行挤爆；点图标打开菜单后再选模型。
+
+     上游 0.1.7 已把这个能力做成契约：conversation 的 observeControlRow()
+     实测 row 装不下时才打 data-model-compact，其 CSS
+     「.uV2eYG_row[data-model-compact]」向下传
+       --dsh-composer-model-text-display: none;
+       --dsh-composer-model-icon-display: block;
+     由 model-selection 消费：triggerIcon display:var(…icon…,none)、
+     triggerLabel/triggerEffort display:var(…text…,block)。
+     **旧规则 [class*="_7KE1Ra_triggerLabel"]{display:inline !important}
+     正是把它顶掉的那一条** —— 图标被 compact 显形、名字又被我们拉回来，
+     所以现场是"图标和名字同时出现"，也就是"上游代码里有、却不生效"。
+     这里删掉它，并在 ≤767px 直接钉住这两个变量，不去赌宿主的实测结果
+     （否则一旦某项变窄让 row 装得下，文字又会长回来，来回抖）。
+
+     _7KE1Ra_ 是本代 model-selection 的样式哈希，包不在则整条死规则，无需
+     另加代际门；必须带哈希前缀，裸 [class*=_triggerLabel] 会误伤
+     permission-presets / settings-general 的同名片段。 */
+  @media (max-width: 767px) {
+    [data-mobile-nav="frame"] [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) {
+      --dsh-composer-model-text-display: none;
+      --dsh-composer-model-icon-display: block;
+    }
   }
-  /* 模型 chip 宽度预算，⑦ 同链收尾：宿主 trigger 的 max-width
-     min(360px,45cqw) 在 390 真机容器 356px 下只给 label+icon+effort+chevron
-     留 ~160px，模型名真机省略成「GLM-5.3-Fla…」（headless 字体窄恰好放得
-     下，同一盲区）。放宽到 60cqw（356 容器实测 213px），effort 标签有宿主
-     自带 flex-shrink:1000 先让位，模型名拿满宽。容器 >360 的平板档 45cqw
-     本就 >160 不绑定，放宽只落在窄容器档。特异性 (0,3,0) 带 !important 胜
-     宿主 (0,1,0) 普通声明；_7KE1Ra_ 哈希本身即代际门（包不在整条死规则）。
-     60 数值可调。 */
+  /* 模型 chip 宽度预算（只对仍显示文字的 768–1023 平板档有意义）：宿主
+     trigger 的 max-width min(360px,45cqw) 在窄容器下只给
+     label+icon+effort+chevron 留 ~160px，模型名会省略成「GLM-5.3-Fla…」
+     （headless 字体窄恰好放得下，同一盲区）。放宽到 60cqw，effort 有宿主
+     自带 flex-shrink:1000 先让位。手机档文字已隐藏，这条不参与。特异性
+     (0,3,0)+!important 胜宿主 (0,1,0) 普通声明；60 数值可调。 */
   [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_trigger"] {
     max-width: min(360px, 60cqw) !important;
+    /* 图标化后宿主那套 padding:0 4px 0 8px 纯属浪费（左 8px 是给文字留的）。
+       2026-09-23 店主第二轮："范围有点大、⌄ 离图标远" ⇒ padding 归零、gap 归零，
+       匣子只剩「图标 + ⌄」本身（实测墨迹间距 10px → ~4px，匣宽 46 → ~32px）。 */
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+  /* ⌄ 的 svg 自身带内边距（墨迹比 viewBox 窄），再拉近 2px。 */
+  [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_chevron"] {
+    /* gap 归零后两个 svg 的内边距会让墨迹直接贴住（实测墨迹连成一段），
+       这里不再加负 margin，留 ~2px 呼吸 —— 间距从 10px 收到 2px。 */
+    margin-left: 0 !important;
   }
   /* --- Settings dialog on mobile ---
      Desktop: 800px two-column flex (188px nav + content). Mobile: a
@@ -1913,6 +2100,16 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     [data-mobile-nav="frame"] [data-phase] header:has([data-team-action]) .dsha-preset-header-anchor [data-dsha-agent-preset="header"] > span {
       max-width: 4em;
     }
+  }
+  /* ---------- 会话行的 ⋯ 菜单在触屏常显（2026-09-22 交互契约） ----------
+     宿主只在 :hover 和 menuOpen 时显示 _rowActions，而手机没有 hover。
+     长按以前是触屏进这个菜单的唯一路径，现在长按改成「改会话名」（见
+     phone-chrome.ts 的 requestRowRename → 标题 dblclick），所以把锚点常显，
+     删除 / 归档 / 分叉 继续有触屏入口。行内布局不动：标题是 flex:1 +
+     min-width:0，自己让位并省略；host 的 time / pinIndicator 保持原样。
+     只作用于抽屉里的会话行，搜索行（searchResultRow）不受影响。 */
+  [data-mobile-nav="frame"] [class*="sessionRow"] [class*="_rowActions"] {
+    display: inline-flex !important;
   }
 }
 `

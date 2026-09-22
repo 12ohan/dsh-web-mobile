@@ -494,12 +494,17 @@ export function installOverlayInteractions(ctx: ClientContext): void {
     let navObserver: MutationObserver | null = null
     let navTimer: number | null = null
 
-    // Touch has no hover, so the host's `_rowActions` — the ⋯ menu anchor —
-    // never shows up: only `:hover` and `menuOpen` reveal it. Long press is the
-    // phone gesture for "row actions", so we drive the host's own ⋯ button and
-    // hold the drawer open around it. The host menu closes on pointerleave,
-    // which the finger lift itself fires, and that lift still synthesizes a
-    // click on the row: both need guarding.
+    // 2026-09-22 交互契约（群内统一）：单击 = 选中、双击 = 打开、长按 = 改会话名。
+    // 宿主 0.1.7 把「改会话名」挂在会话行标题的 dblclick 上（onRenameRequest），
+    // 而这恰好是双击手势要用的那个事件：双击会既打开会话又弹改名框。所以真实
+    // dblclick 在这里被吞掉（下方 onDrawerDoubleClick），长按则重放同一个事件去
+    // 开宿主自己的改名框（requestRowRename）——只有我们派发的那一个事件被放行。
+    // Touch has no hover, so the host's `_rowActions` — the ⋯ menu anchor — never
+    // shows up by itself: only `:hover` and `menuOpen` reveal it. Long press used
+    // to be the touch path to that menu; it belongs to rename now, so the mobile
+    // stylesheet pins `_rowActions` open instead (删除 / 归档 / 分叉 仍有触屏入口).
+    // The host menu closes on pointerleave, which the finger lift itself fires,
+    // and that lift still synthesizes a click on the row: both need guarding.
     let pressTimer: number | null = null
     let pressOrigin: { x: number; y: number } | null = null
     let pressRow: HTMLElement | null = null
@@ -524,6 +529,40 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       if (button === null) return
       menuGuardUntil = performance.now() + LONG_PRESS_MENU_GUARD_MS
       button.click()
+    }
+
+    /** The only `dblclick`s allowed through to the host are the ones we
+     *  dispatch ourselves: a real one is the double *tap* that means "open the
+     *  session", and letting it reach the title would open the rename dialog on
+     *  the same gesture. Identity, not a flag on the event: nothing else can
+     *  forge it. */
+    const syntheticDoubleClicks = new WeakSet<Event>()
+
+    /** 长按 = 改会话名：宿主把改名挂在标题的 dblclick 上，这里重放那个事件，
+     *  而不是复制一套弹窗链路（宿主的 rename 状态机是包内私有的）。
+     *  @returns 是否成功派发；宿主标记变了、拿不到标题时为 false，调用方回退。 */
+    const requestRowRename = (row: HTMLElement): boolean => {
+      const title = row.querySelector<HTMLElement>('[class*="_title"]')
+      if (title === null) return false
+      const event = new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window })
+      syntheticDoubleClicks.add(event)
+      title.dispatchEvent(event)
+      return true
+    }
+
+    /** Swallow the host's title-double-click rename (the 2026-09-22 contract puts
+     *  rename on long press, and double tap on "open"). Capture phase on
+     *  `document`, so the event never reaches React's root container and the
+     *  title's own onDoubleClick cannot run. Armed only inside the mobile
+     *  environment (this effect is MOBILE_QUERY-gated), so mouse-driven desktops
+     *  keep the host behaviour untouched. */
+    const onDrawerDoubleClick = (event: MouseEvent): void => {
+      if (syntheticDoubleClicks.has(event)) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('[class*="sessionRow"] [class*="_title"]') === null) return
+      event.preventDefault()
+      event.stopPropagation()
     }
 
     const selectedRowSignature = (): string | null => {
@@ -638,7 +677,9 @@ export function installOverlayInteractions(ctx: ClientContext): void {
         pressTimer = null
         if (pressRow === null) return
         pressFired = true
-        openRowMenu(pressRow)
+        // 长按 = 改会话名。拿不到标题（宿主标记变了）就退回 ⋯ 菜单：长按至少还能
+        // 到达行操作，而不是变成一个什么都不做的死手势。
+        if (!requestRowRename(pressRow)) openRowMenu(pressRow)
       }, LONG_PRESS_MS)
     }
 
@@ -779,6 +820,7 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       if (drawerOpen()) toggleSidebar()
     }
     document.addEventListener('dsha-session-open', onDshaSessionOpen)
+    document.addEventListener('dblclick', onDrawerDoubleClick, true)
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('click', onDrawerClick, true)
     document.addEventListener('pointerdown', onDrawerPointerDown, true)
@@ -792,6 +834,7 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       touchDownAt = null
       clearPress()
       document.removeEventListener('dsha-session-open', onDshaSessionOpen)
+      document.removeEventListener('dblclick', onDrawerDoubleClick, true)
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('click', onDrawerClick, true)
       document.removeEventListener('pointerdown', onDrawerPointerDown, true)
