@@ -177,9 +177,13 @@ export const BASE_CSS = `
   }
   /* Host modal dialogs (workspace rename, and any future dialog of the same
      shape) portal to a direct body child that carries the stacking context:
-     body > div._root_w1urq_2 { position: fixed; z-index: 1000 } wrapping
-     [role="dialog"][aria-modal="true"] (_dialog_w1urq_22, inner z-index: 1 —
-     raising the dialog itself is useless, it only sorts inside that root).
+     body > div { position: fixed; z-index: 1000 } wrapping
+     [role="dialog"][aria-modal="true"] (inner z-index: 1 — raising the dialog
+     itself is useless, it only sorts inside that root).
+     NOTE (2026-09-23): the hashes once recorded here (_root_w1urq_2 /
+     _dialog_w1urq_22) are gone from both 0.1.7-alpha.1 and alpha.2, so this
+     comment anchors on the SHAPE only — which is what the rule below already
+     matches. Do not reintroduce a hash here without re-measuring.
      Measured 2026-09-19: with the drawer open (column z 1300) the workspace
      Rename dialog sat entirely under it and needed the drawer closed first.
      Raise the portal root, not the dialog, and only while the drawer is open —
