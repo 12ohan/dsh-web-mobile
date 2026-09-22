@@ -577,15 +577,12 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     flex: 0 0 auto;
   }
 
-  /* Model switcher menu: center the dropdown on the now-shrinkable trigger,
-     but never let it exceed the viewport on narrow phones. */
-  [data-phase] [class*="_card"]:has(textarea, [data-composer-input]) [class*="_root"]:has(> [class*="_trigger"]) > [class*="_menu"] {
-    left: 50% !important;
-    right: auto !important;
-    transform: translateX(-50%) !important;
-    max-width: min(320px, calc(100vw - 16px));
-    box-sizing: border-box;
-  }
+  /* Model switcher menu: was centered here with left:50% + translateX(-50%), but the
+     host now PORTALS the menu to <body> (measured 2026-09-23: _7KE1Ra_menu, role=menu,
+     position:fixed, parent=BODY, inline left/top), so this child-chain selector stopped
+     matching and the rule had been dead. The re-anchor lives in JS instead —
+     effects/model-menu-anchor.ts centers the panel on the trigger and clamps it to the
+     viewport. Do not re-add a CSS rule here without checking the portal parent. */
 
   /* --- Fix composer row overflow at narrow widths (320px-360px) ---
      Force every direct child of the tools and trailing lanes to shrink,
