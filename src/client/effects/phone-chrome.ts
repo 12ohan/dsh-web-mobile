@@ -460,21 +460,29 @@ export function installOverlayInteractions(ctx: ClientContext): void {
     const drawerRoot = (): HTMLElement | null =>
       document.querySelector<HTMLElement>('[data-mobile-nav="frame"] > :first-child')
 
-    const shouldCloseOnTapInsideDrawer = (target: EventTarget | null): boolean => {
+    // Shared frame: inside the drawer, on a row navigation target, and not on
+    // one of its buttons. Deliberately free of the DSHA tap-close exemption —
+    // onDrawerPointerDown arms long-press through this base, and starving that
+    // arming would make the host's ⋯ row menu unreachable (#82).
+    const isDrawerNavTarget = (target: EventTarget | null): boolean => {
       if (document.querySelector('[aria-modal="true"]') !== null) return false
       if (!drawerOpen()) return false
       if (!(target instanceof Element)) return false
       const drawer = drawerRoot()
       if (drawer === null || !drawer.contains(target)) return false
       if (target.closest('[class*="sessionRow"] button') !== null) return false
-      // DSHA_SESSION_INTERACTION_V1：宿主把「单击=选中、双击=打开」拆成了两步
-      // （data-dsha-session-select 标记 + dsha-session-open 事件）。上游的
-      // 「点行即关抽屉」会在第一次单击就把抽屉收掉，双击永远到不了。
-      // 这些行改由 dsha-session-open 事件关闭（见下方 document 监听）。
-      // 非 DSHA 宿主没有这个标记，这一条天然不命中。
-      if (target.closest('[data-dsha-session-select]') !== null) return false
       return target.closest(TAP_CLOSE_NAV_SELECTOR) !== null
     }
+    // DSHA_SESSION_INTERACTION_V1：宿主把「单击=选中、双击=打开」拆成了两步
+    // （data-dsha-session-select 标记 + dsha-session-open 事件）。上游的
+    // 「点行即关抽屉」会在第一次单击就把抽屉收掉，双击永远到不了。
+    // 这些行改由 dsha-session-open 事件关闭（见下方 document 监听）。
+    // 非 DSHA 宿主没有这个标记，这一条天然不命中。
+    // 豁免只属于点行关抽屉的两个调用方（click / pointerup），不得回流进
+    // 长按武装门，否则 DSHA 行长按开不了 ⋯ 菜单（#82）。
+    const shouldCloseOnTapInsideDrawer = (target: EventTarget | null): boolean =>
+      !(target instanceof Element && target.closest('[data-dsha-session-select]') !== null)
+      && isDrawerNavTarget(target)
     // Touch path for session/search rows: never close the drawer from pointer
     // events. Closing at pointerup (or deferring the close) races the browser's
     // synthesized click; some iOS shells suppress that click entirely, so the
@@ -617,9 +625,11 @@ export function installOverlayInteractions(ctx: ClientContext): void {
       if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return
       if (isStrokeLocked()) return
       const target = event.target
-      // shouldCloseOnTapInsideDrawer already means "inside the drawer, on a row
-      // navigation target, and not on one of its buttons".
-      if (!shouldCloseOnTapInsideDrawer(target) || !(target instanceof Element)) return
+      // isDrawerNavTarget already means "inside the drawer, on a row navigation
+      // target, and not on one of its buttons" — and it must stay the
+      // exemption-free base: arming long-press through the tap-close predicate
+      // made DSHA rows un-armable, killing their only touch path to the ⋯ menu.
+      if (!isDrawerNavTarget(target) || !(target instanceof Element)) return
       const row = target.closest<HTMLElement>('[class*="_sessionRow"]')
       if (row === null || target.closest('[class*="_rowActions"]') !== null) return
       pressOrigin = { x: event.clientX, y: event.clientY }
