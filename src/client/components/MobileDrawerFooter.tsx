@@ -1,5 +1,5 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconDownloadOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconDownload } from '../core/icon-compat.ts'
 import { NS } from '../i18n/locales.ts'
 import { currentSessionIdOf } from '../core/sessions-compat.ts'
 
@@ -36,7 +36,7 @@ export function MobileDrawerFooter({ useSessions, downloadSessionLog, t }: Mobil
           if (sessionId !== undefined) downloadSessionLog(sessionId)
         }}
       >
-        <IconDownloadOutline16 size={14} />
+        <IconDownload size={14} />
         <span>{t('sessionLog')}</span>
       </button>
     </div>

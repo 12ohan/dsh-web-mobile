@@ -60,13 +60,40 @@ const SHADOW_MARKER = 'data-mobile-nav-focus-shadow'
 
 export function installComposerKeyboardGuard(ctx: ClientContext): void {
   installMobileEffect(ctx, 'dsh-web-mobile: composer keyboard guard', () => {
-    // Only iOS/iPadOS WebKit re-raises the dismissed keyboard on a
-    // programmatic focus; other engines get no listener at all.
-    if (!detectIosWebKit(navigator, typeof CSS !== 'undefined' && typeof CSS.supports === 'function' ? CSS.supports.bind(CSS) : null)) {
+    // 2026-09-23 扩档（店主报"点加号会弹键盘、而且再点关不掉"）：
+    // `+` 的 onClick 是宿主的 onToggleCommandMenu，它先 focusDraftEditor()
+    // 再 toggleCommandMenu(caretSpan) —— 命令菜单需要光标，于是每次点 + 都
+    // 把键盘顶起来。键盘一开，整行上移 ~283px（真机探针：composer y 687→404），
+    // 店主第二次点的是"加号原来的位置"，自然关不掉，看起来像 toggle 坏了。
+    // 同一段 focusDraftEditor 在 iOS 上就是本守卫要拦的调用，所以把启用条件
+    // 从"仅 iOS WebKit"放宽到"触屏档（pointer: coarse）"：桌面（精细指针）保持
+    // 原样，手机/平板上一律不让 composer 按钮去抢编辑器焦点。拦截的是**程序
+    // 化** focus()，原生点输入框聚焦不受影响（点输入框的路径已被下面的 early
+    // return 排除）。
+    const ios = detectIosWebKit(navigator, typeof CSS !== 'undefined' && typeof CSS.supports === 'function' ? CSS.supports.bind(CSS) : null)
+    const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+    if (!ios && !coarse) {
       return undefined
     }
 
+    /** 影子撤除计时器（每次按钮点按重置；见 onPointerDown 里的时间轴注释）。 */
+    let shadowTimer = 0
+
+    /**
+     * 撤影子 **并且关掉守卫窗口**。
+     *
+     * 2026-09-23 二次修订（店主报"点两下加号之后输入框动不了了"）：
+     * 原来这里只删影子、不归零 `shadowTimer`，而下面 `onFocusIn` 的开关就是
+     * `shadowTimer === 0` —— 于是**点过一次 composer 按钮之后守卫永久生效**：
+     * 任何 focusin 都被当场 `blur()`，店主点输入框再也弹不出键盘。
+     * 真机行为级取证（探针：先合成一次 composer 按钮 pointerdown，等过 700ms 窗口，
+     * 再 blur + focus 编辑器）：
+     *   修前 `shadowAttrLeft=false ownFocusLeft=false blurWorked=true focusHeld=false k=754`
+     *   ⇒ 影子已撤、计时器却还挂着 ⇒ 守卫一直在，编辑器拿不回焦点。
+     */
     const restore = (): void => {
+      window.clearTimeout(shadowTimer)
+      shadowTimer = 0
       const el = document.querySelector<HTMLElement>(`[${SHADOW_MARKER}]`)
       if (el === null) return
       el.removeAttribute(SHADOW_MARKER)
@@ -74,14 +101,20 @@ export function installComposerKeyboardGuard(ctx: ClientContext): void {
       if (Object.prototype.hasOwnProperty.call(el, 'focus')) delete shadowed.focus
     }
 
-    const onMouseDown = (event: MouseEvent): void => {
+    const onPointerDown = (event: Event): void => {
       const target = event.target
       if (!(target instanceof Element)) return
       if (typeof target.closest !== 'function') return
       const card = target.closest(COMPOSER_CARD_SELECTOR)
       if (card === null) return
       const editor = card.querySelector<HTMLElement>(COMPOSER_INPUT_SELECTOR)
-      if (editor === null || target.closest(COMPOSER_INPUT_SELECTOR) !== null) return
+      if (editor === null) return
+      // 店主自己点编辑面：这是"我要打字"的正路，立刻解除守卫窗口，
+      // 绝不让兜底 blur 打到这一下（窗口内点输入框也必须能弹键盘）。
+      if (target.closest(COMPOSER_INPUT_SELECTOR) !== null) {
+        restore()
+        return
+      }
       // A button-area tap: shadow focus for the remainder of this dispatch.
       restore()
       editor.setAttribute(SHADOW_MARKER, '')
@@ -92,12 +125,45 @@ export function installComposerKeyboardGuard(ctx: ClientContext): void {
           /* keepFocus called; keep the dismissed keyboard dismissed */
         },
       })
-      setTimeout(restore, 0)
+      // 影子的存活窗口 = 700ms 固定窗口，**不能**"click 后立刻撤"。
+      // 2026-09-23 真机探针的事件轨迹（点一次 `+`）：
+      //   51.5 clicks:添加文件或调用指令 / shadow:ON
+      //   51.6 shadow:off          ← 旧的"click 后 setTimeout(0) 撤"
+      //   51.7 vv 754→471          ← 键盘此时才弹 ⇒ 宿主是在"菜单打开后的 effect"
+      //                              里再 focus 一次，撤早了等于白装。
+      // 影子只拦**程序化** focus()；窗口内用户点输入框由上面那个 early return
+      // 当场解除窗口，所以放宽到 700ms 是安全的；窗口内新的按钮点按会重置计时。
+      window.clearTimeout(shadowTimer)
+      shadowTimer = window.setTimeout(restore, 700)
     }
 
-    document.addEventListener('mousedown', onMouseDown, true)
+    // 2026-09-23：只挂 mousedown 会空转。Android WebView 上按钮的点击经常吃不到
+    // 兼容性 mousedown（touchstart 被 preventDefault 时更甚），于是影子从没装上，
+    // 宿主 click 里的 focusDraftEditor 照样把键盘顶起来 —— 店主实测"两个问题都还在"。
+    // 三个入口都挂上，处理体是幂等的（每次先 restore 再重装影子）。
+    // 兜底：万一"按钮点按 → 编辑器被聚焦"仍然把键盘顶起来（真机可能走
+    // 我们拦不到的路径），在同一个 700ms 窗口内立刻把焦点还回去 —— blur 会
+    // 收起软键盘。宿主的光标/草稿来自它自己的 keyboard 状态，不依赖 DOM focus，
+    // 所以这里 blur 不会丢草稿（用户随后点输入框照常输入）。
+    const onFocusIn = (event: Event): void => {
+      if (shadowTimer === 0) return
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return
+      if (target.closest(COMPOSER_INPUT_SELECTOR) === null) return
+      // 同步 blur：放到宏任务里 IME 已经开始弹了（真机实测 setTimeout 版无效，
+      // vv 仍然 754→471）。在 focusin 的捕获阶段当场 blur，键盘根本不会出现。
+      target.blur()
+    }
+
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('touchstart', onPointerDown, true)
+    document.addEventListener('mousedown', onPointerDown, true)
+    document.addEventListener('focusin', onFocusIn, true)
     return () => {
-      document.removeEventListener('mousedown', onMouseDown, true)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('touchstart', onPointerDown, true)
+      document.removeEventListener('mousedown', onPointerDown, true)
+      document.removeEventListener('focusin', onFocusIn, true)
       restore()
     }
   })

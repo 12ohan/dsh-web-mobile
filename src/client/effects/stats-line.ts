@@ -50,6 +50,29 @@ export function createStatsLineTask(): ReconcilerTask {
       return
     }
   }
+  // 2026-09-23（店主最终确认）：**环要、百分比数字不要** —— 把这块挪进输入框行
+  // 的右簇（模型/麦克风旁），再由 CSS 用 font-size:0 只留环、隐掉 "45%" 文本。
+  // 它原本独占统计行右侧 63px + 12px 间距；挪走后统计条拿满整宽 326px，
+  // 「轮次·步数·tok/s」+「tok 总量·缓存命中」约 316px 完整放下，不滚动也不省略。
+  // 与 moveTps 同款：幂等 + 记录原位，dispose（宽屏档）时放回官方布局。
+  let ringOrigin: { parent: Node; next: Node | null } | null = null
+  const moveRing = (stats: Element): void => {
+    const holder = stats.parentElement
+    const dock = holder === null ? null : holder.parentElement
+    if (dock === null) return
+    const ring = [...dock.children].find(
+      (child) => !child.contains(stats) && /\d\s*%/.test(child.textContent ?? ''),
+    )
+    if (ring === undefined) return
+    const row = document.querySelector('[data-composer-card] [class*="_row"] [class*="_trailing"]')
+    if (row === null) return
+    if (ring.parentElement === row) return
+    if (ring.parentElement !== null) {
+      ringOrigin = { parent: ring.parentElement, next: ring.nextSibling }
+    }
+    ring.setAttribute('data-mobile-nav', 'stats-ring')
+    row.insertBefore(ring, row.querySelector(':scope > [class*="_primary"]'))
+  }
   const mark = (): void => {
     // Fast path: the marked strip usually survives React rebuilds between
     // tokens; re-verifying the anchor is O(1) while the full-tree hunt below
@@ -58,6 +81,7 @@ export function createStatsLineTask(): ReconcilerTask {
     const anchor = document.querySelector('[data-mobile-nav="stats"]')
     if (anchor !== null && statsAnchorAlive(anchor)) {
       moveTps(anchor)
+      moveRing(anchor)
       return
     }
     // Stale marker on a node that left the composer stack/phase context:
@@ -103,6 +127,7 @@ export function createStatsLineTask(): ReconcilerTask {
       if (root.querySelector('textarea, [data-composer-input]') !== null) continue
       root.setAttribute('data-mobile-nav', 'stats')
       moveTps(root)
+      moveRing(root)
       return
     }
   }
@@ -135,6 +160,14 @@ export function createStatsLineTask(): ReconcilerTask {
       for (const el of document.querySelectorAll('[data-mobile-nav="stats"]')) {
         el.removeAttribute('data-mobile-nav')
       }
+      // 上下文环放回统计行旁边，宽屏档恢复官方布局。
+      if (ringOrigin !== null && ringOrigin.parent.isConnected) {
+        for (const ring of document.querySelectorAll('[data-mobile-nav="stats-ring"]')) {
+          ringOrigin.parent.insertBefore(ring, ringOrigin.next)
+          ring.removeAttribute('data-mobile-nav')
+        }
+      }
+      ringOrigin = null
       tpsOrigin = null
     },
   }

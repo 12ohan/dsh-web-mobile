@@ -417,10 +417,28 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   [aria-modal="true"] [class*="_section"] [class*="_row"]:not([class*="_rows"]):not([class*="_rowCard"]):not([class*="_rowHead"]):not([class*="_rowIdentity"]):not([class*="_rowActions"]) > :first-child {
     width: 100% !important;
     max-width: none !important;
+    /* 手机端「文字在上、控件在下」之后，宿主给文字容器留的 padding-right:48px
+       （桌面版给右侧控件让位用的）就成了纯溢出：真机实测 rowText 内容盒 315
+       + 48 = 363 > 内容面板 339 ⇒ **整个设置内容区能横向拖 36px**
+       （店主反馈："通用设置里怎么还可以往左滑"）。归零即根治。 */
+    padding-right: 0 !important;
   }
   [aria-modal="true"] [class*="_section"] [class*="_row"]:not([class*="_rows"]):not([class*="_rowCard"]):not([class*="_rowHead"]):not([class*="_rowIdentity"]):not([class*="_rowActions"]) > :last-child {
     width: 100% !important;
     max-width: none !important;
+  }
+  /* 开关不是"整行控件"。宿主的 Switch 是 button[role=switch]，官方尺寸
+     36×20（flex:0 0 auto）——上面那条 width:100% 把「开发者工具」那行的开关
+     拉成横贯整行的长条（店主 2026-09-23 截图："设置里的开关变得好长好长"）。
+     钉回原尺寸、靠左对齐（行已是 column + stretch，固定宽不会被拉伸）。
+     只命中 role=switch：其他"整行控件"（输入框 / 下拉 / 分段）保持原样。 */
+  [aria-modal="true"] [class*="_section"] [class*="_row"]:not([class*="_rows"]):not([class*="_rowCard"]):not([class*="_rowHead"]):not([class*="_rowIdentity"]):not([class*="_rowActions"]) > button[role="switch"] {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 20px !important;
+    flex: 0 0 auto !important;
+    align-self: flex-start !important;
   }
   /* Models provider editor: a CLOSED <details> ("_customized", the customized
      models section) must not paint its body. This engine paints the ~1500px
@@ -531,7 +549,17 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
      targeted). Layout: ONE fixed-height (28px) flex strip that scrolls
      horizontally — the full metrics stream stays reachable by swiping,
      the row never grows vertically, no ellipsis or fade, 12px gaps
-     between metric groups, a 2px scrollbar as the swipe affordance. */
+     between metric groups, a 2px scrollbar as the swipe affordance.
+
+     2026-09-23 改档（店主："把那个滑动的压缩一下，固定住，不再滑动"）：
+     真机探针实测 可见宽 251px、内容 390px（"10 轮 268 步·244 tok/s" 178 +
+     "57.5M tok·缓存命中 99%" 187，gap 12、font 12），右边 ~75px 被 dock 里的
+     上下文百分比那块占着 ⇒ 一行本来就放不下。按店主选择：**保持一行 + 末尾
+     省略号**。做法：字号 12→10（≈0.83×）、组间距 12→6、去掉为滚动条留的
+     4px 下内边距；overflow 改 hidden（不可滑）、滚动条显式干掉；第一组
+     flex:0 0 auto 保持完整，最后一组 flex:0 1 auto + min-width:0 自己吃掉
+     差额并在末尾出省略号（实测截到"…缓存命…"，tok 数字仍完整可读）。
+     高度仍是 28px：composer 的底部占位（8px + 28px）不变，其它几何不跟着动。 */
 
   [data-mobile-nav="stats"] {
     display: flex !important;
@@ -545,43 +573,123 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
     max-height: 28px !important;
     box-sizing: border-box !important;
     white-space: nowrap !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin !important;
-    scrollbar-color: var(--dsw-alias-border-l1, rgba(0, 0, 0, .28)) transparent !important;
-    padding: 0 0 4px !important;
-    line-height: 20px !important;
-    font-size: 12px !important;
+    overflow: hidden !important;
+    overscroll-behavior-x: none;
+    scrollbar-width: none !important;
+    padding: 0 !important;
+    line-height: 18px !important;
+    font-size: 10px !important;
   }
   [data-mobile-nav="stats"]::-webkit-scrollbar {
-    height: 2px !important;
-  }
-  [data-mobile-nav="stats"]::-webkit-scrollbar-thumb {
-    background: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, .3)) !important;
-    border-radius: 2px !important;
-  }
-  [data-mobile-nav="stats"]::-webkit-scrollbar-track {
-    background: transparent !important;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
   [data-mobile-nav="stats"] > * {
     display: flex !important;
-    flex: 0 0 auto !important;
     flex-flow: row nowrap !important;
     align-items: center !important;
+    white-space: nowrap !important;
+    margin-right: 6px !important;
+    padding: 0 !important;
+  }
+  /* 第一组（轮次·步数·tok/s）保持完整。 */
+  [data-mobile-nav="stats"] > *:first-child {
+    flex: 0 0 auto !important;
     width: max-content !important;
     min-width: max-content !important;
     max-width: none !important;
-    white-space: nowrap !important;
-    margin-right: 12px !important;
-    padding: 0 !important;
   }
+  /* 最后一组（tok 总量·缓存命中）吃掉剩余宽度，末尾省略号。
+     2026-09-23 第二版修正：第一版把整组改成 display:block + 子元素 inline，
+     结果药丸里的图标变成 inline、基线对齐错位（店主："图标都出现位移"）。
+     这版保持 flex 对齐，只让药丸**内部的文字 span** 收缩 + 出省略号；
+     图标 svg 固定不缩。另外把两组药丸的左右内边距压到 6px、组间距压到 4px，
+     抠出来的宽度全部让给第二组（实测它原本只分到 76px 而需要 156px）。 */
   [data-mobile-nav="stats"] > *:last-child {
+    display: flex !important;
+    align-items: center !important;
+    flex: 0 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    overflow: hidden !important;
     margin-right: 0 !important;
+  }
+  [data-mobile-nav="stats"] > *:last-child > * {
+    display: flex !important;
+    align-items: center !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  [data-mobile-nav="stats"] > *:last-child svg {
+    flex: 0 0 auto !important;
+  }
+  [data-mobile-nav="stats"] > *:last-child span {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  [data-mobile-nav="stats"] button {
+    padding: 0 3px !important;
+    margin: 0 !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  /* 药丸内部的 span/svg 有自己的字号（宿主 .pill 自带），只在外层设 10px 不会被
+     继承进去 —— 真机上第二组仍差 ~20px 被省略号切掉，所以这里显式压到内部。 */
+  [data-mobile-nav="stats"] button,
+  [data-mobile-nav="stats"] button span,
+  [data-mobile-nav="stats"] button svg,
+  [data-mobile-nav="stats"] > * {
+    font-size: 10px !important;
+    line-height: 18px !important;
+  }
+  [data-mobile-nav="stats"] > *:not(:last-child) {
+    margin-right: 3px !important;
   }
   [data-mobile-nav="stats"] * {
     white-space: nowrap !important;
+  }
+  /* 「上下文环」被 stats-line 效果挪进输入框行的右簇（店主 2026-09-23 确认：
+     环要、百分比数字不要）。font-size:0 只塌掉文本、环 svg 有显式尺寸不受影响；
+     它是右簇的固定成员，不参与压缩。 */
+  [data-mobile-nav="stats-ring"] {
+    flex: 0 0 auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    min-width: 0 !important;
+    margin: 0 2px 0 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  /* 文本要连**药丸内部**一起塌掉：药丸自带字号，只在外层设 0 不继承进去，
+     真机上会留下半个 "46"。整棵子树 font-size:0，环 svg 用显式 px 不受影响。 */
+  [data-mobile-nav="stats-ring"],
+  [data-mobile-nav="stats-ring"] * {
+    font-size: 0 !important;
+  }
+  [data-mobile-nav="stats-ring"] button {
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    /* 宿主给药丸画的灰底/描边在输入框行里显得比环大一倍（店主："圆圈占了很多空间"），
+       全去掉，只留环本身。 */
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  [data-mobile-nav="stats-ring"] svg {
+    display: inline-block !important;
+    width: 16px !important;
+    height: 16px !important;
+    flex: 0 0 auto !important;
   }
 
   /* ---------- dsh-genui panel dock ----------

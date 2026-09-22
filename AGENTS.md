@@ -22,9 +22,10 @@
   │     ├─ index.tsx         ← 浏览器半区入口（3 slots）
   │     ├─ debug.ts          ← ?mobile-nav-debug=1 诊断徽章
   │     ├─ components/       ← MobileNavToggle / MobileDrawerFooter / ComposerFileButton / open-files-panel.ts
-  │     ├─ core/             ← reconciler-core.ts（零 import）+ raf-scheduler.ts · css-rules.ts · sessions-compat.ts · layout-compat.ts
-  │     ├─ effects/          ← 15 个效果模块：phone-chrome · sidebar-swipe ·
+  │     ├─ core/             ← reconciler-core.ts（零 import）+ raf-scheduler.ts · css-rules.ts · sessions-compat.ts · layout-compat.ts · icon-compat.ts（宿主图标跨代命名兼容）
+  │     ├─ effects/          ← 16 个效果模块：phone-chrome · sidebar-swipe ·
   │     │                       gesture-guard · subagent-chip-touch · composer-keyboard-guard ·
+  │     │                       composer-plus-toggle ·
   │     │                       file-viewer-compat · aionui-compat · stats-line ·
   │     │                       git-chip-reparent · settings-toolbar-reparent · preview-fullscreen ·
   │     │                       overlay-backdrop-fab · panel-exit · session-menu · session-row-fiber
@@ -37,7 +38,7 @@
   │  ├─ cdp-probe.mjs        ← 主探针 14 项核心断言（+6 集成，EXPECTED_FAILURES 基线）
   │  ├─ cdp-swipe-probe/failures · cdp-zoom-probe · cdp-compat-contracts (.mjs)
   │  ├─ css-structure-check.mjs ← CSS 结构检测器（已接入 test:core）
-  │  └─ probes/              ← 20 个回归锚点（builtin-only，可单跑）
+  │  └─ probes/              ← 21 个回归锚点（builtin-only，可单跑）
   ├─ tests/                  ← 24 个 .test.ts（node --test，type-stripping 直跑）
   ├─ docs/
   │  ├─ specs/               ← 8 篇权威设计文档（入库）
@@ -200,7 +201,7 @@ dsh web
 ## Testing & QA
 
 - **设置/插件市场调试地图**：`docs/debug/settings-market-debug-map.md` —— 设置区与市场 UI 的 DOM 层级图、入口链路、CSS module 哈希对照表（VOzbGW_/eGUBIq_/hHd-Xa_…）、compat 干预点索引与 CDP 取证 SOP。排查该区域布局/弹层问题先读它，不要重新摸索层级。（此文档仅本地保留，已加入 .gitignore 不随仓库上传。）
-- Automated gates: `pnpm verify` (typecheck) and `pnpm test:core`（24 个测试文件，glob 覆盖 `tests/` 全部）. `pnpm build` additionally exercises the custom client bundler. Use `git diff --check` for whitespace hygiene.
+- Automated gates: `pnpm verify` (typecheck) and `pnpm test:core`（26 个测试文件，glob 覆盖 `tests/` 全部）. `pnpm build` additionally exercises the custom client bundler. Use `git diff --check` for whitespace hygiene.
 - There is no linter, formatter, or coverage setup; the CI workflow (`.github/workflows/ci.yml`) additionally runs the lib freshness gate `git diff --exit-code lib`.
 - After source/layout changes, install the linked plugin in a real DSH Web profile, restart `dsh web`, and check both sides of the breakpoint:
   - **Narrow phone (~390px):** rail hidden; drawer/FAB/backdrop open and close; Escape; session-row action menus do not close the drawer; settings remains usable; Files opens explorer/preview sheets; session-log/footer actions work; preview fullscreen opens and resets.
@@ -231,7 +232,7 @@ dsh web
 
 - **GitHub Release 文案规格（用户要求，2026-09-20）**：Release notes 照 v2.4.1/v2.3.0 文章体例，不许直接贴 README 段落——`## vX.Y.Z · 一句话摘要` 开头 + 导语段（本版是什么、桌面 no-op 承诺、旧宿主回退建议）+ **致谢行必写**（v2.4.0 体例：「特别感谢合作人 @x（PR #63/#65：具体贡献）」+ 社区贡献与报障逐个 `@handle（#NN 报障 / PR #NN）`；条目标题带 `（#NN by @handle）`归属。署名从 GitHub 实测取：PR author + commit author + issue reporter，且只列修复确实落在本 tag 区间的——用 close 日期、closed_by 提交、`git log vA..vB` 引用三路核对，未合并的 PR 与仍 open 的报障不计）+ `### 安装`（DSHA 一句 + npm 代码块 + GitHub 直装行 + 旧名迁移提示）+ `### 新功能` / `### 修复`（`**症状**：根因 + 修法` 句式）+ `### 兼容`（宿主代际范围 + 已实装验证的第三方版本号）+ `### 完整提交`（提交少时逐条 short-hash；大版本列里程碑提交，收尾必带 `compare/vA...vB` 完整变更对比链接）。
 
-- 回归探针：`scripts/probes/`（20 个回归锚点，node:builtin-only，可单跑；主探针 `pnpm smoke:cdp` 与手势门 `cdp-swipe-failures.mjs` 见 Commands）。
+- 回归探针：`scripts/probes/`（21 个回归锚点，node:builtin-only，可单跑；主探针 `pnpm smoke:cdp` 与手势门 `cdp-swipe-failures.mjs` 见 Commands）。
 - CSS 表面审查（发现清单 + 施工任务 + 再审查协议 + 完整修复链）：`docs/audits/2026-09-15-css-surface-audit.md`；结构检测器 `node scripts/css-structure-check.mjs`（基线 0 fatal / 2 info，2026-09-16 实测）——**已接入 `test:core`**（`tests/css-structure.test.ts`，2026-09-16），所以缩进错位/重复媒体查询/选择器拆分回归会红。
 - 设计 spec：`docs/specs/`（权威设计文档随仓库走）；`.local-tests/` 探针原稿、`docs/superpowers/` 与 `docs/debug/settings-market-debug-map.md` 仍是本地不入库。
 - CI：`.github/workflows/ci.yml`——verify → test:core → build → `git diff --exit-code lib`（lib 新鲜度门）。**本地照抄这条会假绿**：它比的是**工作区↔索引**，`git add` 之后恒真，源码没提交也能过（本分支出过两个只装 `lib/` 的提交）。本地正确判据＝源码与 `lib/` 同一提交 → 再 `pnpm build` → `git diff --exit-code HEAD -- lib`；另加 `git status --porcelain --ignored lib` 必须为空（`git diff` 看不见未跟踪孤儿产物，而 tsc 从不清理 outDir）。**推 `fix/*` 分支不触发任何 CI**（workflow 只监听 main + PR），所以「推上去了」≠「被检查过」。

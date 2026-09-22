@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconPaperclipOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconPaperclip } from '../core/icon-compat.ts'
 import { NS } from '../i18n/locales.ts'
 
 /** Full props for the composer file entry. */
@@ -49,7 +49,7 @@ export function ComposerFileButton({ useInput, useSession, t }: ComposerFileButt
       disabled={disabled}
       onClick={openPicker}
     >
-      <IconPaperclipOutline16 size={14} />
+      <IconPaperclip size={16} />
     </button>
   )
 }
