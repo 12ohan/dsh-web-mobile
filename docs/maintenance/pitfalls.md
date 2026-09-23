@@ -508,6 +508,10 @@ hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session heade
 ### header 拥挤
 
 - **会话 header 拥挤保护必须 `[class*="_root"]`**（尾随空格根因+修正 → `docs/maintenance/pitfalls.md` §header 拥挤）：`ZKlsPq_root ` 带尾随空格，`[class$=]` 真实 DOM 0 命中（合成 fixture 复现不出，只有真渲染能暴露）；门控 `header:has([class*="_crumbs"] [class*="_root"])`；钉宽只钉计数/jobs root（`:has(> button[class*="_trigger"])`），排除 switcherRoot 让 title 省略号收缩；官方 `ZKlsPq_separator` 手机端隐藏，crumbSep 保留。**让位优先级（2026-09-14 反转，用户拍板）**：模式名（手机端唯一的模式切换入口）与会话标题都保住文字，让位的是后台任务芯片的冗长标签 `_count`（≤440px 直接 `display:none`——截成数字在两位数任务时会显示错误的计数；≤559px 再加「lineage 同时在场」条件）——原先压模式文字的 `max-width:18px` 两条规则已删除。
+- **2026-09-23 增补（智能体团队 chip + 右侧留白，真机 dpr 4 / 视口 360）**：
+  - **团队 chip 的字不是插件藏的**：宿主 agent-team 包自带 `@container(width<=480px){.VoX2oq_triggerLabel{display:none}}`，容器是会话头 `wSkVaW_titleRow`（`container-type:inline-size`），头部一行 344 CSS px ⇒ 必命中（用户拍板跟随上游）。既然只剩 14px 图标，**下限从 44px 收到 28px**（图标 14 + 宿主自带 7px 内边距，与本插件 toggle/files 同尺寸）。
+  - **右侧那段 26px 留白不许从预留下手**：头部右侧 `titleCluster{padding-right:46px}` 是承重值——文件按钮是绝对定位 `right:8px` 的 36px 盒，2026-09-22 用 26px 预留在 360px 真机上实测团队 chip 跑到 334、被 316 起的按钮压住 18px，**点 chip 尾巴会打开文件面板**。留白只能从「盒子本身」收：三级间隙 6→4、模式 chip 内边距 6→4、团队 chip 44→28。
+  - **团队 chip「再点不关」是上游 onClick 不 toggle**：该包触发器开态时只 `panelRef.current?.focus()`，关闭只靠 `useDismissOnOutsidePointer`（document 上的 pointerdown，靶心在 root/panel 外）或 Escape。插件侧修法见 `src/client/effects/team-chip-toggle.ts`：开态时替用户向 `document.body` 派发一次合成 pointerdown（走宿主自己的 dismiss），再吞掉那一击 click——**顺序不可换**，放 click 过去会让宿主在未冲刷的旧闭包里 focus 面板。
 ### header 行高与弹层
 
 - **会话 header 的行高、座位线与弹层包含块（2026-09-14 真机三项反馈 → `docs/maintenance/pitfalls.md` §header 行高与弹层）**：①弹层——`dsh-client-ui-jobs` 的菜单是 `position:absolute; top:calc(100%+5px)` 挂在 `.QsffPG_root{position:relative}`（28px 流式盒）上，被我们 chip root 的 `overflow:hidden` 与宿主 `session-title-cluster{overflow:hidden}` 双重裁掉、且 `right:8px` 相对 156px chip root 解析到 x=-16，芯片 `aria-expanded=true` 却什么都没画；修复＝**header `position:relative` + headerActions 内 chip root `position:static`**，两半都必需（只 static 会让包含块外移到 frame，菜单落到 x=8 y=849 屏外）。②行高——宿主手机版 `grid-template-rows: minmax(32px,auto) minmax(44px,auto)` 被空 utilities 座位（44px）与 `[role=tab]{min-height:44px}` 顶成 44/44（97px 里只有 36px 是内容）；压到 rows 36/32 + tab 32 + 座位 30px ⇒ 77px，宿主 `padding-top:8px` **不许再收**（收到 4px 会让标题行中心 22 而两角按钮中心 26）；规则用 `:has(> *)` 门控：hero 那个空 header 仍占 85px，不许被压缩（hero composer rect 逐字节不变）。③title cluster 的 44px 预留裁到 26px（我们的 Files 按钮只画 28px 带，留 8px 净空），标题道再得 18px。④**hero 空 header 的灰线（2026-09-19）**：hero 相位的 `headerHidden` 空 header 在手机上只画出自己的 1px `border-bottom`（像素扫描 y=84–85，rgb(224,224,224)）＝用户报的「新会话顶部灰线」；根因是宿主自家规则互压——`dsh-api-session-controller` 的 ≤768px 规则（(0,2,0) display:grid）压过 conversation 的 `headerHidden` 隐藏（(0,1,0) display:none），桌面 >768px 不命中故无灰线。修＝layout.css 移动分支以 (0,3,1) 重申 display:none（无需 !important，宿主 display 非 important 且我们的标签最后加载）；hero header 无子元素、抽屉入口是 FAB，隐藏顺带释放 85px 死空间。注意宿主在部分引擎上根本不挂载该 header（CDP 系统 Chromium 实测 headerCount=0）——探针断言写「缺席或 display:none」契约语义，不写「必须在场」；锚点 `hero-composer-clip-probe.mjs` 5b/6b。
@@ -647,3 +651,30 @@ hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session heade
 ### 第三方模型条
 
 - **trailing 车道的 slack 吸收者体系只认两种模型条形态：官方 pill（`:has(> _trigger[aria-haspopup="menu"])`，拿 auto）与缺席（subagent 场，meter 兜底拿 auto）；第三方 seat（@hytime/dsh-thinking-effort 的 `data-seat-root`，v0.2.3-v0.3.1 逐字节稳定）是第三形态——在场但无 `_trigger` 子节点（自己的 chip/panel 词汇表），两条吸收者规则全部静默失配（#60，2026-09-22）**：展开态 root 唯一子节点是绝对定位面板 → root 塌成 0 宽，面板 `right:0` 锚着 0 宽 root 的右缘往左扫 336px——393px 实测 root x=106、面板 left=-230（报障者实测：禁用本插件样式表后 root x=339、面板 +3，坐实责任在注入侧；`_trigger`/`aria-haspopup="menu"` 那族规则对 seat root 本就全不命中，`listbox` 不是 `menu`）。修法＝两根新规则锚 `data-seat-root`/`data-seat-panel`（纯增量，不改既有规则）：root `flex: 1 1 auto` + `justify-content: flex-end`（收起态 chip 焊右；伸展吃光自由空间后 flex 尺寸解析先于 auto margin，meter 兜底 auto 归零，无双空隙——这是**不改** meter 兜底规则的根据）；展开态面板 `left: 50%` + `translateX(-50%)` 把重心锚到伸展后的 root（与官方 `_menu` 居中同配方），插件自带 `min(336px, 100vw - 32px)` 宽度保证任意宽度不出屏。**报障者被否的 translateX 尝试败因＝没先修 root 位置**——0 宽 root 上的居中照样出屏；居中只在伸展后的 root 上成立。教训：给 trailing 车道写适配前先问「这条规则在模型条的第三形态下命中谁」；吸收者链每多认一种第三方 seat 就要显式教一次，换词汇表即失联。回归锚＝`tests/third-party-model-seat.test.ts`。
+
+### 工作区 chip 再点关闭
+
+- **hero 工作区 chip 的「再点关闭」被宿主 Menu 的「外部点击」吃到（2026-09-23，宿主 0.1.7-rc.1 源码对账）**：症状＝点 chip 打开工作区列表后，**再点 chip 关不掉**（列表原地不动，等于又开一次）。chip 自己是正常 toggle（`ui-conversation/src/client/skeleton/ConversationContent.tsx`：`onClick: () => { setPickerOpen(open => !open) }`），关不掉的原因在 `ui-workspace/src/client/WorkspacePicker.tsx` 的开法：`<Menu anchor={null} portal getAnchorRect={anchorRef.current.getBoundingClientRect} …>` —— `anchor={null}` 意味着 Menu 的 `rootRef` 是一个**空 span**，触发器 chip 在 Menu 子树**之外**，而 `ui-primitives/src/Menu.tsx` 的关闭判定只豁免这两个子树：
+
+  ```ts
+  const onPointerDown = (e: PointerEvent) => {
+    if (rootRef.current?.contains(e.target) === true) return
+    if (listRef.current?.contains(e.target) === true) return
+    onClose()
+  }
+  ```
+
+  ⇒ 第二击的顺序是：`pointerdown` 被判成外部点击 → `onClose()`（状态翻 false）；紧接着的 `click` 到达 chip 的 `onClick` → 又翻 true。**旁证**：同行的「预设」触发器传的是 `anchor={<button …/>}`（按钮在 rootRef 内），pointerdown 不被判外部，所以它没有这个毛病——同一份 Menu 代码，两种接线。
+
+- **修法（只吞这一击 click，宿主路径不动）**：`effects/workspace-chip-toggle.ts`。`pointerdown` **捕获**阶段：chip 自报 `aria-expanded="true"` 且宿主的 portal 菜单（`[role="menu"]`）在场时记下这一击；`click` **捕获**阶段：同一 chip 的 click 直接 `stopPropagation()`——React 挂在 root 容器上的 onClick 不再执行，chip 的 toggle 不会被翻回「开」，宿主 pointerdown 的那次关闭成为唯一结果（同型：`composer-plus-toggle.ts` 吞 click 挡 React 委托；`subagent-chip-touch.ts` 的 `toggledTrigger` 宽限窗）。菜单本来就关着时（第一击的开启路径）完全不介入。
+
+- **为什么不读 DOM 判开态、也不补发合成事件**：开态必须在 `pointerdown` 阶段读 `aria-expanded`——React 18 对「原生 listener 里的 setState」是 NormalPriority 调度（MessageChannel 宏任务），到 `click` 时 portal 可能**还没卸载**，此刻 `document.querySelector('[role="menu"]')` 读到的可能是未冲刷的旧树；而 `aria-expanded` 在 pointerdown 时必然是这一击之前的真实值。补发合成 `Escape`/`pointerdown` 的路线已否决：Escape 会同时打到插件自己的抽屉关闭与宿主 modal 的 document 级监听（`composer-plus-toggle` 就是因为这个才必须把 Escape 派发在编辑器元素上），合成 pointerdown 同理有 blast radius。
+
+- **选择器与跨代边界**：chip 锚 `[class*="heroWorkspaceRow"] > button[aria-haspopup="menu"]`——**直接子**是关键，预设触发器在 Menu 的 anchor span 里，加 `>` 才不会误伤（它的接线是好的，吞它的 click 会让菜单关不掉）。整条效果走 `installMobileEffect`（`MOBILE_QUERY` 门控），桌面零介入（那里同一处宿主缺口依然存在，但不属于本插件范围）。回归锚＝`tests/workspace-chip-toggle.test.ts`（选择器/捕获阶段/开态读法/唯一 stopPropagation/dispose 五项源码契约）。
+
+### 全屏侧边栏面板带
+
+- **0.1.7 全屏右侧边栏面板（终端 / 文件 / 预览 / 浏览器 tab）压在插件浮层之上：手机上唯一的抽屉入口点不到（2026-09-23，真机 dsh web 0.1.7-rc.1 实测）**：宿主在 fullscreen 档把 `--dsh-dockkit-dock-layer` 设成 **40**（`.panel[data-sidebar-right-panel='fullscreen']`），dockkit 的 tabCell 于是拿 z 40；而宿主 AppFrame 的 overlayLayer 只有 **20**、本插件 FAB 只有 **21** —— 面板一开就盖住这两者。宿主在桌面是有意的（fullscreen 面板 > frame overlays），但手机上 FAB 是面板占住主区后**唯一**的返回/抽屉入口（见 `overlay-backdrop-fab.ts` 的 FAB 第二张脸），被盖住即全断。
+- **实测（390×844，headless 真浏览器打真宿主）**：面板开着时 `elementFromPoint`(FAB 中心) 命中面板子节点（`hitInPanel: true`），真实 tap 后 `data-sidebar-collapsed` 仍为 true（抽屉没开）；同一次修复后：FAB `z-index: 55`、命中自身、tap 打开抽屉、Escape 关上。第 1 处 chip 的 A/B 同批跑（见「工作区 chip 再点关闭」）。
+- **修法**：`base.css.ts` 的 mobile「popover band」节加一条同形 gate——`body:has([data-sidebar-right-open][data-sidebar-right-panel="fullscreen"])` 下把本插件 FAB 抬到 **55**（本插件「抽屉之下」带：仍在遮罩 1250 / 抽屉 1300 之下，抽屉开着时照旧被盖住，不回退 09-13 的遮挡事故），并把 `[class*="_overlayLayer"]` 抬到 **1400**（与抽屉 gate 同值；两条 gate 同值时无论哪条胜出结果一样，不会出现「右侧栏开着反而把层压低到抽屉之下」）。**门必须带 `[data-sidebar-right-open]`**：`data-sidebar-right-panel="fullscreen"` 是展示档、面板关着也在（实测 restore 后仍在），只按它会把 band 常驻抬高、FAB 就会浮在打开的抽屉之上。docker 档（层 10）本来就低于 FAB 21，不进这条门。
+- **被否决**：把 FAB 抬到 1400（会浮在打开的抽屉上）；只抬 `_overlayLayer` 不抬 FAB（FAB 是 frame 子节点、不在该层里，实测 `fabChain[0] = pI_x6G_frame`)；降抽屉/遮罩 z（09-13 全黑事故）；按面板逐个打补丁（宿主的 fullscreen 档是通用形态）。回归锚＝`tests/overlay-layer-band.test.ts` 三条新断言（FAB 带值区间、overlayLayer 同值、门必须含 open 属性）。

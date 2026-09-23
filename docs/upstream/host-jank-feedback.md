@@ -26,13 +26,23 @@
 
 **现象**：打开一个长会话后的第一分钟内，主线程间歇出现 400–1900ms 的 longtask（与用户操作无关，开抽屉、点输入框都会撞上）。
 
-**证据**：回调级计时（包装 rAF/MO/setTimeout/querySelectorAll）+ 屏蔽前端资产差分定位到宿主 index bundle 的语法高亮器（Shiki，`css-variables` 主题、`tokenizeTimeLimit:0`）。触发链：`setTimeout(()=>{hr()})` 调度 + 语言包懒加载完成后 `then(l=>{hr()})` 重跑，每遍 tokenize 全部待高亮 code 块 110–400ms（1x CPU），多遍叠加。第三方移动端插件的响应路径已逐一排除（flush ≤8ms、MutationObserver ≤9ms、最慢选择器 4.9ms）。
+**证据**：回调级计时（包装 rAF/MO/setTimeout/querySelectorAll）+ 屏蔽前端资产差分定位到宿主 index bundle 的语法高亮器（Shiki，`css-variables` 主题；当时 bundle 里是 `tokenizeTimeLimit:0`，该字段在当前宿主上的位置已变，见下方 2026-09-23 更正）。触发链：`setTimeout(()=>{hr()})` 调度 + 语言包懒加载完成后 `then(l=>{hr()})` 重跑，每遍 tokenize 全部待高亮 code 块 110–400ms（1x CPU），多遍叠加。第三方移动端插件的响应路径已逐一排除（flush ≤8ms、MutationObserver ≤9ms、最慢选择器 4.9ms）。
 
 **建议（任一）**：
 
 1. 高亮 pass 改 idle 调度或分片增量 tokenize（每空闲片处理少量块）；
-2. 给 `tokenizeTimeLimit` 设预算——**已在本机验证可行**：对 dist bundle 做 `tokenizeTimeLimit:0 → 100` 单点替换，served 生效、真会话 boot 正常、尖刺消除；
+2. 给 `tokenizeTimeLimit` 设预算——**当时在本机验证可行**：对 `0.1.1-rc.2` 的 dist bundle 做 `tokenizeTimeLimit:0 → 100` 单点替换，served 生效、真会话 boot 正常、尖刺消除。**在当前宿主上这个单点替换已经打不到渲染路径，别照搬**（见下方更正）；
 3. 视口优先：先高亮可视区块，屏外块延后。
+
+**2026-09-23 在 0.1.7-rc.1 上复核（上面那些毫秒数未重测，只复核了三条前提）**：① 宿主 dist 里**仍是 `tokenizeTimeLimit:0`**（当年的止血手改被宿主升级抹回）；② 会话包**仍无窗口化**（`virtual` / `windowing` / `IntersectionObserver` / `content-visibility` 在 `dsh-client-ui-conversation/lib/client.js` 全 0 命中 ⇒ 每次切换整段挂载）；③ 症状随上下文长度放大的量化：短会话 52 KB / 0 个代码块 vs 两个长会话 5.3 MB / 153 块、5.9 MB / 176 块。真机（双击行切换）首屏短长都是 ~0.9s ⇒ **切换动作本身不慢，卡在首屏之后的整段挂载 + 高亮**。完整交接见 `docs/audits/2026-09-23-session-switch-jank-handover.md`。
+
+**2026-09-23 更正（0.1.7-rc.1 bundle 精读：`dsh-web-frontend/dist/assets/index-3dwByubT.js` + `vendor-CCJJTK99.js`）**：上面「仍是 `tokenizeTimeLimit:0`／单块不限时」的说法要修正——`tokenizeTimeLimit` 在两个 bundle 里**各只出现 1 次**：
+
+- `index-*.js` 那唯一一处是**预热**调用：`Qk()` 建好 highlighter 后用 3 个样例片段跑 `codeToTokens(..., {tokenizeTimeLimit:0})`（0 = 不限时）；
+- 真正的渲染调用**不带这个参数**：`N6()` → `d1().codeToTokens(code, {lang, theme:"css-variables"})`；流式高亮类的 `tokenize()` → `codeToTokensBase(code, {lang, theme, grammarState?})`；
+- `vendor-*.js` 里 Shiki 内部 `Ji()` 的默认值是 `{tokenizeMaxLineLength = 0, tokenizeTimeLimit = 500}`，而且是**逐行**预算：每行都拿 `tokenizeLine(line, state, 500)`。
+
+两条结论：① **按块看仍没有有效预算**（代价 ≈ Σ 每块行数 × 每行 tokenize 时间，500ms 只是单行上限）；② **建议 2 的单点替换在当前宿主上打不到渲染路径**——sed 只会改到预热的那 3 个片段。要见效得给渲染调用显式传预算，或按建议 1/3 改调度与视口优先。
 
 ## 复现要点
 

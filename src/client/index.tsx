@@ -11,6 +11,8 @@ import { installSubagentChipTouch } from './effects/subagent-chip-touch.ts'
 import { installSessionMenuDelete } from './effects/session-menu.ts'
 import { installComposerKeyboardGuard } from './effects/composer-keyboard-guard.ts'
 import { installComposerPlusToggle } from './effects/composer-plus-toggle.ts'
+import { installWorkspaceChipToggle } from './effects/workspace-chip-toggle.ts'
+import { installTeamChipToggle } from './effects/team-chip-toggle.ts'
 import { installModelMenuAnchor } from './effects/model-menu-anchor.ts'
 import { installAionuiCompat } from './effects/aionui-compat.ts'
 import { createPanelExit, installPanelRowExit } from './effects/panel-exit.ts'
@@ -221,6 +223,14 @@ export function apply(ctx: ClientContext): void {
   // dismissed keyboard (upstream keepFocus focuses the editor on mousedown).
   installComposerKeyboardGuard(ctx)
   installComposerPlusToggle(ctx)
+  // Hero workspace chip: the host's picker portaled its Menu with
+  // `anchor={null}`, so its own outside-pointerdown close eats the trigger's
+  // tap and the chip's toggle re-opens it. Swallow that one click.
+  installWorkspaceChipToggle(ctx)
+  // Agent Team chip: the host trigger only opens (its onClick focuses the panel
+  // when open, never toggles), so a second tap could not close it. Dispatch the
+  // outside pointerdown its own dismiss hook waits for, then swallow the click.
+  installTeamChipToggle(ctx)
   // Model/reasoning menu portals to <body>; the CSS centering rule died with the
   // portal move, so re-anchor it on the trigger here (owner report: opens far left).
   installModelMenuAnchor(ctx)

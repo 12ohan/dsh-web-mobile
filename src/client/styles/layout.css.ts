@@ -1448,7 +1448,11 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     max-width: none !important;
     min-width: 0 !important;
     min-height: 40px !important;
-    gap: 0 6px !important;
+    /* 三级间隙 6 → 4（2026-09-23 用户拍板）：团队 chip 在手机档被宿主
+       @container(width<=480px) 藏掉标签、只剩 14px 图标（对账见 §6），
+       这一行不再需要 6px 的呼吸量；收成 4px 让「模式 / 团队 / 文件夹」
+       看起来是一组。 */
+    gap: 0 4px !important;
     justify-content: flex-start !important;
     align-items: center !important;
     /* 簇溢出守卫，随断点 A 无条件化并入本显示规则（原为独立条）：极端
@@ -1545,7 +1549,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     padding: 0 !important;
     border-top: 0 !important;
     justify-content: flex-end !important;
-    gap: 6px !important;
+    /* 与 titleCluster 同步收到 4px（2026-09-23）：动作行里的 chip（任务 /
+       谱系 / 团队）之间也只留 4px。 */
+    gap: 4px !important;
     overflow-x: auto !important;
     scrollbar-width: none;
   }
@@ -1635,12 +1641,17 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
       手机端唯一的模式切换入口（pitfalls ⑤：必须保字），团队 chip 的完整
       文字在自己的面板里有承载（点开即达），所以让它先让：保持 order:2
       不变（创造在前、团队在后的次序不能翻），只把不可缩改成可缩，并加
-      44px 收缩下限（数值可调）保住图标点击区；内部省略号窗口由 rc 代的
+      收缩下限保住图标点击区；内部省略号窗口由 rc 代的
       > button / > button > * 规则继续供给。特异性 (0,5,1) 高于 pin 规则
-      (0,4,1)，且 !important，不依赖书写顺序；:has 门控保证 rc 宿主不命中。 */
+      (0,4,1)，且 !important，不依赖书写顺序；:has 门控保证 rc 宿主不命中。
+      2026-09-23 下限 44 → 28（用户拍板）：宿主自己那条 @container(width<=480px)
+      把标签藏了，手机档这颗 chip 实际只剩 14px 图标，44px 的盒子成了那一行
+      最宽的空占位（真机 dpr 4：图标右缘 291 → 文件按钮图标左缘 326，观感 35px
+      留白）。28 = 图标 14 + 宿主自带左右内边距 7（.VoX2oq_trigger padding），
+      与本插件 toggle/files 同尺寸，不再额外扩拍击区。 */
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-team-action][class*="_root"] {
     flex: 0 1 auto !important;
-    min-width: 44px !important;
+    min-width: 28px !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerActions"] [class*="QsffPG_root"] {
     position: absolute !important;
@@ -2189,7 +2200,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     max-width: 100%;
     height: 36px !important;
     min-height: 36px !important;
-    padding: 0 6px;
+    /* 左右内边距 6 → 4（2026-09-23 用户拍板）：与 6 → 4 的三级间隙一起，
+       把「标准模式 / 智能体 / 文件夹」收成一组；文字本身不受影响。 */
+    padding: 0 4px;
     border: 0;
     background: transparent;
     font: inherit;

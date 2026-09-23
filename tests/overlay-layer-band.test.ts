@@ -41,3 +41,41 @@ test('overlayLayer raise is drawer-open-gated at the 1400 band', () => {
   )
   assert.match(band, /\[class\*="_overlayLayer"\]\s*\{\s*z-index: 1400 !important;\s*\}/)
 })
+
+// 0.1.7 fullscreen sidebar panels (terminal / files / preview / browser) put the
+// dockkit cell at z 40 (--dsh-dockkit-dock-layer: 40), above the host's overlay
+// layer (20) and our FAB (21). Measured 2026-09-23 at 390px with the terminal
+// open: the FAB's centre hit-test returned a panel child and a real tap left the
+// drawer closed. The band must raise our own two surfaces for that state — and
+// only for it: the presentation attribute alone survives a closed panel.
+const FIX = '[data-sidebar-right-open][data-sidebar-right-panel="fullscreen"]'
+
+test('fullscreen right-sidebar panel raises our FAB above the dock layer band', () => {
+  const gate = `body:has(${FIX}) [data-mobile-nav="fab"]`
+  const at = band.indexOf(gate)
+  assert.notEqual(at, -1, 'FAB raise for the fullscreen right sidebar is missing')
+  const body = band.slice(at, band.indexOf('}', at))
+  assert.match(body, /z-index: 55 !important/, 'FAB must rise to the below-the-drawer band (55)')
+  // Below the drawer stack by design: an open drawer still covers the FAB.
+  const value = Number(/(\d+)/.exec(body)?.[1])
+  assert.ok(value > 40, `FAB band must out-rank the dock layer 40 (got ${String(value)})`)
+  assert.ok(value < 1250, `FAB band must stay under the backdrop 1250 (got ${String(value)})`)
+})
+
+test('fullscreen right-sidebar panel also raises the overlayLayer root', () => {
+  const selection = `body:has(${FIX})\n    [class*="_overlayLayer"]`
+  assert.ok(band.includes(selection), 'overlayLayer raise for the fullscreen right sidebar is missing')
+  const at = band.indexOf(selection)
+  assert.match(band.slice(at, band.indexOf('}', at)), /z-index: 1400 !important/)
+})
+
+test('the right-sidebar raise is gated on the OPEN attribute, not the presentation', () => {
+  // `data-sidebar-right-panel="fullscreen"` stays on the panel while it is
+  // closed (measured 2026-09-23), so the gate must include the open marker.
+  assert.doesNotMatch(
+    band,
+    /body:has\(\[data-sidebar-right-panel="fullscreen"\]\)/,
+    'a presentation-only gate would raise the band on a closed panel',
+  )
+  assert.match(band, new RegExp(FIX.replace(/[[\]"]/g, '\\$&')))
+})
