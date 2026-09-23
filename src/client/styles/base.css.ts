@@ -234,6 +234,27 @@ export const BASE_CSS = `
     [class*="_overlayLayer"] {
     z-index: 1400 !important;
   }
+  /* 0.1.7 fullscreen sidebar panels (the sidebar terminal / files / preview /
+     browser tabs) state the dockkit cell at z 40 — the host sets
+     --dsh-dockkit-dock-layer: 40 on .panel[data-sidebar-right-panel=fullscreen]
+     — which outranks the
+     host's own overlay layer (20) and our FAB (21). Measured 2026-09-23 at
+     390px with the terminal panel open: elementFromPoint at the FAB's centre
+     returned a panel child, and a real tap on it left the drawer closed — the
+     phone lost its only way back to navigation (the FAB is the screen's only
+     control once a panel owns the main area, see overlay-backdrop-fab.ts).
+     Raise OUR two surfaces for that state, the same "raise the root, not the
+     children" shape as above; the FAB stays in the below-the-drawer band (55)
+     so an open drawer keeps covering it. Gate on the open attribute: the
+     presentation attribute alone survives a closed panel. Closed-panel,
+     docked-panel (dock layer 10) and desktop stacks keep the host's order. */
+  body:has([data-sidebar-right-open][data-sidebar-right-panel="fullscreen"]) [data-mobile-nav="fab"] {
+    z-index: 55 !important;
+  }
+  body:has([data-sidebar-right-open][data-sidebar-right-panel="fullscreen"])
+    [class*="_overlayLayer"] {
+    z-index: 1400 !important;
+  }
 }
 
 /* Floating fallback button (hero / blank phases without a session header).
