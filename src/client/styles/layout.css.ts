@@ -793,29 +793,14 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      顺带留下取证结论，免得以后有人再试：本 WebView 里该 svg 的 CSS transform 完全失效
      （内联 rotate(45deg) 盒子都不变，svg 根上的 SVG transform 属性也无效），
      只有里层 path 的属性有效；真要做也只能走 JS 设属性。现已决定不做。 */
-  /* 输入区**其它**控件的按下反馈（店主 2026-09-23："头部以外的那几个功能，怎么没有
-     触击反馈？应该会有个胶囊才对"）。读源码取证：宿主这四包 ——
-     dsh-client-ui-conversation / model-selection / permission-presets / input-trigger
-     —— **:active 全为 0**，胶囊只挂在 :hover 上（触摸设备不可靠），
-     而且这四包**没有任何 ::before/::after**（各 0 次）⇒ 可以安全借用伪元素。
-     做法与上面 📎 那组同源：::before 画 999px 圆（inset 3px），:active 时上宿主 token 色。
-     发送键（_primary）已有实心蓝底、不需要，排除。 */
-  [data-composer-card] button:not([class*="_primary"]):not([data-mobile-nav="file-upload"]) {
-    position: relative;
-  }
-  [data-composer-card] button:not([class*="_primary"]):not([data-mobile-nav="file-upload"])::before {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    border-radius: 999px;
-    background: transparent;
-    pointer-events: none;
-    transition: background .12s ease;
-  }
-  [data-composer-card] button:not([class*="_primary"]):not([data-mobile-nav="file-upload"]):hover::before,
-  [data-composer-card] button:not([class*="_primary"]):not([data-mobile-nav="file-upload"]):active::before {
-    background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06));
-  }
+  /* 输入区**宿主渲染**的功能键**不再自加胶囊**（店主 2026-09-23："点击功能键怎么有两个
+     灰色的叠加？"）。
+     原因：宿主本来就有自己的 hover 底色（conversation 包 13 条 :hover、model-selection 3 条、
+     permission-presets 2 条、input-trigger 3 条），我们再加一层 ::before 就是**两层灰叠在一起**。
+     教训：上一轮店主说"这几个功能没有触击反馈"，我据此加了胶囊 —— 实际是那次刚把浏览器默认
+     淡蓝 tap 高亮压掉、观感反差的错觉；**宿主已有的反馈不要再叠一层**。
+     我们自己注入的 📎（[data-mobile-nav="file-upload"]）例外：宿主没有对应控件、也就没有底色，
+     它的胶囊留在上面那组规则里。 */
   /* 命中区外扩：::after 属于按钮本身，一起参与命中测试，视觉完全不变。 */
   [data-composer-card] [data-mobile-nav="file-upload"]::after {
     content: '';
