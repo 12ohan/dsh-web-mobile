@@ -1,7 +1,7 @@
 # 交接：会话切换卡顿（0.1.7-rc.1 手机端，2026-09-23）
 
-> 一句话：**卡顿属上游宿主前端**——每次切换整段挂载 + 不限时 Shiki 高亮全部代码块；本插件（dsh-web-mobile）的响应路径已被实测排除，DSHA 只是提供 WebView 与 ARM 单主线程的平台。
-> **状态（2026-09-23 晚更新）：定位完成，未动任何代码或宿主文件。** 处置已定：走 B（提交上游官方），A 的 dist 单点替换经 §2.4 精读确认在当前宿主上失效。量化 A/B 因容器浏览器通道与设备 shell 双双不可用而搁置（§6-2）。
+> 一句话：**卡顿属上游宿主前端**——每次切换整段挂载 + 没有有效预算的 Shiki 高亮全部代码块（预热调用是 `tokenizeTimeLimit:0`，渲染路径落到默认 500ms/**行**，见 §2.4）；本插件不含任何高亮逻辑、也不渲染会话正文，但它在「首屏之后那一段」的占比在当前宿主上**未量化**（§4 / §6-2）。DSHA 只是提供 WebView 与 ARM 单主线程的平台。
+> **状态（2026-09-23 晚更新）：定位完成，未动任何代码或宿主文件。** 处置已定：走 B（提交上游官方）——**已提交 <https://github.com/deepseek-ai/deepseek-harness/discussions/7647>**；A 的 dist 单点替换经 §2.4 精读确认在当前宿主上失效。量化 A/B 因容器浏览器通道与设备 shell 双双不可用而搁置（§6-2）。
 
 ## 0. 症状与复现
 
@@ -131,7 +131,7 @@ grep -o "tokenizeTimeLimit:[0-9]*" $F     # 复核：:100 才算打上
 
 ## 6. 待办
 
-1. **已定：走 B（上游）**。A 的 dist 单点替换经 §2.4 精读确认在当前宿主上打不到渲染路径，不再作为止血手段；2026-09-23 用户拍板把问题提交官方（`deepseek-ai/deepseek-harness`）。
+1. **已定：走 B（上游）**。A 的 dist 单点替换经 §2.4 精读确认在当前宿主上打不到渲染路径，不再作为止血手段；2026-09-23 用户拍板把问题提交官方。**已提交：<https://github.com/deepseek-ai/deepseek-harness/discussions/7647>** —— `deepseek-ai/deepseek-harness` 的 issues 是关闭的，官方反馈入口是 Discussions → General（标题带 `[Bug]`）；帖子正文＝`host-jank-feedback.md` §问题 2 的证据 + §2.4 更正 + 体量数字。
 2. **量化 A/B 被环境卡住（不是没做）**：容器里 chromium 通道 18:17 起失效（GPU 进程 SIGSEGV 带崩浏览器；本次复现：完整版 153 / 136 / 131 三个构建 + headless shell 全败，`Page.navigate` 与 `Emulation` 域直接挂住）；设备 shell 通道未连（设置 → 设备能力授权），`dumpsys` 被策略拦。⇒「插件在首屏之后那段里占多少」仍未量化，§4 的三条插件侧嫌疑（6 个无 scope 任务每帧全跑、O(records) MutationObserver、7 条 `body:has` 门）保持**未验**，不要当已排除。
 3. 通道恢复后可直接跑已就位的三臂脚本（`/root/tmp/jank-ab.mjs`：现状 / Shiki 预算 / 插件停用；采 longtask + LoAF 归因）。取证注意：一次性 cookie 用 `.credentials.yaml` 密钥铸（须店主授权）；`Network.setCookie` 在 headless shell 上不返回，改用 `Network.setExtraHTTPHeaders` 注 Cookie。
 4. 宿主下一次升级后，**重跑 §3.2 的三条复核 + §2.4 的位置核对**（渲染路径是否终于显式传预算、是否终于有了窗口化）。
