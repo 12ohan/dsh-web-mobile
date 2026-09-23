@@ -21,7 +21,9 @@ export const BASE_CSS = `
   -webkit-tap-highlight-color: transparent;
 }
 [data-mobile-nav="toggle"]:hover,
-[data-mobile-nav="files"]:hover {
+[data-mobile-nav="files"]:hover,
+[data-mobile-nav="toggle"]:active,
+[data-mobile-nav="files"]:active {
   background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06));
 }
 [data-mobile-nav="toggle"]:focus-visible,
