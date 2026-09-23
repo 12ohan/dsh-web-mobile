@@ -590,6 +590,8 @@ hero 态存在一个**空的、宿主隐藏但仍在文档流**的 session heade
 ### 响应压缩
 
 - **响应压缩是进程级 prototype patch**：`src/compress.ts` 直接替换 `http.ServerResponse.prototype` 的 writeHead/write/end（disposer 还原），作用于 DSH Web 进程内所有响应而不只是本插件路由；仅压缩 ≥4KB 且 content-type 含 json、无既有 content-encoding、客户端 Accept-Encoding 支持 br/gzip 的响应，SSE 有意不压。改动该文件时必须保持三条不变式：小 JSON 原样字节透传（原头不动）、Content-Length 与实发字节数一致、dispose 完整还原三个方法。
+- **#80 跟进已修（2026-09-22）**：缓冲期 `write()` 的 encoding 随块缓冲（latin1 不再被静默重编码，`end(data, enc)` 同透传）；completion callback 收进 `pending`，在真 `end()` 回放后 fire-once 按序触发（不接 error 传播——真实 flush 无法单独失败它们）；缓冲期恒 `true`（内存全收、socket 未触碰）＝已文档化限制（模块头注同记）。回归锚：`tests/compress.test.ts` 两用例（回调顺序、latin1 字节）。
+
 ### 会话删除
 
 - **会话删除的注入面按宿主分代**（fork wzxmt-zhc 摘抄；完整取证 → `docs/fork-wzxmt-zhc/backlog.md` 会话删除行）：rc.2 手机抽屉只渲染宿主 rail（现役 `bhn1Oq_rail`；上游已改名，子串匹配不受影响），会话行 `_sessionRow` 与 ⋯ 菜单只在 ≥1024px 桌面面板存在 → session-menu.ts 在 touch 门控内静默、宿主升级后自动激活；**别为此做全宽注入或抽屉展开面板**（用户已否决）。**0.1.5 菜单换形（2026-09-13 真机）**：仍 3 项但渲染换代——`role="menuitem"` 按钮直排文本、无子元素（rc.2 的 `_itemIcon/_itemLabel` 克隆模板消失）；读取用 `itemLabel`（label span → 整按钮 textContent）双代兼容，注入项在无 label span 且无子元素时整按钮改文+染色，**未知形状（有子元素却无 label span）不猜文本**。升级绊线：`scripts/probes/session-delete-probe.mjs` 断言 5（rail 在场但 0 行/0 菜单）——0.1.3 上翻红即按 SKIP 提示复启注入/弹窗套件。桌面零注入由断言 15c/15d 守（pointer 门控 + misc pointer-only 隐藏块双保险），宽屏触摸（≥1024px + touch emulation）注入由 16a-16d 守。删除端点真机已验：冷会话 200 + 整目录移除、GET 405 / 空参 400 / 未知 404；**运行中会话 409 仅单测**。源码不变量守卫 `tests/session-menu.test.ts`。
