@@ -39,7 +39,7 @@
   │  ├─ cdp-swipe-probe/failures · cdp-zoom-probe · cdp-compat-contracts (.mjs)
   │  ├─ css-structure-check.mjs ← CSS 结构检测器（已接入 test:core）
   │  └─ probes/              ← 21 个回归锚点（builtin-only，可单跑）
-  ├─ tests/                  ← 27 个 .test.ts（node --test，type-stripping 直跑）
+  ├─ tests/                  ← 28 个 .test.ts（node --test，type-stripping 直跑）
   ├─ docs/
   │  ├─ specs/               ← 8 篇权威设计文档（入库）
   │  ├─ audits/ · maintenance/pitfalls.md · upstream/（runbook + compat-contracts.json + host-jank-feedback.md）· fork-wzxmt-zhc/
@@ -141,7 +141,7 @@ dsh web
 
 ## Pitfalls
 
-- **53 个坑的索引：名字 = 触发词 = 锚点**。每条原文在 `docs/maintenance/pitfalls.md` 末尾「2026-09-18 迁入原文」节，锚点 `### <名字>`，顺序与下面一一对应。**动手改某块代码前，先按名字读对应条目**——里面是踩过的坑、最硬铁律、实测数据、探针断言与被否决方案；不看就改等于重踩。
+- **54 个坑的索引：名字 = 触发词 = 锚点**。每条原文在 `docs/maintenance/pitfalls.md` 末尾「2026-09-18 迁入原文」节，锚点 `### <名字>`，顺序与下面一一对应。**动手改某块代码前，先按名字读对应条目**——里面是踩过的坑、最硬铁律、实测数据、探针断言与被否决方案；不看就改等于重踩。
 - 本文件只放名字，正文一律进 `docs/`（见 Maintenance「体积门槛」）：新增坑位 = 名字加进下面清单 + 原文写进该档并补 `### 同名` 锚点。
 
 - `手势层`
@@ -197,11 +197,12 @@ dsh web
 - `composer 文件入口`
 - `代际门控`
 - `谓词复用与豁免`
+- `第三方模型条`
 
 ## Testing & QA
 
 - **设置/插件市场调试地图**：`docs/debug/settings-market-debug-map.md` —— 设置区与市场 UI 的 DOM 层级图、入口链路、CSS module 哈希对照表（VOzbGW_/eGUBIq_/hHd-Xa_…）、compat 干预点索引与 CDP 取证 SOP。排查该区域布局/弹层问题先读它，不要重新摸索层级。（此文档仅本地保留，已加入 .gitignore 不随仓库上传。）
-- Automated gates: `pnpm verify` (typecheck) and `pnpm test:core`（27 个测试文件，glob 覆盖 `tests/` 全部）. `pnpm build` additionally exercises the custom client bundler. Use `git diff --check` for whitespace hygiene.
+- Automated gates: `pnpm verify` (typecheck) and `pnpm test:core`（28 个测试文件，glob 覆盖 `tests/` 全部）. `pnpm build` additionally exercises the custom client bundler. Use `git diff --check` for whitespace hygiene.
 - There is no linter, formatter, or coverage setup; the CI workflow (`.github/workflows/ci.yml`) additionally runs the lib freshness gate `git diff --exit-code lib`.
 - After source/layout changes, install the linked plugin in a real DSH Web profile, restart `dsh web`, and check both sides of the breakpoint:
   - **Narrow phone (~390px):** rail hidden; drawer/FAB/backdrop open and close; Escape; session-row action menus do not close the drawer; settings remains usable; Files opens explorer/preview sheets; session-log/footer actions work; preview fullscreen opens and resets.
@@ -215,6 +216,8 @@ dsh web
 - **设备仿真验证优先用 Playwright MCP（本机已装），脚本化回归走原生 CDP**：MCP 自带 Chromium 能起真浏览器打 `127.0.0.1` 的 DSH Web，`browser_run_code_unsafe` 里 `browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })` + 复制 cookie + `addInitScript` 写 `localStorage['dsh.sessions.current']` 就是一台手机；**被桌面布局隐藏的元素必须用 `document.querySelector(sel).click()`，`page.click()` 的可见性检查必失败**；`~/tmp/pw-dsh-tmp` 需先存在，且无 `setSafeAreaInsets`。`playwright-core` 在 android 抛 `Unsupported platform`，所以仓库内脚本一律原生 CDP（`scripts/cdp-probe.mjs` 的 `createCdpClient`）。完整步骤/坑 → `docs/maintenance/pitfalls.md` §探针运行环境。
 - **Termux 上 headless chromium 必须给可写的 `TMPDIR` 与 `XDG_RUNTIME_DIR`**（指到 `~/tmp` 下自建目录），否则 ProcessSingleton 建 socket 失败、CDP 端口永不上线；探针的 `DSH_PROBE_CHROME` 可用 `chromium-browser`（2026-09-18 契约探针整跑实测），异常时直指真实 ELF；临时脚本/截图放 `~/tmp/` 用完清理。完整命令与 cookie TTL → `docs/maintenance/pitfalls.md` §探针运行环境。
 - Validate compatible third-party versions when exercising integrations（2026-09-19 修正）：**判据是 `~/.dsh/profiles/web/cordis.patch.yml` 的行启用状态，不是 node_modules 里装没装**——2026-09-19 实测 25+ 行全部 `disabled: true`（market/usage-stats/genui/task-board/pet/ssh/skin-center…），唯一启用的 web-all 行是 git-graph；包在树里 ≠ DOM 在场。当前实装：`dsh-web-mobile`、`@dsh-external/seshat`、`@linxin666/dsh-web-all`（仅 git-graph 行）。@omdsh-dev/dsh-genui 与 @changfenhuang/dsh-genui 包逐字节相同（迁移副车）。行状态变更后先重跑 `docs/debug/settings-market-debug-map.md` §5。
+- **未安装的第三方插件不做实机复现（用户要求，2026-09-22）**：修复目标插件本机从未安装时（如 #60 的 @hytime/dsh-thinking-effort），验证止步于静态对账 + 单元锚 + 报障者实测数据交叉验证，不装插件、不上机索 token；用户装好后主动要实机验收再说。
+
 - **外部贡献合并前必须过「与既有体系冲突」检查**（#47 教训，2026-09-06 补课）：外部贡献者不知道仓库已有什么——PR #47 的 iOS floor 方案与仓库既有 16px 下限体系（misc.css `html[data-mobile-nav-ios]` 门控）冗余且会引入第二次 viewport 改写。合并 fork/PR 前先盘点与本改动同域的既有机制（viewport 所有权、16px 下限、手势让位、marker 契约清单、composer 固定控件三件套），逐一判断贡献是冗余、冲突还是互补；冗余部分砍掉、冲突部分以仓库体系为准，互补才并入。
 
 ## Maintenance
