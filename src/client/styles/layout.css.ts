@@ -758,6 +758,25 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-composer-card] [data-mobile-nav="file-upload"]:active::before {
     background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06));
   }
+  /* 压掉浏览器默认的淡蓝 tap 高亮（店主 2026-09-23："单纯点击图标，出现一个淡蓝色
+     的原始的点击画面"）。读源码取证：宿主头部那几个包（dsh-client-ui-subagent /
+     agent-preset / dsh-experimental-client-ui-agent-team / jobs）**都没有 :active、
+     也没有任何 tap-highlight 处理**，触摸设备上点"标准模式 / Agent Team / 1 个子代理 /
+     对话·轨迹"就会叠一层原始高亮；我们输入区的控件早已处理（见上面 file-upload 那组）。
+     做法与输入区同源：高亮透明，按下反馈交给宿主自己的 :hover/:active token
+     （那几个包各有 2~9 条 :hover 规则，触摸时 Chromium 会套用）。 */
+  /* 覆盖范围放宽：宿主有些控件不是 button（实测输入区里就有 [role=button]、带
+     tabindex 的 div 形态），所以三类一起收。 */
+  [data-mobile-nav="frame"] [data-phase] header button,
+  [data-mobile-nav="frame"] [data-phase] header [role="tab"],
+  [data-mobile-nav="frame"] [data-phase] header [role="menuitem"],
+  [data-mobile-nav="frame"] [data-phase] header [role="button"],
+  [data-mobile-nav="frame"] [data-phase] header [tabindex],
+  [data-composer-card] button,
+  [data-composer-card] [role="button"],
+  [data-composer-card] [tabindex] {
+    -webkit-tap-highlight-color: transparent;
+  }
   /* 命中区外扩：::after 属于按钮本身，一起参与命中测试，视觉完全不变。 */
   [data-composer-card] [data-mobile-nav="file-upload"]::after {
     content: '';
