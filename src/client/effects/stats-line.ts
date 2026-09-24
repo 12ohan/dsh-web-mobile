@@ -23,39 +23,82 @@ export function statsAnchorAlive(el: Element | null): boolean {
 }
 
 export function createStatsLineTask(): ReconcilerTask {
-  // The composer root renders the TPS readout ("TPS 89.4 tok/s") as its
-  // own row BELOW the status strip; fold it into the strip so every
-  // metric scrolls together. The suite re-renders its own tree, so this
-  // must be idempotent and re-run on every mutation. Where the readout
-  // came from is recorded so disposal can put it back — on a
-  // narrow→wide transition the desktop layout must be the official one
-  // again, and `[data-mobile-nav="stats"]` is not covered by the
-  // desktop hide rules.
-  let tpsOrigin: { parent: Node; next: Node | null } | null = null
+  // React-owned nodes must never be relocated (issue #104): on unmount React
+  // calls parent.removeChild(child) against the parent it rendered the node
+  // into, so a node this task moved makes that throw NotFoundError and the
+  // SlotErrorBoundary blanks the whole composer slot until a reload. The
+  // offline-reconnect rebuild hits exactly this path. Both folded readouts
+  // (context ring, TPS text) therefore STAY where React rendered them; the
+  // visible slot is held by a plugin-owned placeholder element React does not
+  // track, and the host node is absolutely positioned on top of it.
+  // Coordinates refresh on every flush and on viewport resizes — the keyboard
+  // changes layout without any DOM mutation to wake the reconciler.
+
+  // The overlay must resolve against a positioned ancestor. The host rarely
+  // positions these containers, so mark the expected one (CSS sets
+  // position: relative for the marker, without !important so host styles stay
+  // in charge) and let placeOverlay walk to whichever ancestor actually ends
+  // up positioned — the math is self-consistent with any container.
+  const ensurePositioned = (el: Element, marker: string): void => {
+    if (getComputedStyle(el).position === 'static') el.setAttribute('data-mobile-nav', marker)
+  }
+  const positionedAncestor = (el: Element): Element | null => {
+    for (let node = el.parentElement; node !== null; node = node.parentElement) {
+      if (getComputedStyle(node).position !== 'static') return node
+    }
+    return null
+  }
+  const placeOverlay = (host: Element, reserve: Element): void => {
+    const container = positionedAncestor(host)
+    if (container === null) return
+    const box = reserve.getBoundingClientRect()
+    const base = container.getBoundingClientRect()
+    const left = box.left - base.left - container.clientLeft
+    const top = box.top - base.top - container.clientTop
+    const styled = host as HTMLElement
+    if (styled.style.left !== `${left}px`) styled.style.left = `${left}px`
+    if (styled.style.top !== `${top}px`) styled.style.top = `${top}px`
+  }
+
+  // The composer root renders the TPS readout ("TPS 89.4 tok/s") as its own
+  // row BELOW the status strip; fold it into the strip so every metric sits
+  // on one line. Idempotent: the placeholder's text mirrors the readout and
+  // the readout itself is overlaid on the placeholder's box.
   const moveTps = (stats: Element): void => {
-    if ([...stats.children].some((c) => /^TPS\s+\d/.test((c.textContent ?? '').trim()))) return
     const stack = stats.closest('[class*="_composerStack"]')
     if (stack === null) return
+    let reserve = stats.querySelector(':scope > [data-mobile-nav="stats-tps-reserve"]')
     for (const el of stack.querySelectorAll('div')) {
       const text = (el.textContent ?? '').trim()
       if (!/^TPS\s+\d/.test(text)) continue
       if (el.children.length > 0) continue
-      // The composer stack can be rebuilt by React between mutations:
-      // refresh the origin every time we actually move the TPS readout, so
-      // disposal returns it where it currently belongs.
-      if (el.parentElement !== null) {
-        tpsOrigin = { parent: el.parentElement, next: el.nextSibling }
+      if (el.getAttribute('data-mobile-nav') === 'stats-tps') continue
+      if (reserve === null) {
+        reserve = document.createElement('span')
+        reserve.setAttribute('data-mobile-nav', 'stats-tps-reserve')
+        reserve.setAttribute('aria-hidden', 'true')
+        stats.appendChild(reserve)
       }
-      stats.appendChild(el)
+      const live = el.textContent ?? ''
+      if (reserve.textContent !== live) reserve.textContent = live
+      el.setAttribute('data-mobile-nav', 'stats-tps')
+      const tpsRow = el.parentElement
+      if (tpsRow === null) continue
+      ensurePositioned(tpsRow, 'stats-tps-row')
+      placeOverlay(el, reserve)
+      // The strip's last child is the flex shrink group: mirror whatever
+      // width the placeholder settled on so the overlay clips with the same
+      // ellipsis instead of overlapping the neighbouring group.
+      const width = reserve.getBoundingClientRect().width
+      const styled = el as HTMLElement
+      if (styled.style.maxWidth !== `${width}px`) styled.style.maxWidth = `${width}px`
       return
     }
   }
-  // 2026-09-23（店主最终确认）：**环要、百分比数字不要** —— 把这块挪进输入框行
-  // 的右簇（模型/麦克风旁），再由 CSS 用 font-size:0 只留环、隐掉 "45%" 文本。
-  // 它原本独占统计行右侧 63px + 12px 间距；挪走后统计条拿满整宽 326px，
-  // 「轮次·步数·tok/s」+「tok 总量·缓存命中」约 316px 完整放下，不滚动也不省略。
-  // 与 moveTps 同款：幂等 + 记录原位，dispose（宽屏档）时放回官方布局。
-  let ringOrigin: { parent: Node; next: Node | null } | null = null
+  // 2026-09-23（店主最终确认）：**环要、百分比数字不要** —— 环显示在输入框行
+  // 的右簇（模型/麦克风旁），CSS 用 font-size:0 只留环、隐掉 "45%" 文本；统计条
+  // 拿满整宽。与 moveTps 同款 overlay：环留在 React 渲染的 dock 原位，插件自建
+  // 占位 span 顶住右簇槽位（16px 环 + 2px 边距，行 gap 补足余量）。
   const moveRing = (stats: Element): void => {
     const holder = stats.parentElement
     const dock = holder === null ? null : holder.parentElement
@@ -66,14 +109,40 @@ export function createStatsLineTask(): ReconcilerTask {
     if (ring === undefined) return
     const row = document.querySelector('[data-composer-card] [class*="_row"] [class*="_trailing"]')
     if (row === null) return
-    if (ring.parentElement === row) return
-    if (ring.parentElement !== null) {
-      ringOrigin = { parent: ring.parentElement, next: ring.nextSibling }
+    let reserve = row.querySelector(':scope > [data-mobile-nav="stats-ring-reserve"]')
+    const primary = row.querySelector(':scope > [class*="_primary"]')
+    if (reserve === null) {
+      reserve = document.createElement('span')
+      reserve.setAttribute('data-mobile-nav', 'stats-ring-reserve')
+      row.insertBefore(reserve, primary)
+    } else if (
+      primary === null ? row.lastElementChild !== reserve : reserve.nextElementSibling !== primary
+    ) {
+      // React rebuilt the row and shuffled its children around our
+      // placeholder: put the reserved slot back at the anchor position.
+      row.insertBefore(reserve, primary)
     }
-    ring.setAttribute('data-mobile-nav', 'stats-ring')
-    row.insertBefore(ring, row.querySelector(':scope > [class*="_primary"]'))
+    if (ring.getAttribute('data-mobile-nav') !== 'stats-ring') {
+      ring.setAttribute('data-mobile-nav', 'stats-ring')
+    }
+    ensurePositioned(dock, 'stats-ring-dock')
+    placeOverlay(ring, reserve)
+  }
+  let viewportHandler: (() => void) | null = null
+  const relayout = (): void => {
+    const anchor = document.querySelector('[data-mobile-nav="stats"]')
+    if (anchor === null) return
+    moveTps(anchor)
+    moveRing(anchor)
   }
   const mark = (): void => {
+    // Keyboard open/close and viewport rotations relayout the composer without
+    // any DOM mutation, so the overlays need their own re-layout channel.
+    if (viewportHandler === null) {
+      viewportHandler = relayout
+      window.addEventListener('resize', relayout)
+      window.visualViewport?.addEventListener('resize', relayout)
+    }
     // Fast path: the marked strip usually survives React rebuilds between
     // tokens; re-verifying the anchor is O(1) while the full-tree hunt below
     // grows with the conversation. moveTps still re-runs so a rebuilt TPS
@@ -142,33 +211,28 @@ export function createStatsLineTask(): ReconcilerTask {
     scopes: ['*'],
     ensure: mark,
     dispose: () => {
-      // Hand the official layout back: return the TPS readout to its own
-      // row, then drop the marker that drives the one-line strip.
-      if (tpsOrigin !== null && tpsOrigin.parent.isConnected) {
-        // Find the TPS readout only inside the marked stats strip we moved
-        // it into — a global text search could pick up a different element.
-        for (const stats of document.querySelectorAll('[data-mobile-nav="stats"]')) {
-          const tps = [...stats.querySelectorAll('div')].find(
-            (el) => el.children.length === 0 && /^TPS\s+\d/.test((el.textContent ?? '').trim()),
-          )
-          if (tps !== undefined) {
-            tpsOrigin.parent.insertBefore(tps, tpsOrigin.next)
-            break
-          }
+      // Hand the official layout back: drop every marker (the strip loses its
+      // one-line layout, ring/TPS overlays return to static flow) and remove
+      // the plugin-owned placeholders.
+      if (viewportHandler !== null) {
+        window.removeEventListener('resize', viewportHandler)
+        window.visualViewport?.removeEventListener('resize', viewportHandler)
+        viewportHandler = null
+      }
+      for (const el of document.querySelectorAll('[data-mobile-nav="stats-ring"], [data-mobile-nav="stats-tps"]')) {
+        const styled = el as HTMLElement
+        styled.style.left = ''
+        styled.style.top = ''
+        styled.style.maxWidth = ''
+      }
+      for (const key of ['stats', 'stats-ring', 'stats-ring-dock', 'stats-tps', 'stats-tps-row']) {
+        for (const el of document.querySelectorAll(`[data-mobile-nav="${key}"]`)) {
+          el.removeAttribute('data-mobile-nav')
         }
       }
-      for (const el of document.querySelectorAll('[data-mobile-nav="stats"]')) {
-        el.removeAttribute('data-mobile-nav')
+      for (const el of document.querySelectorAll('[data-mobile-nav="stats-ring-reserve"], [data-mobile-nav="stats-tps-reserve"]')) {
+        el.remove()
       }
-      // 上下文环放回统计行旁边，宽屏档恢复官方布局。
-      if (ringOrigin !== null && ringOrigin.parent.isConnected) {
-        for (const ring of document.querySelectorAll('[data-mobile-nav="stats-ring"]')) {
-          ringOrigin.parent.insertBefore(ring, ringOrigin.next)
-          ring.removeAttribute('data-mobile-nav')
-        }
-      }
-      ringOrigin = null
-      tpsOrigin = null
     },
   }
 }

@@ -653,10 +653,11 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   [data-mobile-nav="stats"] * {
     white-space: nowrap !important;
   }
-  /* 「上下文环」被 stats-line 效果挪进输入框行的右簇（店主 2026-09-23 确认：
-     环要、百分比数字不要）。font-size:0 只塌掉文本、环 svg 有显式尺寸不受影响；
-     它是右簇的固定成员，不参与压缩。 */
+  /* 「上下文环」显示在输入框行的右簇（店主 2026-09-23 确认：
+     环要、百分比数字不要）。font-size:0 只塌掉文本、环 svg 有显式尺寸不受
+     影响；绝对定位盖在自建占位上（见下方 #104 注释），不再搬动节点。 */
   [data-mobile-nav="stats-ring"] {
+    position: absolute !important;
     flex: 0 0 auto !important;
     display: inline-flex !important;
     align-items: center !important;
@@ -690,6 +691,49 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
     width: 16px !important;
     height: 16px !important;
     flex: 0 0 auto !important;
+  }
+  /* 环与 TPS 读数不再搬动宿主 React 节点（#104：搬动后宿主卸载调 removeChild
+     对不上父节点直接抛 NotFoundError，SlotErrorBoundary 把整个 composer 槽位
+     清空）。节点留在 React 渲染的原位，可见槽位由插件自建占位顶住，宿主节点
+     绝对定位盖在占位上；占位是插件节点，宿主重建/卸载都不经过它。 */
+  [data-mobile-nav="stats-ring-reserve"],
+  [data-mobile-nav="stats-tps-reserve"] {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  [data-mobile-nav="stats-ring-reserve"] {
+    flex: 0 0 auto !important;
+    display: inline-block !important;
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 2px 0 0 !important;
+    padding: 0 !important;
+  }
+  [data-mobile-nav="stats-tps"] {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 10px !important;
+    line-height: 18px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  [data-mobile-nav="stats-tps"] * {
+    white-space: nowrap !important;
+  }
+  [data-mobile-nav="stats-tps"] span {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-width: 0 !important;
+  }
+  /* overlay 的定位上下文：宿主自己没定位时才生效（无 !important，宿主样式随时
+     可以接管；stats-line 每帧按真实 positioned ancestor 计算，不受影响）。 */
+  [data-mobile-nav="stats-ring-dock"],
+  [data-mobile-nav="stats-tps-row"] {
+    position: relative;
   }
 
   /* ---------- dsh-genui panel dock ----------
