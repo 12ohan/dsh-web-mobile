@@ -44,6 +44,10 @@ function readConfig(env = process.env) {
 
   return {
     url: parsedUrl.href,
+    // The token URL 303-redirects to the bare path (the auth cookie carries
+    // the session), so load checks must compare against the origin, not the
+    // navigated URL string.
+    origin: parsedUrl.origin,
     sessionId,
     chromePath: env.DSH_PROBE_CHROME || 'chromium',
     timeoutMs,
@@ -774,7 +778,7 @@ async function main() {
     const waitForPageLoad = (label) => waitFor(label, config.timeoutMs, signal, async () => {
       try {
         const state = await client.evaluate(`({ ready: document.readyState === 'complete', href: location.href })`);
-        return state.ready && state.href.startsWith(config.url) ? state : null;
+        return state.ready && state.href.startsWith(config.origin) ? state : null;
       } catch {
         return null;
       }
