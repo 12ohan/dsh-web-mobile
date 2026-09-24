@@ -22,7 +22,8 @@
 //     signal to re-enable the injected-item/dialog assertion suite (kept
 //     below as SKIP with the exact steps);
 //   - the mouse/pointer-less desktop panel carries the rows and exactly the
-//     3 host menu items (rename / fork / archive) with ZERO injected markers
+//     4 host menu items (pin / rename / fork / archive — 0.1.7 shape; the
+//     pre-0.1.7 hosts rendered 3) with ZERO injected markers
 //     — the desktop zero-impact contract (15c/15d);
 //   - the WIDE-TOUCH desktop (same ≥1024px viewport WITH touch emulation)
 //     DOES get the injected item and its confirm dialog (16a-16d) — the
@@ -189,12 +190,12 @@ async function main() {
     if (desktopMenu) {
       const dItems = await evaluate(`document.querySelectorAll('[role="menu"] [role="menuitem"]').length`)
       const dInjected = await evaluate(`document.querySelectorAll('[data-mobile-nav="session-delete"]').length`)
-      record(dItems === 3 && dInjected === 0, '15c.desktop-menu-is-3-host-items-no-injection', `items=${dItems} injected=${dInjected}`)
+      record(dItems === 4 && dInjected === 0, '15c.desktop-menu-is-4-host-items-no-injection', `items=${dItems} injected=${dInjected}`)
       await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
       await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
       await sleep(300)
     } else {
-      record(false, '15c.desktop-menu-is-3-host-items-no-injection', 'menu did not open')
+      record(false, '15c.desktop-menu-is-4-host-items-no-injection', 'menu did not open')
     }
     const dDialogs = await evaluate(`document.querySelectorAll('[data-mobile-nav="session-delete"], [data-mobile-nav="delete-dialog"], [data-mobile-nav="delete-dialog-backdrop"]').length`)
     record(dDialogs === 0, '15d.desktop-zero-delete-markers', `n=${dDialogs}`)
@@ -212,7 +213,8 @@ async function main() {
     if (wtMenu) {
       const wtItems = await evaluate(`document.querySelectorAll('[role="menu"] [role="menuitem"]').length`)
       const wtInjected = await evaluate(`document.querySelectorAll('[data-mobile-nav="session-delete"]').length`)
-      record(wtItems === 4 && wtInjected === 1, '16b.wide-touch-menu-has-delete-item', `items=${wtItems} injected=${wtInjected}`)
+      // 0.1.7: 4 host items (pin / rename / fork / archive) + 1 injected.
+      record(wtItems === 5 && wtInjected === 1, '16b.wide-touch-menu-has-delete-item', `items=${wtItems} injected=${wtInjected}`)
       // Tap the injected item: it closes the host menu and opens the confirm
       // dialog. No deletion happens until the dialog's own "yes" is tapped,
       // which this probe never does.

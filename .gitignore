@@ -17,5 +17,8 @@ playwright-report/
 # 本地调试地图（决定不上传，仅本地保留）
 docs/debug/settings-market-debug-map.md
 
+# 成员完工交接文档（团队过程记录，仅本地保留，2026-09-24 起）
+docs/handover/
+
 # 2026-09-17 composer DOM recon（与 settings-market-debug-map.md 同类：带日期的现场快照，不入库）
 docs/debug/composer-tree-recon.md

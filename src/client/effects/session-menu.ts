@@ -1,8 +1,10 @@
 /**
  * Session-row action-menu injection: on touch-primary devices, adds a
- * "delete session" item to the host's per-row ⋯ menu (beside rename / fork /
- * archive) and drives the whole delete flow: row → session id resolution, a
- * confirm dialog, the host delete endpoint, and the list refresh.
+ * "delete session" item to the host's per-row ⋯ menu (beside the host's own
+ * items — rename / fork / archive, plus the 0.1.7 pin item; blank rows stay
+ * host-native) and drives the whole delete flow: row → session id
+ * resolution, a confirm dialog, the host delete endpoint, and the list
+ * refresh.
  *
  * The host menu is React-owned (ui-workspace) with no extension slot, so the
  * item is injected into the portaled `[role="menu"]` list by cloning the
@@ -141,14 +143,26 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       return (label ?? item).textContent?.trim() ?? ''
     }
 
-    /** Whether a menu list is the host's per-session row menu. */
+    /**
+     * Whether a menu list is the host's per-session row menu. Containment
+     * style, never an exact item count: 0.1.7 added a fourth 「置顶会话」
+     * item (menu.pinSession, alongside rename / fork / archive) — a
+     * `length === 3` gate silently disabled the whole feature on 0.1.7.
+     * rename + fork + archiveSession is the discriminating triple (a
+     * full-host label audit: the fork label exists only in ui-workspace's
+     * session menu). Archived rows swap archive for 取消归档, so they do NOT
+     * match this signature and get no delete item — the host's own look
+     * (delete via unarchive first); resolution excludes archived ids anyway,
+     * so an injected item there would be a doomed deleteErrorResolve tap
+     * (#V1 N1: the removed unarchive branch used to inject exactly that).
+     */
     const isSessionMenu = (menu: HTMLElement): boolean => {
       const labels = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')]
         .map(itemLabel)
       const rename = wsT('rename')
       const fork = wsT('menu.fork')
-      const archive = wsT('menu.archiveSession')
-      return labels.length === 3 && labels.includes(rename) && labels.includes(fork) && labels.includes(archive)
+      return labels.includes(rename) && labels.includes(fork)
+        && labels.includes(wsT('menu.archiveSession'))
     }
 
     const closeDialog = (): void => {
@@ -163,16 +177,18 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       }
     }
 
-    /** Show the delete confirmation as a bottom card over the frame.
-     *  Mounted on <body>, NOT in the frame: the third-party mobile shim
-     *  (@linxin666/dsh-web-all) listens in the CAPTURE phase on the frame and,
-     *  while the drawer is open, answers every click inside the frame but
+    /** Show the delete confirmation as a centered frosted-glass modal over
+     *  the frame. Mounted on <body>, NOT in the frame: the third-party mobile
+     *  shim (@linxin666/dsh-web-all) listens in the CAPTURE phase on the frame
+     *  and, while the drawer is open, answers every click inside the frame but
      *  outside [data-pane="sidebar"] with preventDefault + stopPropagation.
      *  A card inside the frame therefore had dead buttons — measured
      *  2026-09-14: a real touch tap on 「取消」 left the card open, and only
      *  Escape closed it. Body-level, the shim's listener never sees these
      *  clicks (its sibling menus are portaled there for the same reason), and
-     *  the card's own band lives in base.css (z 1400/1401, above the drawer). */
+     *  the dialog's band lives in base.css (backdrop z 1400 above the drawer
+     *  on the mobile branch). The card is appended INTO the backdrop so the
+     *  backdrop's flex centers it (base.css 2026-09-24 rework). */
     const showDeleteDialog = (sessionId: string, title: string): void => {
       closeDialog()
       const host = document.body
@@ -194,7 +210,15 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       const yesButton = card.querySelector<HTMLButtonElement>('[data-mobile-nav="delete-confirm-yes"]')
       const errorLine = card.querySelector<HTMLElement>('[data-mobile-nav="delete-error"]')
       noButton?.addEventListener('click', closeDialog)
-      backdrop.addEventListener('click', closeDialog)
+      // The card is a CHILD of the backdrop (the CSS centers it through the
+      // backdrop's flex), so close only on genuine backdrop taps — without
+      // the target guard every card click (the async yes tap included) would
+      // bubble here and close the dialog before the fetch settles, killing
+      // the pending state and the error display path.
+      backdrop.addEventListener('click', (event) => {
+        if (event.target !== backdrop) return
+        closeDialog()
+      })
       const onKey = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') closeDialog()
       }
@@ -259,7 +283,7 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       })
 
       host.appendChild(backdrop)
-      host.appendChild(card)
+      backdrop.appendChild(card)
       dialogHost = { backdrop, card }
     }
 
@@ -280,14 +304,19 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
           <button type="button" data-mobile-nav="delete-confirm-no">${escapeHtml(navT('deleteConfirmNo'))}</button>
         </div>`
       card.querySelector<HTMLButtonElement>('[data-mobile-nav="delete-confirm-no"]')?.addEventListener('click', closeDialog)
-      backdrop.addEventListener('click', closeDialog)
+      // Same child-of-backdrop target guard as showDeleteDialog: error-card
+      // taps must not bubble into the backdrop's close.
+      backdrop.addEventListener('click', (event) => {
+        if (event.target !== backdrop) return
+        closeDialog()
+      })
       const onKey = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') closeDialog()
       }
       document.addEventListener('keydown', onKey, true)
       closeDialogOnKey = onKey
       host.appendChild(backdrop)
-      host.appendChild(card)
+      backdrop.appendChild(card)
       dialogHost = { backdrop, card }
     }
 
@@ -349,10 +378,23 @@ export function installSessionMenuDelete(ctx: ClientContext): void {
       viewport.appendChild(clone)
     }
 
-    /** Inject into every open session menu. */
+    /**
+     * Inject into every open session menu. Blank (new-session) rows are
+     * excluded: the host renders their title as the localized "New session"
+     * label (`t("session.new")`) while the summary's `displayTitle` stays
+     * empty, so the delete flow could never resolve them — the tap would
+     * only end in a deleteErrorResolve card. A menu without the delete item
+     * is the host's own look for those rows. Known ceiling: a normal session
+     * manually titled exactly the host's "New session" label is mistaken for
+     * a blank row and gets no delete item either (accepted trade-off; its
+     * resolution itself would still work).
+     */
     const injectAll = (): void => {
+      const blankLabel = wsT('session.new')
       for (const menu of document.querySelectorAll<HTMLElement>('[role="menu"]')) {
-        if (isSessionMenu(menu)) injectInto(menu)
+        if (!isSessionMenu(menu)) continue
+        if (anchor !== null && anchor.title === blankLabel) continue
+        injectInto(menu)
       }
     }
     const scheduleInject = (): void => {
