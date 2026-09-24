@@ -2,6 +2,14 @@
 
 > 按时间倒序（最新在上）。每条：日期 + 做了什么 + 结果/遗留。做完一步就记，别攒到结尾。
 
+## 2026-09-24
+
+- **0.1.7 session-delete bring-up 完成（eaf74e4；#W1 落码 → #V1 diff 审查 → #W2/#W3 修复轮，交接文档在本地 `docs/handover/`）**：
+  - 菜单识别去掉 `length===3` 硬卡，改**包含式签名** `rename+fork+(archive|unarchive)`：命中 0.1.7 四项普通行（新增 pin）；**归档行（unarchive 换 archive）不再命中**——#V1 发现 0.1.7 新签名 unarchive 分支使已归档行被注入删除项，而 `resolveSessionId` 的 `!archived.has(id)` 过滤使点击必弹 deleteError（#W2 修复）；blank 新会话行（标题=宿主 `session.new`）跳过注入（0.1.7 blank 行本无 ⋯，`!row.blank &&` 门，守卫属跨代防御，#V1 确认为不可达分支）。
+  - 删除确认弹窗按真机反馈重设计（#W3）：居中毛玻璃卡——材质取自宿主 ⋯ 菜单（`rgba(248,249,250,.58)` + `blur(40px) saturate(1.5)`、16px 圆角、hairline+软影），几何取自宿主 Dialog（16px/500 标题、36px pill 按钮、danger 实心主键）；卡片挂进 backdrop flex 容器、target-guarded **点遮罩才关（点卡片不关）**；无独立入场动画（随 backdrop 淡入）。DONE_WITH_CONCERNS 备案：真机观感/backdrop 点击语义变化待 QA 复核。
+  - 回归面：探针 15c 期望改「0.1.7 四项宿主菜单+零注入」、16b 期望 items=5 injected=1；`tests/session-menu.test.ts` 增 containment / archived-row / blank-row 契约锚（test:core 185）。
+  - chore：`docs/handover/` 进 .gitignore（成员交接文档本地化）；pitfalls §会话删除补 0.1.7 换形段，backlog 会话删除行状态同步。
+
 ## 2026-09-08
 
 - **🥉→🥇 会话删除分层摘抄完成（预备式）**：纯核 `src/delete-session.ts`（4c58bc6，fork 原样 + 3 处分代适配：`entry.header ?? entry` 扁平 list 归一、live 门控降级 409 session-busy、`workspace.detachSession?()` 可选链）+ 10/10 单测（fork 7 条逐字 + rc.2 基线 3 条）；宿主路由（95e5839，`POST /api/mobile-nav.session.delete`，405/400/503/200/404/409）；客户端 `effects/session-menu.ts` fork 逐字（f54690a；fork 原文 `n(ns)` 系本仓库 `rg -r` 误读产物，保留 `bind(NS)`；i18n 10 键）+ base.css 弹窗块（d1113a3；**动画名坑**：fork 的 `dsh-mobile-nav-*` 在本仓库是 no-op，已改 `dsh-web-mobile-fade/sheet-in`）+ misc 桌面隐藏块 +3 类。
