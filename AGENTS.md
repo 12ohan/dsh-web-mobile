@@ -23,12 +23,12 @@
   │     ├─ debug.ts          ← ?mobile-nav-debug=1 诊断徽章
   │     ├─ components/       ← MobileNavToggle / MobileDrawerFooter / ComposerFileButton / open-files-panel.ts
   │     ├─ core/             ← reconciler-core.ts（零 import）+ raf-scheduler.ts · css-rules.ts · sessions-compat.ts · layout-compat.ts · icon-compat.ts（宿主图标跨代命名兼容）
-  │     ├─ effects/          ← 18 个效果模块：phone-chrome · sidebar-swipe ·
+  │     ├─ effects/          ← 17 个效果模块：phone-chrome · sidebar-swipe ·
   │     │                       gesture-guard · subagent-chip-touch · composer-keyboard-guard ·
   │     │                       composer-plus-toggle · workspace-chip-toggle · team-chip-toggle ·
   │     │                       model-menu-anchor ·
   │     │                       file-viewer-compat · aionui-compat · stats-line ·
-  │     │                       settings-toolbar-reparent · preview-fullscreen ·
+  │     │                       preview-fullscreen ·
   │     │                       overlay-backdrop-fab · panel-exit · session-menu · session-row-fiber
   │     ├─ styles/           ← index.ts（base→layout→compat→misc 承载顺序）+ 4 个 .css.ts
   │     └─ i18n/locales.ts
@@ -98,7 +98,7 @@ dsh web
   - `src/client/core/reconciler-core.ts` is a DOM-free engine with **zero imports**. It owns task registry, dirty-key routing (`scopes`), coalesced rAF flush scheduling, and per-task error isolation.
   - `src/client/effects/phone-chrome.ts` is the thin browser adapter: one `MutationObserver` on `document.documentElement` maps records to dirty keys (`attributeName`, or `'*'` for tree changes), feeds `core.note()`, and drives activation/deactivation via `installMobileEffect`.
   - Tasks only run while the mobile breakpoint is active, coalesced to one pass per animation frame. `stats-line` must stay `scopes: ['*']` because TPS updates are childList/characterData text mutations.
-  - Registered tasks: `frame-marker`, `preview-fullscreen-toggle`, `settings-toolbar-reparent`, `preview-close-sync`, `sheet-rise-replay`, `stats-line`, `overlay-backdrop-fab`, `panel-back-exit`.
+  - Registered tasks: `frame-marker`, `preview-fullscreen-toggle`, `preview-close-sync`, `sheet-rise-replay`, `stats-line`, `overlay-backdrop-fab`, `panel-back-exit`.
 - Effects:
   - `phone-chrome.ts` — status bar/theme-color/viewport meta, the iOS focus-zoom marker (`detectIosWebKit` → `html[data-mobile-nav-ios]`), drawer close interactions (Escape + navigation taps), and the overlay backdrop/FAB via reconciler tasks.
   - `sidebar-swipe.ts` + `gesture-guard.ts` — drawer swipe gestures：开=8px 锁轴**提前提交**（inline `-101%` 百分比基线跟随 + arm 帧 `content-visibility:hidden` 拆挂载）；关=**晚提交**（inline 280ms 滑到自身宽×110% px 槽位后翻 marker，防 React 中途换子树）；遮罩经 `fadeOverlayOut` 渐隐；右缘 files 手势与抽屉手势同层双族路由（判定矩阵与已踩坑见 Pitfalls「files 手势」）；`gesture-guard.ts` supplies the host-yield consume marks + stroke axis lock.
@@ -117,7 +117,7 @@ dsh web
     pointerdown（走宿主自己的 dismiss），再吞掉那颗 click（顺序不可换）。见 Pitfalls「header 拥挤」。
   - `session-menu.ts` — touch-gated injection of a 「删除会话」 item into the workspace session-row ⋯ menu (clone-and-inject from the fork wzxmt-zhc v2.7.0): guard = TOUCH_QUERY (`(pointer: coarse)` at EVERY width — large tablets in landscape included, v2.4.1) + row/menu/label selectors present; inert on hosts whose drawer renders the rail variant (rc.2), activates on hosts rendering session rows in the drawer (0.1.3) or on the ≥1024px desktop panel; after deleting the current session `ctx.layout.toggleSidebar()` only runs on the mobile query (desktop panels must not collapse); confirmation dialog markup/styles live in base.css.ts (wide-touch card capped 420px centered) with corrected animation names.
   - `panel-exit.ts` — 侧边栏面板的退出：系统返回键/手势（popstate 记账）、再点已选中的面板行、以及面板视图下左上角按钮的语义切换；三条路共用一个 `exit`。`core/layout-compat.ts` 探测 `ctx.layout.selectPanel` 是否存在于本代宿主（rc.6 没有），缺失则整条特性惰性化。
-  - Reconciler task modules: `settings-toolbar-reparent.ts`, `preview-fullscreen.ts`, `overlay-backdrop-fab.ts`, `panel-exit.ts`.
+  - Reconciler task modules: `preview-fullscreen.ts`, `overlay-backdrop-fab.ts`, `panel-exit.ts`.
 - Styles: `src/client/styles/index.ts` concatenates `base → layout → compat → misc` in that load-bearing order and injects one `<style data-plugin>` tag. Mobile rules target `(max-width: 1023px) and (pointer: coarse)` (keep every top-level media block in sync with `MOBILE_QUERY`); the desktop hide block in misc.css.ts is its exact complement and must preserve the uninstalled layout.
 - Third-party compatibility is implemented through scoped DOM markers, stable `data-*` attributes, `MutationObserver`, and carefully scoped class/text anchors. Never modify third-party source packages.
 - Authoritative design docs: `docs/specs/2026-08-27-sidebar-swipe-gestures.md` (gesture parameters/state machine) and `docs/audits/2026-08-27-sidebar-swipe-latent-defects.md` (gesture defect baseline).
