@@ -31,6 +31,10 @@ function readConfig(env = process.env) {
   const sessionId = env.DSH_PROBE_SESSION_ID?.trim();
   if (!sessionId) throw new Error('DSH_PROBE_SESSION_ID is required');
   const parsedUrl = new URL(env.DSH_PROBE_URL || 'http://127.0.0.1:3080/');
+  // Token-gated web: navigate to the ?token= URL so the host's 303 sets the
+  // auth cookie before the app boots (same posture as the offline probe).
+  const token = env.DSH_PROBE_TOKEN?.trim();
+  if (token) parsedUrl.searchParams.set('token', token);
   const timeoutMs = Number(env.DSH_PROBE_TIMEOUT_MS || 45000);
   return { url: parsedUrl.href, sessionId, chromePath: env.DSH_PROBE_CHROME || 'chromium', timeoutMs };
 }

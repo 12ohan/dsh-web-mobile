@@ -31,6 +31,10 @@ function readConfig(env = process.env) {
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
     throw new Error('DSH_PROBE_URL must use http or https');
   }
+  // Token-gated web: navigate to the ?token= URL so the host's 303 sets the
+  // auth cookie before the app boots (the load check below compares origin).
+  const token = env.DSH_PROBE_TOKEN?.trim();
+  if (token) parsedUrl.searchParams.set('token', token);
 
   const timeoutMs = Number(env.DSH_PROBE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
