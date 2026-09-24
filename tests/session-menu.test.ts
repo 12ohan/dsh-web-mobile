@@ -43,3 +43,39 @@ test('the host delete-endpoint flow is unchanged', () => {
   // The host menu is closed through its own anchor before the flow starts.
   assert.match(SOURCE, /captured\?\.button\.click\(\)/)
 })
+
+test('menu recognition is containment-style: rename + fork + archive', () => {
+  // 0.1.7 added a fourth 「置顶会话」 item — an exact item-count gate
+  // silently disabled the whole feature there, so the counted form must
+  // stay gone from the predicate (the source comment may still cite it as
+  // history).
+  assert.doesNotMatch(SOURCE, /labels\.length === 3/)
+  assert.match(SOURCE, /labels\.includes\(rename\) && labels\.includes\(fork\)/)
+  assert.match(SOURCE, /labels\.includes\(wsT\('menu\.archiveSession'\)\)/)
+  // The discriminating-triple rationale (fork label exists only in the
+  // session menu) is documented next to the predicate.
+  assert.match(SOURCE, /fork label exists only in ui-workspace/)
+})
+
+test('archived rows (unarchive swap) never get the injected delete item', () => {
+  // #V1 N1: the former unarchive branch recognized archived-row menus and
+  // injected a delete item that resolution can never satisfy (archived ids
+  // are filtered out) — the tap always ended in deleteErrorResolve. The
+  // predicate must key on archiveSession only; the unarchive call form must
+  // stay gone from the code (negative assertion pinned to the call shape,
+  // NOT a bare word — source comments may still cite the history).
+  assert.doesNotMatch(SOURCE, /labels\.includes\(wsT\('menu\.unarchiveSession'\)\)/)
+  assert.match(SOURCE, /Archived rows swap archive/)
+  assert.match(SOURCE, /delete via unarchive first/)
+})
+
+test('blank (new-session) rows never get the injected delete item', () => {
+  // A blank row renders the host's localized "New session" label while
+  // displayTitle stays empty — resolution could never succeed, so the item
+  // is withheld and the menu stays host-native.
+  assert.match(SOURCE, /const blankLabel = wsT\('session\.new'\)/)
+  assert.match(SOURCE, /anchor\.title === blankLabel/)
+  // The accepted ceiling (a session manually titled exactly the host label)
+  // is annotated in the source so it is not re-litigated as a bug.
+  assert.match(SOURCE, /Known ceiling/)
+})

@@ -66,10 +66,10 @@ export const BASE_CSS = `
 }
 
 [data-mobile-nav="delete-confirm-title"] {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 18px;
-  color: var(--dsw-alias-state-error-primary, #b91c1c);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--dsw-alias-text-primary, rgb(15, 17, 21));
 }
 [data-mobile-nav="delete-confirm-desc"] {
   font-size: 12px;
@@ -83,21 +83,21 @@ export const BASE_CSS = `
   margin-top: 2px;
 }
 [data-mobile-nav="delete-confirm-actions"] > button {
-  height: 30px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 0 14px;
   border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, .12));
-  border-radius: 10px;
+  border-radius: 18px;
   background: transparent;
   color: var(--dsw-alias-label-primary, inherit);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 20px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 [data-mobile-nav="delete-confirm-yes"] {
-  border-color: var(--dsw-alias-state-error-secondary, rgba(220, 38, 38, .5)) !important;
-  background: var(--dsw-alias-state-error-primary, #dc2626) !important;
+  border-color: transparent !important;
+  background: var(--dsw-alias-state-error-primary, #b91c1c) !important;
   color: #ffffff !important;
 }
 [data-mobile-nav="delete-confirm-actions"] > button:disabled {
@@ -106,47 +106,45 @@ export const BASE_CSS = `
 }
 [data-mobile-nav="delete-error"] {
   width: 100%;
-  font-size: 12px;
-  line-height: 17px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--dsw-alias-state-error-primary, #b91c1c);
 }
 
-/* Bottom overlay for the delete confirm / error card: dimmed backdrop plus a
-   viewport-anchored card above the drawer. [hidden] keeps the error line out
-   of layout until a failure lands. */
+/* Centered frosted-glass modal for the delete confirm / error card: the
+   backdrop is a flex positioning container (centering + 16px inset padding)
+   and the card rides inside it as a static child (session-menu.ts appends
+   the card INTO the backdrop for exactly this reason). Look baseline = the
+   host ⋯ menu's portal root, measured 2026-09-24: translucent
+   rgba(248,249,250,.58) fill with blur(40px) saturate(1.5) frosted glass,
+   16px radius, hairline + soft shadow. Geometry baseline = the host Dialog,
+   measured the same day: centered modal, 16px/500 title, 36px pill buttons,
+   solid-fill primary. [hidden] keeps the error line out of layout until a
+   failure lands. */
 [data-mobile-nav="delete-dialog-backdrop"] {
   position: fixed;
   inset: 0;
   z-index: 55;
-  background: rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, .4);
   animation: dsh-web-mobile-fade .2s var(--ds-ease-in-out, ease-in-out);
 }
 [data-mobile-nav="delete-dialog"] {
-  position: fixed;
-  left: 8px;
-  right: 8px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
-  z-index: 56;
+  position: static;
+  width: min(420px, calc(100vw - 32px));
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--dsw-alias-bg-base, #ffffff);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, .22);
-  animation: dsh-web-mobile-sheet-in .22s var(--ds-ease-out, ease-in-out);
-}
-/* Wide touch (tablet landscape ≥1024px, pointer coarse): the card would
-   otherwise span the full desktop viewport. Cap and center it with margins
-   (not transform, which the entry animation would override mid-play). */
-@media (min-width: 1024px) and (pointer: coarse) {
-  [data-mobile-nav="delete-dialog"] {
-    left: 0;
-    right: 0;
-    width: 420px;
-    margin-inline: auto;
-  }
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(248, 249, 250, .58);
+  -webkit-backdrop-filter: blur(40px) saturate(1.5);
+  backdrop-filter: blur(40px) saturate(1.5);
+  box-shadow: rgba(0, 0, 0, .04) 0 0 0 .5px, rgba(0, 0, 0, .04) 0 3px 8px 0, rgba(0, 0, 0, .05) 0 0 20px 0;
 }
 @media (prefers-reduced-motion: reduce) {
   [data-mobile-nav="delete-dialog-backdrop"],
@@ -189,9 +187,10 @@ export const BASE_CSS = `
      Measured 2026-09-19: with the drawer open (column z 1300) the workspace
      Rename dialog sat entirely under it and needed the drawer closed first.
      Raise the portal root, not the dialog, and only while the drawer is open —
-     the closed-drawer and desktop stacks keep the host's own ordering. Our own
-     delete card is untouched: its role sits on the body child itself, so
-     :has(>) never matches it. */
+     the closed-drawer and desktop stacks keep the host's own ordering. Our
+     own delete backdrop matches this rule too since the 2026-09-24 centered
+     rework (its direct child card carries role=dialog) — harmlessly: it sets
+     the same 1400 the dedicated rule below sets. */
   body:has([data-mobile-nav="frame"]:not([data-sidebar-collapsed]))
     > div:has(> [role="dialog"][aria-modal="true"]) {
     z-index: 1400 !important;
