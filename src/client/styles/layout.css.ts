@@ -2014,11 +2014,17 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child > :first-child {
     display: none !important;
   }
-  /* The tab list scrolls in the space left by the toolbar: the toolbar
-     (config file + close) is reparented INTO this nav row by a client
-     reconciler task (settings-toolbar-reparent), so the tab list must be
-     anchored by its class, NOT by :last-child (the reparented toolbar
-     becomes the nav's new last child). */
+  /* The tab strip stays clear of the toolbar: the toolbar (close, plus
+     the config-file button on hosts that render one) is absolutely
+     positioned over the nav row's right end (#105 A' — it stays at its
+     React home in the content column; see below). This host renders the
+     navList as a nowrap horizontal scroller (overflow-x:auto, its own
+     upstream design — a forced flex-wrap loses to it), so the scroller
+     VIEWPORT must stop short of the toolbar zone: margin-right = toolbar
+     width (36: the 32px round close + 4px) + 6px gap (measured
+     2026-09-24) reproduces the reparent-era scroller geometry (its box
+     ended 6px short of the toolbar). The strip must be anchored by its
+     class. */
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"] {
     flex: 1 1 auto;
     min-width: 0;
@@ -2026,14 +2032,23 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     flex-wrap: wrap;
     gap: 6px;
     overflow: visible;
+    margin-right: 42px;
   }
-  /* Content toolbar (Open configuration file + close): grouped flush to
-     the right edge, and reparented INTO the nav row on mobile by the
-     settings-toolbar-reparent reconciler task, so it shares one line with
-     the tabs (user feedback 2026-08-16 — the toolbar's own row left a
-     full-width dead gap under the tabs). Children carry official
-     auto-margins that would defeat flex-end, so neutralize them. The close
-     button gets a round tappable base so it reads as its own control, not
+  /* Content toolbar (close, plus the config-file button on hosts that
+     render one): pinned over the nav row's right end, flush right.
+     #105 A' — the toolbar stays at its React home (the content column's
+     direct child) and is absolutely positioned against the dialog; the
+     dialog is position:absolute itself, so it is the containing block
+     and no new one is introduced. Constants measured 2026-09-24 (CDP,
+     393px): the reparented toolbar — whose visual this replaces — sat
+     at in-dialog dy=10 / fromRight=12, hence top 10px / right 12px.
+     Out of flow, the toolbar's own row disappears and the options area
+     starts right under the nav row; the navList's scroll viewport stops
+     short of the toolbar with margin-right = toolbar width (36: the 32px
+     round close + 4px) + 6px gap (measured). Children carry official
+     auto-margins
+     that would defeat flex-end, so neutralize them. The close button
+     gets a round tappable base so it reads as its own control, not
      part of the outline button.
      Anchored structurally, not by class substring: a bare [class*="_header"]
      also matches every plugin settings card header in the options area —
@@ -2042,14 +2057,16 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      siblings were renamed upstream in dsh-web-all 0.3.20, verified 2026-09-18), all sharing the upstream template text-align:left,
      gap:12px, padding:14px 16px). The old broad anchor right-aligned their
      text, gutted the padding and painted a 32px gray circle behind the
-     chevron (2026-09-05 sweep: 8 bleeding headers). The toolbar has two
-     structural homes, both covered below: after the reparent it is a direct
-     child of the nav row ([class*="_nav"]); before the reparent runs it is
-     the content column's direct child (the panel's :last-child). Card
-     headers live deeper — inside the options scroll area — and match
-     neither, so no per-plugin hash guards are needed. */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > [class*="_nav"] > [class*="_header"]:not([class*="_headerActions"]),
+     chevron (2026-09-05 sweep: 8 bleeding headers). The toolbar's one
+     structural home is the content column's direct child (the panel's
+     :last-child); the post-reparent nav-row home died with the
+     settings-toolbar-reparent task. Card headers live deeper — inside
+     the options scroll area — and match neither, so no per-plugin hash
+     guards are needed. */
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) {
+    position: absolute;
+    top: 10px;
+    right: 12px;
     flex: 0 0 auto;
     justify-content: flex-end;
     align-items: center;
@@ -2057,12 +2074,10 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     padding: 0 0 0 4px;
     min-height: 40px;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > [class*="_nav"] > [class*="_header"]:not([class*="_headerActions"]) > *,
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > * {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > [class*="_nav"] > [class*="_header"]:not([class*="_headerActions"]) > :last-child,
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > :last-child {
     width: 32px;
     height: 32px;

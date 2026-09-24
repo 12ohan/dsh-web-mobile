@@ -31,6 +31,10 @@ function readConfig(env = process.env) {
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
     throw new Error('DSH_PROBE_URL must use http or https');
   }
+  // Token-gated web: navigate to the ?token= URL so the host's 303 sets the
+  // auth cookie before the app boots (the load check below compares origin).
+  const token = env.DSH_PROBE_TOKEN?.trim();
+  if (token) parsedUrl.searchParams.set('token', token);
 
   const timeoutMs = Number(env.DSH_PROBE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
@@ -44,6 +48,10 @@ function readConfig(env = process.env) {
 
   return {
     url: parsedUrl.href,
+    // The token URL 303-redirects to the bare path (the auth cookie carries
+    // the session), so load checks must compare against the origin, not the
+    // navigated URL string.
+    origin: parsedUrl.origin,
     sessionId,
     chromePath: env.DSH_PROBE_CHROME || 'chromium',
     timeoutMs,
@@ -62,7 +70,6 @@ const results = [];
 // failing must be removed from this list.
 const EXPECTED_FAILURES = [
   { name: 'page.errors', includes: '404' },
-  { name: 'integration.gitgraph.reparented' },
   { name: 'integration.gitgraph.pressed' },
 ];
 
@@ -576,14 +583,25 @@ async function runGitgraphScenario(client, config, signal) {
   }
   pass('chip.present', 'found=true');
 
-  // Step 2: the chip must have been reparented into the composer card
-  // (textarea's closest element whose class ends with `_card`).
+  // Step 2 (#105 A′): the chip must have stayed where React rendered it —
+  // inside the conversation.input.dock subtree — and be CSS-pinned near the
+  // composer card's top-left corner + (12,12). No reparenting happens
+  // anymore; the old reparented assertion died with git-chip-reparent.ts.
   const placement = await client.evaluate(`(() => {
     const chip = document.querySelector(${JSON.stringify(CHIP_SELECTOR)});
-    const card = document.querySelector('textarea')?.closest('[class$="_card"]');
-    return { hasCard: card !== null, reparented: chip?.parentElement === card };
+    const dock = document.querySelector('[data-slot="conversation.input.dock"]');
+    const card = document.querySelector('[data-composer-input], textarea')?.closest('[class*="_card"]');
+    const stack = document.querySelector('[class*="_composerStack"]');
+    const a = document.querySelector('[data-gitgraph-chip-anchor]');
+    let align = null;
+    if (a && card) {
+      const ab = a.getBoundingClientRect(), cb = card.getBoundingClientRect();
+      align = { dx: Math.round((ab.left - (cb.left + 12)) * 10) / 10, dy: Math.round((ab.top - (cb.top + 12)) * 10) / 10 };
+    }
+    return { hasDock: dock !== null, inDock: !!(chip && dock && dock.contains(chip)), stackRelative: stack ? getComputedStyle(stack).position === 'relative' : false, align };
   })()`);
-  assertCheck('integration.gitgraph.reparented', placement.hasCard && placement.reparented, `hasCard=${placement.hasCard} reparented=${placement.reparented}`);
+  assertCheck('integration.gitgraph.docked', placement.hasDock && placement.inDock && placement.stackRelative, `hasDock=${placement.hasDock} inDock=${placement.inDock} stackRelative=${placement.stackRelative}`);
+  check('integration.gitgraph.chip-anchored', placement.align !== null && Math.abs(placement.align.dx) <= 2 && Math.abs(placement.align.dy) <= 2, `align=${JSON.stringify(placement.align)}`);
 
   // Step 3: real pressed feedback. Press at the live chip center and hold
   // ~120ms so `:active` stays applied, then require both `:active` and a
@@ -764,7 +782,7 @@ async function main() {
     const waitForPageLoad = (label) => waitFor(label, config.timeoutMs, signal, async () => {
       try {
         const state = await client.evaluate(`({ ready: document.readyState === 'complete', href: location.href })`);
-        return state.ready && state.href.startsWith(config.url) ? state : null;
+        return state.ready && state.href.startsWith(config.origin) ? state : null;
       } catch {
         return null;
       }

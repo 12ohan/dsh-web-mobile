@@ -1,5 +1,6 @@
 // hero 相位分支胶囊净空断言（红→绿回归门）
-// 断言：胶囊 reparent 进卡片后，compat 的 40px 顶部净空不被 hero 紧凑规则踩掉
+// 断言：胶囊经 A′ CSS 重锚定（留在 dock 子树，常数钉到卡角）后，compat 的
+// 44px 顶部净空不被 hero 紧凑规则踩掉
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdir, mkdtemp } from 'node:fs/promises';

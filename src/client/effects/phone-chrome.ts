@@ -7,8 +7,6 @@ import { currentSessionIdOf, sessionsCanOpen } from '../core/sessions-compat.ts'
 import { createPreviewCloseTask, createSheetRiseTask } from './aionui-compat.ts'
 import { createStatsLineTask } from './stats-line.ts'
 import { createPreviewFullscreenTask } from './preview-fullscreen.ts'
-import { createGitChipTask } from './git-chip-reparent.ts'
-import { createSettingsToolbarTask } from './settings-toolbar-reparent.ts'
 import { createOverlayTask } from './overlay-backdrop-fab.ts'
 import { createFileViewerMarkerTask } from './file-viewer-compat.ts'
 import type { PanelExit } from './panel-exit.ts'
@@ -860,8 +858,6 @@ export function registerReconcileTasks(ctx: ClientContext, panelExit: PanelExit)
   const t = ctx.locale.bind(NS)
   const removeTasks = [
     addReconcilerTask(createPreviewFullscreenTask(t)),
-    addReconcilerTask(createGitChipTask()),
-    addReconcilerTask(createSettingsToolbarTask()),
     addReconcilerTask(createPreviewCloseTask()),
     addReconcilerTask(createSheetRiseTask()),
     addReconcilerTask(createStatsLineTask()),

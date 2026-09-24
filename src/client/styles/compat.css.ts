@@ -773,41 +773,44 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
     padding-left: 4px !important;
   }
 
-  /* ---------- git-graph branch chip: inside the composer card ----------
+  /* ---------- git-graph branch chip: CSS re-anchor, no reparent (A′) ----------
      The branch chip (conversation.input.dock) floats between the dock rows
      and the input card; on a phone it reads as a stray capsule crowding the
-     composer. A client reconciler task (git-chip-reparent) reparents the
-     chip INTO the composer card; these rules pin it to the card's top-left
-     and give the card a dedicated chip row. The card is position: relative
-     by the official stylesheet, so the absolute anchor resolves against it.
+     composer. #105: the old fix reparented the chip INTO the composer card,
+     and React's unmount removeChild then threw NotFoundError into the
+     SlotErrorBoundary (same root cause as #104). A′ re-anchors instead:
+     the chip stays where React rendered it (inside the dock subtree) and
+     the composerStack becomes the containing block, with the anchor
+     constants = the card's static offset inside the stack + the original
+     (12,12) corner offset. Constants measured 2026-09-24 (CDP, 393px):
+     conversation phase card offset (16,0) → top 12 / left 28; hero phase
+     card offset (16,122.9) → top 134.9 / left 28 (hero override below).
      The plugin's own sheet sets all four offsets on the anchor, so
-     right/bottom must be neutralized too. Scope is the frame marker + the
-     anchor attribute (NOT the dock slot — the reparenting moves the chip
-     out of the dock's subtree). Desktop untouched: the frame marker only
-     exists below 1024px, and the effect restores the chip to the dock when
-     the viewport widens. Chip row geometry (2026-08-16, user feedback):
-     48px padding left a 16px dead gap between the chip and the input line
-     and made the composer read too tall; the row was tuned to 40px = chip
-     (24px) at top 12px + ~4px to the textarea. The chip itself has since
-     grown to 28px (git-graph chip CSS), which ate the breathing gap, so the
-     row is 44px to keep the same ~4px clearance (2026-09-06). */
-
+     right/bottom must be neutralized too. Desktop untouched: the frame
+     marker only exists below 1024px. Chip row geometry (2026-08-16, user
+     feedback): 48px padding left a 16px dead gap and made the composer read
+     too tall; 40px = chip (24px) at corner +12 + ~4px to the textarea; the
+     chip has since grown to 28px (git-graph chip CSS), so the row is 44px
+     (2026-09-06). The 44px clearance now keys off a STACK-level :has() —
+     the chip is no longer a card descendant, so a card-level :has() could
+     never match; the card disambiguation keeps non-composer cards (e.g. a
+     todo card sharing the stack) out of the chip row. */
+  [data-mobile-nav="frame"] [class*="_composerStack"] {
+    position: relative;
+  }
   [data-mobile-nav="frame"] [data-gitgraph-chip-anchor] {
     position: absolute !important;
     top: 12px !important;
-    left: 12px !important;
+    left: 28px !important;
     right: auto !important;
     bottom: auto !important;
     z-index: 1 !important;
   }
-  [data-mobile-nav="frame"] [class*="_card"]:has([data-gitgraph-chip-anchor]) {
-    padding-top: 44px !important;
+  [data-mobile-nav="frame"] [data-phase="hero"] [data-gitgraph-chip-anchor] {
+    top: 134.9px !important;
   }
-  /* Kill double-tap zoom on the chip wherever it lives (the tap-target trio
-     in misc.css is scoped to the dock slot and dies once the reparent moves
-     the anchor into the card). Geometry-free: touch-action only. */
-  [data-mobile-nav="frame"] [data-gitgraph-chip-anchor] [data-gitgraph-chip] {
-    touch-action: manipulation !important;
+  [data-mobile-nav="frame"] [class*="_composerStack"]:has([data-gitgraph-chip-anchor]) [class*="_card"]:has(textarea, [data-composer-input]) {
+    padding-top: 44px !important;
   }
 
   /* ---------- dsh-meme 表情选择卡片：右缘安全距离 ----------
