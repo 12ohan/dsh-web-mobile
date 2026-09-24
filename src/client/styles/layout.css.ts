@@ -1922,6 +1922,22 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
       --dsh-composer-model-text-display: none;
       --dsh-composer-model-icon-display: block;
     }
+    /* 图标化后（上方变量钉死为 icon-only）宿主那套 padding:0 4px 0 8px 纯属
+       浪费（左 8px 是给文字留的）。2026-09-23 店主第二轮："范围有点大、
+       ⌄ 离图标远" ⇒ padding 归零、gap 归零，匣子只剩「图标 + ⌄」本身
+       （实测墨迹间距 10px → ~4px，匣宽 46 → ~32px）。issue #101 对账：原与
+       max-width 同块、无档位限定，768–1023 平板档文字在场时也被归零，chip
+       内部「图标|模型名|effort|⌄」贴死 —— 2026-09-24 挪进本 ≤767 专档。 */
+    [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_trigger"] {
+      padding: 0 !important;
+      gap: 0 !important;
+    }
+    /* ⌄ 的 svg 自身带内边距（墨迹比 viewBox 窄），再拉近 2px。gap 归零后两个
+       svg 的内边距会让墨迹直接贴住（实测墨迹连成一段），这里不再加负 margin，
+       留 ~2px 呼吸 —— 间距从 10px 收到 2px。 */
+    [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_chevron"] {
+      margin-left: 0 !important;
+    }
   }
   /* 模型 chip 宽度预算（只对仍显示文字的 768–1023 平板档有意义）：宿主
      trigger 的 max-width min(360px,45cqw) 在窄容器下只给
@@ -1931,17 +1947,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      (0,3,0)+!important 胜宿主 (0,1,0) 普通声明；60 数值可调。 */
   [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_trigger"] {
     max-width: min(360px, 60cqw) !important;
-    /* 图标化后宿主那套 padding:0 4px 0 8px 纯属浪费（左 8px 是给文字留的）。
-       2026-09-23 店主第二轮："范围有点大、⌄ 离图标远" ⇒ padding 归零、gap 归零，
-       匣子只剩「图标 + ⌄」本身（实测墨迹间距 10px → ~4px，匣宽 46 → ~32px）。 */
-    padding: 0 !important;
-    gap: 0 !important;
-  }
-  /* ⌄ 的 svg 自身带内边距（墨迹比 viewBox 窄），再拉近 2px。 */
-  [data-mobile-nav="frame"] [data-phase] [class*="_7KE1Ra_chevron"] {
-    /* gap 归零后两个 svg 的内边距会让墨迹直接贴住（实测墨迹连成一段），
-       这里不再加负 margin，留 ~2px 呼吸 —— 间距从 10px 收到 2px。 */
-    margin-left: 0 !important;
+    /* issue #101 对账：padding/gap 归零与 chevron margin-left:0 已分档至上方
+       ≤767 专档（那是「图标化后」的前提）；768–1023 文字显示档保留宿主
+       padding 0 4px 0 8px 与宿主 gap，⌄ 回宿主 margin。 */
   }
   /* --- Settings dialog on mobile ---
      Desktop: 800px two-column flex (188px nav + content). Mobile: a
