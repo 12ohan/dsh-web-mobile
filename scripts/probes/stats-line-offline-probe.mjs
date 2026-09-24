@@ -3,6 +3,8 @@
 // removeChild then threw NotFoundError and the SlotErrorBoundary emptied the
 // composer bar slot until a reload. Repro recipe = Network.emulateNetworkConditions
 // offline on a loaded mobile session (reporter-verified).
+// #105 adds the git-chip A′ section (G1-G4): chip stays in the dock subtree
+// and is CSS-pinned to the card corner; asserted only when the chip renders.
 // Env: DSH_PROBE_SESSION_ID (required, full session-<uuid>),
 //      DSH_PROBE_TOKEN (required, the ?token= value of the running web),
 //      DSH_PROBE_URL (default http://127.0.0.1:3080/),
@@ -66,6 +68,17 @@ const snap = `(() => {
     slotErrors: document.querySelectorAll('[data-slot-error]').length,
     removeChildMiss: window.__mnRemoveChildMiss || 0,
   }
+  // git-chip 段（#105 A′）：chip 留在 dock 子树 + CSS 钉角 ≈ 卡角+(12,12)±2px
+  const gAnchor = document.querySelector('[data-gitgraph-chip-anchor]')
+  const gDock = document.querySelector('[data-slot="conversation.input.dock"]')
+  const gCard = document.querySelector('[data-composer-input], textarea')?.closest('[class*="_card"]')
+  out.chipPresent = !!gAnchor
+  out.chipInDock = !!(gAnchor && gDock && gDock.contains(gAnchor))
+  if (gAnchor && gCard) {
+    const ab = gAnchor.getBoundingClientRect(), cb = gCard.getBoundingClientRect()
+    out.chipAlignDx = Math.round((ab.left - (cb.left + 12)) * 10) / 10
+    out.chipAlignDy = Math.round((ab.top - (cb.top + 12)) * 10) / 10
+  }
   if (!strip) return out
   const holder = strip.parentElement
   const dock = holder && holder.parentElement
@@ -92,6 +105,15 @@ add('P3 环 overlay 对准自建占位', pre.ringOnReserve === true, 'ring=' + J
 add('P4 环为绝对定位', pre.ringPosition === 'absolute', 'position=' + pre.ringPosition)
 add('P5 复现前 composer 在场', pre.composerAlive, 'composerAlive=' + pre.composerAlive)
 add('P6 复现前槽位零错误', pre.slotErrors === 0, 'slotErrors=' + pre.slotErrors)
+// #105 A′ git-chip 段：chip 在场才断言（headless 无 git 数据时缺席与主探针 gitgraph
+// SKIP 基线同源，整段记 SKIP，不影响退出码）；在场则全部为必过断言（绊线）。
+const chipAligned = (s) => s.chipPresent && Math.abs(s.chipAlignDx ?? 99) <= 2 && Math.abs(s.chipAlignDy ?? 99) <= 2
+if (pre.chipPresent) {
+  add('G1 chip 留在 dock 子树（A′ 不搬家不变量）', pre.chipInDock === true, 'chipInDock=' + pre.chipInDock)
+  add('G2 chip 左上角 ≈ 卡角+(12,12) ±2px', chipAligned(pre), 'dx=' + pre.chipAlignDx + ' dy=' + pre.chipAlignDy)
+} else {
+  console.log('SKIP git-chip 断言段（G1-G4）：chip 未渲染（headless 无 git 数据，与主探针 gitgraph SKIP 基线同源）')
+}
 
 // 断网 ≥15s → 恢复（报障者配方）
 await client.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
@@ -106,6 +128,10 @@ add('X2 零 removeChild 未命中（钩子计数，含被边界吞掉的）', po
 add('X3 composer 槽位零 data-slot-error', post.slotErrors === 0, 'slotErrors=' + post.slotErrors)
 add('X4 环未被搬动（不变量保持）', post.ringParentIsDock === true, 'ringParentIsDock=' + post.ringParentIsDock)
 add('X5 环 overlay 仍对准占位', post.ringOnReserve === true, 'ring=' + JSON.stringify(post.ring) + ' reserve=' + JSON.stringify(post.reserve))
+if (pre.chipPresent) {
+  add('G3 断网重连后 chip 仍在 dock 子树', post.chipInDock === true, 'chipInDock=' + post.chipInDock)
+  add('G4 断网重连后 chip 钉角不变（≈卡角+(12,12)±2px）', chipAligned(post), 'dx=' + post.chipAlignDx + ' dy=' + post.chipAlignDy)
+}
 
 let fail = 0
 for (const a of A) { console.log((a.ok ? 'PASS' : 'FAIL') + '  ' + a.name + (a.ok ? '' : '  [' + a.detail + ']')); if (!a.ok) fail++ }

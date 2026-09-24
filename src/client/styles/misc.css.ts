@@ -12,16 +12,20 @@ export const MISC_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
   [data-phase="hero"] [class*="_card"]:has(textarea, [data-composer-input]) {
     gap: 8px !important;
   }
-  /* Cards carrying the reparented git branch chip must keep compat.css's
-     44px chip clearance: that rule sets padding-top: 44px on any card that
-     contains the absolutely-positioned chip anchor (top 12px + 28px chip —
-     the chip grew 24→28px, so the clearance grew 40→44px to keep the same
-     ~4px breathing gap). This compact override used to stomp it back to 6px
-     with the same specificity (this sheet loads after compat), so on the
-     hero empty state the chip painted over the input line (2026-09-06).
-     Excluding chip-bearing cards restores the clearance; the textarea
-     collapse below still applies to them. */
-  [data-phase="hero"] [class*="_card"]:has(textarea, [data-composer-input]):not(:has([data-gitgraph-chip-anchor])) {
+  /* Composer stacks carrying the git branch chip must keep compat.css's 44px
+     chip clearance: that rule sets padding-top: 44px on the composer card of
+     any stack that contains the absolutely-positioned chip anchor (A′, #105:
+     the chip stays in the dock subtree and is re-anchored to the stack, so
+     the exclusion moved from the card level to this stack-level :not(:has())
+     — a card-level :has() could never match anymore). Chip geometry: top
+     corner +12 + 28px chip — the chip grew 24→28px, so the clearance grew
+     40→44px to keep the same ~4px breathing gap (2026-09-06). This compact
+     override used to stomp the clearance back to 6px with the same
+     specificity (this sheet loads after compat), so on the hero empty state
+     the chip painted over the input line (2026-09-06). Excluding
+     chip-bearing stacks restores the clearance; the textarea collapse below
+     still applies to them. */
+  [data-phase="hero"] [class*="_composerStack"]:not(:has([data-gitgraph-chip-anchor])) [class*="_card"]:has(textarea, [data-composer-input]) {
     padding-top: 6px !important;
   }
   /* The official composer autosizes the textarea and writes an inline
