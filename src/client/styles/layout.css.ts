@@ -2022,13 +2022,26 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child > :first-child {
     display: none !important;
   }
-  /* The tab strip stays clear of the toolbar: the toolbar (close, plus
-     the config-file button on hosts that render one) is absolutely
+  /* The tab strip stays clear of the toolbar: the toolbar (the close ✕ on
+     this host — the config-file button is hidden below) is absolutely
      positioned over the nav row's right end (#105 A' — it stays at its
-     React home in the content column; see below). This host renders the
-     navList as a nowrap horizontal scroller (overflow-x:auto, its own
-     upstream design — a forced flex-wrap loses to it), so the scroller
-     VIEWPORT must stop short of the toolbar zone: margin-right = toolbar
+     React home in the content column; see below). The strip is pinned to
+     ONE horizontal scroller: flex-wrap:nowrap + overflow-x:auto.
+     2026-09-25, rc.2 portal regression: 0.1.7-rc.1 rendered this sheet in
+     place (inside the app frame); rc.2 wraps it in
+     createPortal(..., document.body) — diffed rc.1 vs rc.2 bundles, no
+     createPortal before — so every [data-mobile-nav="frame"]-scoped
+     dialog rule (the frame-era single-row scroller in compat.css among
+     them) went dead the moment the overlay became a direct body child.
+     What survived was this rule's own flex-wrap:wrap, which had been
+     losing to the host's nowrap scroller and now had nothing to lose to:
+     the cells broke into uneven rows (3/2/3/2/1 at 402px) whose first row
+     slid under the 138px toolbar (config-file button + close) — the
+     settings-sheet half of the owner's 2026-09-25 report. Pinning the
+     scroller here makes the geometry host-generation independent again;
+     the cells keep flex-shrink:0 + nowrap (rule below), the strip
+     scrolls, and the hairline scrollbar is the affordance. The scroller
+     VIEWPORT stops short of the toolbar zone: margin-right = toolbar
      width (36: the 32px round close + 4px) + 6px gap (measured
      2026-09-24) reproduces the reparent-era scroller geometry (its box
      ended 6px short of the toolbar). The strip must be anchored by its
@@ -2037,10 +2050,43 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     flex: 1 1 auto;
     min-width: 0;
     flex-direction: row !important;
-    flex-wrap: wrap;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
     gap: 6px;
-    overflow: visible;
     margin-right: 42px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Hairline scrollbar for the tab strip: the default WebKit scrollbar
+     reads fat on a phone; 2px keeps the scroll affordance without the
+     bulk. (Portal-aware copies of the frame-scoped rules in compat.css,
+     which died with the rc.2 portal move.) */
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"]::-webkit-scrollbar {
+    height: 2px !important;
+  }
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"]::-webkit-scrollbar-thumb {
+    background: var(--dsw-alias-border-l2, rgba(0, 0, 0, .22)) !important;
+    border-radius: 1px !important;
+  }
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"]::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  /* Cells stay whole inside the scroller: no shrink, no wrap, compact
+     metrics. (Portal-aware copies of the frame-scoped rules in compat.css,
+     which died with the rc.2 portal move.) */
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navCell"] {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    padding: 6px 8px !important;
+    gap: 6px !important;
+    font-size: 13px !important;
+    justify-content: flex-start !important;
+  }
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navCell"] svg {
+    width: 14px !important;
+    height: 14px !important;
+    flex: none !important;
   }
   /* Content toolbar (close, plus the config-file button on hosts that
      render one): pinned over the nav row's right end, flush right.
@@ -2075,18 +2121,39 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     position: absolute;
     top: 10px;
     right: 12px;
+    /* z-index is load-bearing since 0.1.7-rc.2 (owner report 2026-09-25):
+       the sheet is portaled to <body>, and the market page (dshmarket's
+       nUhMVa_root, position:relative, z:auto) paints AFTER this header in
+       DOM order — both are z:auto positioned, so the market head covered
+       the pinned toolbar: the close ✕ stayed visible through the head's
+       transparent right end but hit-testing returned the head, so tapping
+       the ✕ did nothing ("按了关闭没用"). z-index lifts the toolbar into
+       the painted-above layer: above the market root and its sticky list
+       heads (.stickyHead z:5), still below the market's own transient
+       layers (.opPanel z:40, .lightbox z:10000) which SHOULD cover it.
+       Settings view: the toolbar sits over the nav row's reserved right
+       end (margin-right 42px), so nothing there to cover or be covered. */
+    z-index: 10;
     flex: 0 0 auto;
     justify-content: flex-end;
     align-items: center;
     gap: 8px;
     padding: 0 0 0 4px;
-    min-height: 40px;
+    /* Hug the close ✕ only: the host header box is 54px tall, and with the
+       actions hidden its empty lower half (above the market's "导出日志"
+       button, which starts ~13px under the ✕) formed a dead zone that
+       ate the export button's top-right corner once z-index lifted the
+       toolbar above it (owner report follow-up 2026-09-25). 32px = the
+       close's own height, so the toolbar's box ends where the ✕ ends. */
+    height: 32px;
+    min-height: 32px;
   }
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > * {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
   [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > :last-child {
+    position: relative;
     width: 32px;
     height: 32px;
     border-radius: 50% !important;
@@ -2094,6 +2161,34 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     align-items: center;
     justify-content: center;
     background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06)) !important;
+  }
+  /* 32px is under the ~44px touch minimum and this ✕ shares the corner
+     with the market's version text (above-left) and its export button
+     (below-left) — the owner's "很容易误触" report 2026-09-25. Extend the
+     HIT area only (no visual change): the pseudo-element grows up, left
+     and right by 6px — never downward, where the market's "导出日志"
+     button starts ~13px under the ✕'s bottom edge and must keep its own
+     top-right corner. Anchored to the button (position:relative above),
+     so the extension travels with the pinned toolbar. */
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > :last-child::after {
+    content: "";
+    position: absolute;
+    inset: -6px -6px 0 -6px;
+    border-radius: 50%;
+  }
+  /* The config-file action (a settings.action slot — dsh-version-update's
+     "打开配置文件") is hidden on phones: it is rarely needed here, and its
+     ~94px next to the 32px close made the pinned toolbar 138px wide —
+     wide enough to swallow the nav strip's first cells while the strip
+     still wrapped (2026-09-25 report, the other half of the same
+     regression as the scroller fix above). The close ✕ is the toolbar's
+     SIBLING, not its child (verified in the live DOM: header children are
+     [actions, close]), so hiding the actions never removes the way out.
+     Desktop keeps the button: this whole block sits inside the mobile
+     media wrapper. (Portal-aware replacement for the frame-scoped rule in
+     compat.css, which died with the rc.2 portal move.) */
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) [class*="_actions"] {
+    display: none !important;
   }
   /* Appearance mode cards: the official cube row renders three tall
      vertical cards (~268px) that eat half the sheet. Turn them into a

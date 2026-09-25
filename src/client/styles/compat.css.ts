@@ -279,8 +279,12 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
      so position:fixed centers against the real viewport (a plain left:50%
      would resolve against the tiny relative trigger wrapper and land even
      further right). The upstream 86vw width cap, 70vh max-height and
-     internal scroll all still apply; the close button stays inside. */
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_opPanel"] {
+     internal scroll all still apply; the close button stays inside.
+     2026-09-25: re-anchored from [data-mobile-nav="frame"] [aria-modal]
+     to the market's own root marker — since rc.2 the whole settings
+     sheet (market included) is portaled to <body> and no longer matches a
+     frame-descendant selector. */
+  [data-dsh-market-root] [class*="_opPanel"] {
     position: fixed !important;
     top: 50% !important;
     bottom: auto !important;
@@ -300,20 +304,83 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
      sometimes-horizontal/sometimes-vertical flapping. Let the row wrap
      instead: line 1 keeps icon + title + repo + version, the update
      buttons get their own full-width-feeling second line, and the title
-     itself is locked to one ellipsized line no matter what follows it. */
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_titleRow"] {
+     itself is locked to one ellipsized line no matter what follows it.
+     2026-09-25: re-anchored from [data-mobile-nav="frame"] [aria-modal]
+     to the market's own root marker — since rc.2 the whole settings
+     sheet (market included) is portaled to <body> and no longer matches a
+     frame-descendant selector. Same day, second pass: the ported rule's
+     flex:1 1 auto on the title GREW it to fill the row, which pushed the
+     repo link and the version "v1.65.1" to the far right — exactly where
+     the pinned toolbar's close ✕ sits, crowding the corner the owner
+     reported as "很容易误触" (hit-test: the version box reached x≈378,
+     the close ✕ starts at x=350). flex:0 1 auto keeps the title at its
+     natural width (repo + version pack left, as upstream intends) while
+     still letting it shrink-and-ellipsize when the update buttons force a
+     wrap — the wrap rule above, not flex-grow, is what makes room for
+     them. */
+  [data-dsh-market-root] [class*="_titleRow"] {
     flex-wrap: wrap !important;
     row-gap: 6px !important;
   }
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_titleRow"] [class*="_title"] {
-    flex: 1 1 auto !important;
+  [data-dsh-market-root] [class*="_titleRow"] [class*="_title"] {
+    flex: 0 1 auto !important;
     min-width: 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
   }
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_titleRow"] button {
+  [data-dsh-market-root] [class*="_titleRow"] button {
     white-space: nowrap !important;
+  }
+
+  /* ---------- dshmarket polish: card byline stays on one line ----------
+     The byline (avatar · owner · version · ↓downloads · ★stars) is a
+     wrapping flex row by upstream design — the market would rather drop
+     the counts to a second line than over-shrink the owner name (its
+     .owner carries flex:0 1 auto + ellipsis + min-width:44px exactly for
+     that). At a phone's card width the break point lands mid-row though:
+     everything but the star fits, so a lone "· ★ 8k" wraps onto its own
+     line under the author — inconsistent with the cards that happen to
+     fit, which reads as a rendering bug (owner report 2026-09-25,
+     IMG_4208: dsh-remote-web-ui and dsh-skill-explorer both orphaned the
+     star). Pin the row to one line instead: the owner is the market's own
+     flexible item, so it absorbs the squeeze and the counts stay whole.
+     Desktop cards are far wider than the row and never wrapped anyway. */
+  [data-dsh-market-root] [class*="_byline"] {
+    flex-wrap: nowrap !important;
+  }
+
+  /* ---------- dshmarket polish: top inset ----------
+     The sheet is pinned to the top of the screen (A': top = safe-area +
+     12px) and the market page started FLUSH against the sheet's top
+     edge — measured 2026-09-25: the title row's gap from the sheet's top
+     was 0px while the pinned close ✕ sat 10px under it, so the whole
+     page read as crushed against the boundary (owner report, IMG_4211:
+     "最上面快要顶到边界了... 把整体往下移一点，有点留白会更美观").
+     Give the page the same 12px inset its own horizontal padding already
+     has (the root box was 12px from each side, 0px from the top), so the
+     title lands ~12px under the sheet's rounded corner, level with the
+     close ✕. The market page is the sheet's CONTENT, so it moves; the
+     pinned toolbar (close ✕) belongs to the sheet and deliberately does
+     NOT move ("关闭按钮可以不动"). Scrolls away naturally with the page.
+     Desktop market is vertically centered with the host's own clearance
+     and never had this read; the rule is mobile-only. */
+  [data-dsh-market-root] {
+    margin-top: 12px !important;
+  }
+  /* Below ~360px the fixed-width counts plus the owner's 44px min overrun
+     the card, so the ellipsis eats most of the name ("omds..."). Trade text
+     size for name length on the smallest phones: 11px → 10px text and
+     6px → 4px gaps buy the owner roughly a third more room while the row
+     stays one line. Tablet/phone tiers above this width are unaffected. */
+  @media (max-width: 360px) {
+    [data-dsh-market-root] [class*="_byline"] {
+      gap: 4px !important;
+      font-size: 10px !important;
+    }
+    [data-dsh-market-root] [class*="_byline"] [class*="_dot"] {
+      margin-left: 3px !important;
+    }
   }
 
   /* ---------- dshmarket 1.20+ compat: keep the settings nav visible ----------
@@ -324,9 +391,25 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
      Our host's only close ✕ lives inside that very nav, so the market
      would leave no categories and no way back or out (dead-end UI,
      2026-08-23). Mirror upstream's exact media condition and restore the
-     nav: categories row + ✕ stay above the inline market page. */
+     nav: categories row + ✕ stay above the inline market page.
+     2026-09-25 (rc.2 regression): 0.1.7-rc.2 renders this sheet through
+     createPortal(..., document.body), so the frame-scoped selector matches
+     nothing on rc.2+ hosts and the market takeover silently won — no
+     categories row above the market page on every updated phone. The twin
+     rule below carries the same declaration on a structural anchor
+     ([role=dialog]:has(...) > nav, no frame prefix): on rc.1 hosts the
+     frame-scoped rule does the work and the twin is inert (the sheet is a
+     frame descendant there); on rc.2+ the twin carries it. Both stay
+     inside this file's mobile media wrapper, so desktop never sees them.
+     Premise note: this host generation keeps its close ✕ in the CONTENT
+     header (pinned top-right — see layout.css), so the dead-end half of
+     the 2026-08-23 report no longer applies; the rule is kept and twinned
+     for the categories row it restores (guarded by the test suite). */
   @media (max-width: 560px) {
     [data-mobile-nav="frame"] [role="dialog"]:has([data-dsh-market-root]) > nav {
+      display: flex !important;
+    }
+    [role="dialog"]:has([data-dsh-market-root]) > nav {
       display: flex !important;
     }
   }
@@ -357,55 +440,21 @@ export const COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
      with its dead label/control gap, now fight that design and double every
      row's height; they were removed (see the tombstone below). */
 
-  /* Nav tabs: single scrolling row instead of the 3-per-row grid — seven
-     categories wrap into three rows on a phone (~130px of sheet height);
-     one row with a thin scrollbar keeps every tab reachable and returns
-     that space to the options area (user feedback 2026-08-16). An earlier
-     one-row attempt had no scroll affordance and silently cut the last
-     tab off; the thin scrollbar IS the affordance. Scoped to the frame
-     marker: the desktop dialog keeps its official vertical nav column. */
-  [data-mobile-nav="frame"] [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"] {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    gap: 6px !important;
-    width: 100% !important;
-    scrollbar-width: thin !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-  /* Hairline scrollbar for the tab row: the default WebKit scrollbar reads
-     fat on a phone; 2px keeps the scroll affordance without the bulk. */
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_navList"]::-webkit-scrollbar {
-    height: 2px !important;
-  }
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_navList"]::-webkit-scrollbar-thumb {
-    background: var(--dsw-alias-border-l2, rgba(0, 0, 0, .22)) !important;
-    border-radius: 1px !important;
-  }
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_navList"]::-webkit-scrollbar-track {
-    background: transparent !important;
-  }
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_navCell"] {
-    flex: 0 0 auto !important;
-    white-space: nowrap !important;
-    padding: 6px 8px !important;
-    gap: 6px !important;
-    font-size: 13px !important;
-    justify-content: flex-start !important;
-  }
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_navCell"] svg {
-    width: 14px !important;
-    height: 14px !important;
-    flex: none !important;
-  }
-  /* Content toolbar: the "Open configuration file" button is hidden on
-     mobile — it is rarely needed on a phone and steals ~180px from the
-     tab row's scroll area (user feedback 2026-08-16). Only the close ✕
-     stays, flush right in the nav row. Desktop untouched (frame scoped). */
-  [data-mobile-nav="frame"] [aria-modal="true"] [class*="_header"]:not([class*="_headerActions"]) [class*="_actions"] {
-    display: none !important;
-  }
+  /* Nav tabs + toolbar: TOMBSTONE (2026-09-25). This whole family —
+     the single-row scroller, its hairline scrollbar, the compact cells and
+     the hidden "Open configuration file" button — was scoped to
+     [data-mobile-nav="frame"] because rc.1 rendered the settings sheet in
+     place, inside the app frame. rc.2 wraps the sheet in
+     createPortal(..., document.body): the overlay is a direct body child,
+     nothing inside it matches a frame-descendant selector, and every rule
+     here went dead at once. The live symptoms were the nav cells wrapping
+     into uneven rows that slid under the 138px toolbar and the config-file
+     button reappearing in that toolbar (owner report 2026-09-25). The
+     portal-aware replacements live in layout.css.ts, in the "Settings
+     dialog on mobile" section, anchored on the same structural
+     :has(> :first-child > :last-child > button) gate (settings sheet only;
+     export dialog and directory picker stay excluded). Nothing to restore
+     here — do not re-add behind a frame selector. */
   /* Setting rows: no mobile rework — the host renders compact space-between
      rows natively (.Pt1bsG_row: text left, control right, 16px vertical
      padding, .5px divider). The previous "stack each row" rule family
