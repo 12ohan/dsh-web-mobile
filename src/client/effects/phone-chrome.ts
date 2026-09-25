@@ -311,7 +311,7 @@ const IOS_MARKER = 'data-mobile-nav-ios'
  * zoom away from Android/DSHA; the iOS focus-zoom fix is the >=16px field
  * floor (data-mobile-nav-ios), not a zoom ban (#45).
  */
-const VIEWPORT_CONTENT = 'width=device-width, initial-scale=1, viewport-fit=cover'
+const VIEWPORT_CONTENT = 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover'
 
 const findViewportMeta = (): HTMLMetaElement | null =>
   document.querySelector<HTMLMetaElement>('meta[name="viewport"]')
