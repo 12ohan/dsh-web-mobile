@@ -41,6 +41,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   body {
     touch-action: pan-y pinch-zoom !important;
     overscroll-behavior-x: none !important;
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    width: 100% !important;
   }
 
   /* AppFrame: the drawer takes the sidebar column out of grid flow, so the
@@ -73,6 +76,9 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     position: relative !important;
     grid-template-columns: minmax(0, 1fr) 0 0 !important;
     padding-top: env(safe-area-inset-top, 0px) !important;
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    width: 100% !important;
   }
 
   /* The sidebar column (first grid child) becomes a left drawer. The drawer
@@ -329,22 +335,20 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      Suppress the turn rail and width handles completely across all touch/mobile
      viewports with display:none and pointer-events:none. */
   [data-mobile-nav="frame"] [class*="_slot"]:has([class*="_marks"]),
-  [data-mobile-nav="frame"] [class*="_slot"]:has([class*="_mark"]),
   [data-mobile-nav="frame"] [class*="_frame"]:has([class*="_marks"]),
   [data-mobile-nav="frame"] [class*="_marks"],
   [data-mobile-nav="frame"] [class*="_markPosition"],
-  [data-mobile-nav="frame"] [class*="_mark"],
+  [data-mobile-nav="frame"] button[class*="_mark"]:not([class*="_markdown"]),
   [data-mobile-nav="frame"] [class*="_scroller"]:has([class*="_marks"]),
   [data-mobile-nav="frame"] nav[class*="_frame"][aria-label*="Turn"],
   [data-mobile-nav="frame"] nav[class*="_frame"][aria-label*="轮次"],
   [data-mobile-nav="frame"] [class*="widthHandle"],
   [data-mobile-nav="frame"] [data-width-handle],
   [data-phase] [class*="_slot"]:has([class*="_marks"]),
-  [data-phase] [class*="_slot"]:has([class*="_mark"]),
   [data-phase] [class*="_frame"]:has([class*="_marks"]),
   [data-phase] [class*="_marks"],
   [data-phase] [class*="_markPosition"],
-  [data-phase] [class*="_mark"],
+  [data-phase] button[class*="_mark"]:not([class*="_markdown"]),
   [data-phase] [class*="_scroller"]:has([class*="_marks"]),
   [data-phase] nav[class*="_frame"][aria-label*="Turn"],
   [data-phase] nav[class*="_frame"][aria-label*="轮次"],
@@ -356,6 +360,19 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
     height: 0 !important;
     opacity: 0 !important;
     visibility: hidden !important;
+  }
+
+  /* Assistant Markdown safeguard: ensure assistant response text is NEVER hidden by substring selectors */
+  [data-phase] [class*="_markdown"],
+  [data-phase] [class*="_markdown"] * {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  [data-phase] [class*="_markdown"] {
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    pointer-events: auto !important;
   }
   /* Message action rows (copy / run-time badges) can overflow the right
      edge on narrow screens — keep them inside the message width. */
@@ -935,14 +952,26 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
   [data-mobile-nav="frame"] [data-phase="active"] [data-composer-card] {
     padding-top: 2px !important;
     gap: 4px !important;
+    box-sizing: border-box !important;
+    max-width: 100% !important;
   }
   [data-mobile-nav="frame"] [data-phase="active"] [data-composer-card] [class*="_row"] {
     padding: 0 8px !important;
+    box-sizing: border-box !important;
+    max-width: 100% !important;
   }
   [data-mobile-nav="frame"] [data-phase="active"] [data-composer-card] [data-composer-input],
   [data-mobile-nav="frame"] [data-phase="active"] [data-composer-card] [class*="_scroll"] {
     min-height: 28px !important;
     padding-top: 2px !important;
+  }
+  /* Prevent iOS Safari input auto-zoom: fields must compute to >= 16px */
+  [data-mobile-nav="frame"] [data-composer-card] [data-composer-input],
+  [data-mobile-nav="frame"] [data-composer-card] [data-composer-input] *,
+  [data-mobile-nav="frame"] [data-composer-card] [data-composer-placeholder],
+  [data-mobile-nav="frame"] [data-composer-card] textarea,
+  [data-mobile-nav="frame"] [data-composer-card] input {
+    font-size: 16px !important;
   }
   /* --- Session header on mobile ---
      Keep the host-owned metadata in one responsive row. The conversation
