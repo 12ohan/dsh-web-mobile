@@ -296,15 +296,66 @@ export const LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND
      Classic desktop scrollbars (Edge/Chrome) also occupy ~8-17px in a
      phone-sized viewport, shifting the column further. Mobile scrolling
      is touch/wheel, so remove the scrollbar entirely on phones: the
-     column is then exactly centered in every browser. */
-  [data-phase] [class*="_scrollBody"] {
+     column is then exactly centered in every browser.
+     Holding scrollbar-width: none and hiding webkit-scrollbar also prevents
+     iOS Safari from attaching a fast-scroll scrubber thumb to the right edge. */
+  [data-mobile-nav="frame"] [data-conversation-scroll],
+  [data-mobile-nav="frame"] [class*="_scrollBody"],
+  [data-phase] [class*="_scrollBody"],
+  [data-phase] [data-conversation-scroll] {
     scrollbar-gutter: auto !important;
-    scrollbar-width: none;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch;
+    overflow-anchor: none !important;
   }
-  [data-phase] [class*="_scrollBody"]::-webkit-scrollbar {
+  [data-mobile-nav="frame"] [data-conversation-scroll]::-webkit-scrollbar,
+  [data-mobile-nav="frame"] [class*="_scrollBody"]::-webkit-scrollbar,
+  [data-phase] [class*="_scrollBody"]::-webkit-scrollbar,
+  [data-phase] [data-conversation-scroll]::-webkit-scrollbar,
+  [data-mobile-nav="frame"] [class*="_scroll"]:not([class*="_scrollBody"])::-webkit-scrollbar,
+  [data-phase] [class*="_scroll"]:not([class*="_scrollBody"])::-webkit-scrollbar {
     display: none !important;
-    width: 0;
-    height: 0;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  /* ---------- Turn Navigator (chat turn rail) & Width Handles: suppress on mobile ----------
+     On mobile phones, right-thumb scrolling frequently touches down or swipes
+     along the right 28px edge. The host's TurnNavigatorRail (.eGxaPq_frame)
+     binds an onClick / onPointerMove handler that translates touch Y coordinates
+     to a turn index and calls onNavigate(), instantly jumping the conversation
+     up or down multiple chats. WidthHandles (.wSkVaW_widthHandle) also intercept
+     drags along the right margin.
+     Suppress the turn rail and width handles completely across all touch/mobile
+     viewports with display:none and pointer-events:none. */
+  [data-mobile-nav="frame"] [class*="_slot"]:has([class*="_marks"]),
+  [data-mobile-nav="frame"] [class*="_slot"]:has([class*="_mark"]),
+  [data-mobile-nav="frame"] [class*="_frame"]:has([class*="_marks"]),
+  [data-mobile-nav="frame"] [class*="_marks"],
+  [data-mobile-nav="frame"] [class*="_markPosition"],
+  [data-mobile-nav="frame"] [class*="_mark"],
+  [data-mobile-nav="frame"] [class*="_scroller"]:has([class*="_marks"]),
+  [data-mobile-nav="frame"] nav[class*="_frame"][aria-label*="Turn"],
+  [data-mobile-nav="frame"] nav[class*="_frame"][aria-label*="轮次"],
+  [data-mobile-nav="frame"] [class*="widthHandle"],
+  [data-mobile-nav="frame"] [data-width-handle],
+  [data-phase] [class*="_slot"]:has([class*="_marks"]),
+  [data-phase] [class*="_slot"]:has([class*="_mark"]),
+  [data-phase] [class*="_frame"]:has([class*="_marks"]),
+  [data-phase] [class*="_marks"],
+  [data-phase] [class*="_markPosition"],
+  [data-phase] [class*="_mark"],
+  [data-phase] [class*="_scroller"]:has([class*="_marks"]),
+  [data-phase] nav[class*="_frame"][aria-label*="Turn"],
+  [data-phase] nav[class*="_frame"][aria-label*="轮次"],
+  [data-phase] [class*="widthHandle"],
+  [data-phase] [data-width-handle] {
+    display: none !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
   }
   /* Message action rows (copy / run-time badges) can overflow the right
      edge on narrow screens — keep them inside the message width. */
