@@ -26,6 +26,9 @@
 > 4. **三组哈希换代**：`w1urq_`→`11bjj_`（bundle 判定，live 未复现宿主模态）、`1nxmc_`→`1t7on_`、`YyYd_a_`→`pbvGtq_`；**`oY77xG_`/`hVGvvW_`/`T1PP_` 0.1.7 复活**、与 `Pt1bsG_` 混用（`lats3W_` 仍 0）。
 > 5. 增量详情见文末 §8；插件侧规则面变化（#101/#105/#111/eaf74e4）同见 §8。
 
+> [!warning] 2026-09-25 复测二（宿主 0.1.7-rc.2，PR #116 合并后，读本文档前先看这段）
+> **设置弹窗 rc.2 起 `createPortal(..., document.body)`**——§8「无 portal、就地渲染于 settingsArea」的挂载链实锤只对 rc.1 成立。插件全部 `[data-mobile-nav="frame"]` 作用域的对话框规则在 rc.2+ 上**静默失效**（选择器合法但零命中）。规则面已按 PR #116 全部换锚，详见 §9。
+
 
 ---
 
@@ -101,12 +104,12 @@ body
 | 规则目标 | 选择器要点 | 解决的问题 |
 |---|---|---|
 | 【历史快照】市场 tabs 行 | `[aria-modal="true"] [class*="_tabs"]` wrap + `_searchInline` 全宽（**子串**，`compat.css.ts:255`） | 搜索框溢出右缘 |
-| 【历史快照】标题行 | `[data-mobile-nav="frame"] [aria-modal="true"] [class*="_titleRow"]` wrap；`_title` 单行 ellipsis；行内 button nowrap（**带 frame 域 + 子串**，`:304/:308/:315`） | **待更新按钮出现时**(~450px 自然宽)把文字压成逐词竖排 |
+| 【历史快照】标题行 | `[data-mobile-nav="frame"] [aria-modal="true"] [class*="_titleRow"]` wrap；`_title` 单行 ellipsis；行内 button nowrap（**带 frame 域 + 子串**，`:304/:308/:315`）——**rc.2 起该 frame 形态已死，换锚 `[data-dsh-market-root]` 且 `_title` 改 `flex: 0 1 auto`，见 §9** | **待更新按钮出现时**(~450px 自然宽)把文字压成逐词竖排 |
 | 【历史快照】Tasks 弹卡 | `[class*="_opPanel"]` → position:fixed + translate(-50%,-50%) | 上游右对齐下拉贴边、不居中 |
-| 【历史快照】设置 nav 恢复（dshmarket ≥1.20） | `@media(max-width:560px)` 内镜像上游条件：`[role=dialog]:has([data-dsh-market-root]) > nav { display:flex !important }`（frame 域限定） | 1.20.x 起 ≤560px 上游藏宿主 nav 让市场接管整屏，但本宿主唯一叉号在该 nav 里 → 分类+叉号全消失、无路可退 |
+| 【历史快照】设置 nav 恢复（dshmarket ≥1.20） | `@media(max-width:560px)` 内镜像上游条件：`[role=dialog]:has([data-dsh-market-root]) > nav { display:flex !important }`（frame 域限定）——**rc.2 起增补 portal 感知孪生规则（无 frame 前缀），frame 形态保留作测试守护，见 §9** | 1.20.x 起 ≤560px 上游藏宿主 nav 让市场接管整屏，但本宿主唯一叉号在该 nav 里 → 分类+叉号全消失、无路可退 |
 | 【历史快照】已安装列表 | index.tsx 内联 effect：`[class*="irow"]:not(irowActions):not(irowTrailing)` | 行文本挤压（注意排除嵌套 action 容器） |
 | 【历史快照】Models 卡片列表 | 设置行三连 `[class*="_section"] [class*="_row"]` 加 `:not(_rows/_rowCard/_rowHead/_rowIdentity/_rowActions)` 复合族守卫（2026-08-24） | PR#27 `$=`→`*=` 复活过匹配：UL 命中使首尾卡 width:100%，官方 content-box(+14px padding+1px border) 变 372px vs 兄弟 342px 并超出 390 视口；守卫后四卡等宽、按钮回自然宽。**2026-09-24 #111：竖堆四连（flex-direction:column + gap:8 + 首尾子 width:100% + 开关钉宽）已整删**，墓碑注释在 compat.css.ts 原位（宿主行已重设计为紧凑 space-between）；复发须按代际门控重引入，不许 blanket `[class*="_row"]` 覆盖 |
-| 设置工具栏三连 | **2026-09-24 #105 A′ 改纯 CSS 重锚定**：`[aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"]))`（navList 复刻 nowrap 横滚条 + `margin-right:42px` 让位）；reparent 任务已删（settings-toolbar-reparent.ts 32 行删除） | 旧裸 `[class*="_header"]` 命中内容区插件卡头：标题右对齐、官方 padding/gap 被清空、箭头套 32px 灰圆底。0.1.7 复测：结构锚两断点唯一命中 `VOzbGW_panel`（panel>nav:first-child>navList:last-child>button 链成立；`<nav>` 隐式 role 不带属性、不触发排除） |
+| 设置工具栏三连 | **2026-09-24 #105 A′ 改纯 CSS 重锚定**：`[aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"]))`（navList 复刻 nowrap 横滚条 + `margin-right:42px` 让位）；reparent 任务已删（settings-toolbar-reparent.ts 32 行删除）——**rc.2 起 #116 大改：navList nowrap+overflow-x 移入本锚（compat frame 版墓碑）、工具栏 z-index:10 + 盒高 32px、✕ 热区 ::after 扩 6px（不向下）、移动端隐藏 `_actions`，见 §9** | 旧裸 `[class*="_header"]` 命中内容区插件卡头：标题右对齐、官方 padding/gap 被清空、箭头套 32px 灰圆底。0.1.7 复测：结构锚两断点唯一命中 `VOzbGW_panel`（panel>nav:first-child>navList:last-child>button 链成立；`<nav>` 隐式 role 不带属性、不触发排除） |
 | ghost details 隐藏 | `details[class*="_customized"]:not([open]) > [class*="_customizedBody"] { display:none }`（2026-09-19） | 引擎把关闭态 details 的 body（模型目录 ~1500px）照常渲染成幽灵层，盖住编辑器动作行与其前的提供商行（命中被劫持）——「无法删除提供商/获取模型无反应/Cancel 关不掉」同根因；宿主布局按关闭态正确计算，解压方向全无效，open=true 立即恢复 |
 | dialog footer 按钮不折行 | `[aria-modal] [class*="_footer"]` flex-wrap + 内 `button[class*="_button"]` nowrap（2026-09-19） | 36px 单行按钮 white-space:normal 在窄视口/长名/fontScale~1.3 下标签折行裁字（工作区重命名对话框同族受益） |
 
@@ -139,7 +142,7 @@ Termux 前提：playwright-core 在 android 直接抛 `Unsupported platform`—�
 - 弹卡贴边不居中 = opPanel 上游 absolute 右对齐（已修 fixed 居中）
 - 打开市场后分类+叉号全消失 = dshmarket ≥1.20 在 ≤560px 隐藏 `[role=dialog]:has([data-dsh-market-root]) > nav`，其注释假设的「content header 关闭按钮」在本宿主不存在；compat 已镜像条件反制（§4）。此类「谁藏了它」问题：活页面遍历 `document.styleSheets`（递归 media 规则）找命中目标且带 display:none 的规则即可定位注入 style 标签
 - `[class*="irow"]` 宽泛匹配会误伤已安装列表的 action 容器
-- 设置 nav「不换行、cell 排到 x≈1400」不是失效：单行横滑就是设计（commit 1185f2e，2026-08-16 用户反馈——13 个分类 wrap 要占三行 ~130px；2px 细滚动条即滑动可供性）。layout 的 wrap 规则仍命中但被 compat `flex-wrap:nowrap !important` 有意覆盖，排查时别再误判（2026-08-25 实锤：锚点链 full match，modal 无 [role=navigation] 属性——`<nav>` 的隐式 ARIA role 不产生该属性，属性选择器匹配不受影响）。
+- 设置 nav「不换行、cell 排到 x≈1400」不是失效：单行横滑就是设计（commit 1185f2e，2026-08-16 用户反馈——13 个分类 wrap 要占三行 ~130px；2px 细滚动条即滑动可供性）。~~layout 的 wrap 规则仍命中但被 compat `flex-wrap:nowrap !important` 有意覆盖~~**2026-09-25 rc.2 起机制简化：compat 的 frame 域 nowrap 三连已墓碑，layout 结构锚自身就是 `nowrap !important + overflow-x:auto`（#116），不再有跨文件覆盖关系**；排查时别再误判（2026-08-25 实锤：锚点链 full match，modal 无 [role=navigation] 属性——`<nav>` 的隐式 ARIA role 不产生该属性，属性选择器匹配不受影响）。
 - **插件卡头被工具栏规则波及（右对齐/清 padding/箭头灰圆底）**＝ layout.css 工具栏三连用了裸 `[class*="_header"]`；2026-09-05 全节扫描实锤 8 个卡头（YyYd_a_header×3 + Kwoi6G/bpnj3G/Jh0q7G/jmhvDG/rUBhvW_header×5）中招，已改结构锚定（§4）。新装插件卡再现同类症状先查这条规则；回归探针 `.local-tests/plugin-card-header-bleed.mjs`（10 断言）
 - **设置分类顶部灰色椭圆**（2026-08-25 实锤）：layout.css 的 `[class*="_header"]:not([class*="_headerActions"])` 工具栏复合规则命中 @linxin666 插件设置卡头 `*_headerStatic`（pet/community-plugins/skin-center/live-stats 共享 PluginSettingsCard 模板）——「关闭按钮圆形底座」的 50% 圆角+灰底落在全宽 `_headText` span（340×32）上成椭圆，容器规则还压掉上游 14px/16px 内边距。三处规则已追加 `:not([class*="_headerStatic"])`。取证手法升级：朴素逐规则 `el.matches` 扫描会因 var() 间接赋值漏报，改用**样式表二分禁用法**（每轮关一半 document.styleSheets 看 getComputedStyle 签名变化，~7 轮锁定唯一肇事表）。回归探针 `.local-tests/ellipse-regression.mjs`（断言 headText 无圆角无底色 + VOzbGW_close 32×32 圆底座保留）
 - 设置 Models 区卡片宽窄不一+首尾卡出屏 = compat `_row` 子串规则过匹配 `_row*` 复合族（PR#27 复活）；同类「某区卡片宽度不一致/出屏」症状先查 `[aria-modal] _section _row` 三连规则的命中面，回归用 assert-models-layout.mjs
@@ -165,7 +168,7 @@ Termux 前提：playwright-core 在 android 直接抛 `Unsupported platform`—�
 
 **面板结构升级【live，挂载链实证】**：`VOzbGW_overlay` > `VOzbGW_mask`（新，absolute inset0）+ `VOzbGW_panel[role=dialog][aria-modal=true]`——设置对话框自身就是 aria-modal dialog，模态让位规则直接命中。`VOzbGW_` 新键 live 分布：mask/navTitle/trigger/triggerRow 在场；rail/railRow/triggerLabel bundle 有、当前形态未渲染。唯一滚动容器仍 = `VOzbGW_options`。
 
-**portal 根现状【live】**：设置打开态 body 直接子 fixed z≥900 = 0（无 portal）——「就地渲染于 settingsArea」（§2 关键事实 0）由推断升级为挂载链实锤。`_root_w1urq_2` 与继任 `11bjj_` 全程 0 命中（只有真宿主模态才挂 body，本次未复现）。`_overlay` 子串另有两个常驻命中别误认：`uV2eYG_overlayAnchor`（composer）、`pI_x6G_overlayLayer`（shell）。
+**portal 根现状【live】**：设置打开态 body 直接子 fixed z≥900 = 0（无 portal）——「就地渲染于 settingsArea」（§2 关键事实 0）由推断升级为挂载链实锤。**【rc.2 起失效】0.1.7-rc.2 改 `createPortal(..., document.body)`，设置弹窗成为 body 直接子——本条只对 rc.1 成立，见 §9**。`_root_w1urq_2` 与继任 `11bjj_` 全程 0 命中（只有真宿主模态才挂 body，本次未复现）。`_overlay` 子串另有两个常驻命中别误认：`uV2eYG_overlayAnchor`（composer）、`pI_x6G_overlayLayer`（shell）。
 
 **0.1.7 新族速览【live 计数 + scout 归属】**：
 
@@ -190,3 +193,19 @@ Termux 前提：playwright-core 在 android 直接抛 `Unsupported platform`—�
 **QA 配方变更【live】**（同 composer-tree-recon.md §9）：①会话种子必须全量 `dsh.*` localStorage 快照（只写 `dsh.sessions.current` 单键 0.1.7 落 hero 不恢复会话）；②`mint-cookie.mjs` 已禁用，改 token URL（GET / 303 换 HttpOnly cookie）。
 
 **证据路径**：原始数据 `~/tmp/doc-recon-20260925/`（settings-desktop.json / settings-mobile.json / settings-desktop-supplement.json / beacon-listener.cjs + raw.jsonl / capture-scripts.md）。
+
+## 9. 0.1.7-rc.2 增补（2026-09-25，PR #116 合并后）
+
+**根因（上游包逐字节 diff 实证，贡献者 @BuvkB）**：`dsh-client-ui-settings-general` rc.1 **原地渲染**设置弹窗（bundle 内无 `createPortal`），rc.2 改 **`createPortal(..., document.body)`** → overlay 成 body 直接子，插件全部 `[data-mobile-nav="frame"]` 作用域对话框规则一次性失效。活体症状：设置 nav 3/2/3/2/1 换行且首行滑进 138px 工具栏底下、市场 ✕ 看得见点不着（`nUhMVa_root` 后画且 z:auto 盖住工具栏）、byline「· ★ 8k」孤行、页面零距离贴顶。取证前后对照图：`docs/audits/2026-09-25-rc2-portal-regression/`（4 张）。
+
+**插件规则面变化（全部仍在移动 media 包裹内，桌面零影响）**：
+
+| 规则 | rc.1 形态 | rc.2 起现役形态 |
+|---|---|---|
+| 市场 opPanel / titleRow | frame 域（compat） | compat 原位**换锚 `[data-dsh-market-root]`**；`_title` flex `1 1 auto` → **`0 1 auto`**（版本号回归标题左侧，不再被顶到 ✕ 角致误触） |
+| 市场 byline / 顶距 | —（上游自流） | **byline 钉单行**（nowrap，owner 项 `flex:0 1 auto`+ellipsis 吸收挤压）+ **≤360px 紧凑档**（10px 字 / 4px gap）+ **页顶 12px 留白**（与自身左右 padding 一致；工具栏/✕ 不动） |
+| 设置 nav 单行横滚 | compat frame 域三连（滚动条+紧凑 cell+藏 actions） | compat 三连 **tombstone（原位墓碑注释，勿按 frame 选择器复活）**；接管者 = layout.css 结构锚同族：`flex-wrap:nowrap !important + overflow-x:auto` + 细滚条 + 紧凑 cell，宿主代际无关 |
+| 设置工具栏 | `margin-right:42px` 让位（#105 A′） | **`z-index:10`**（盖市场根与 stickyHead z:5，仍低于 opPanel z:40 / lightbox z:10000）+ 盒高 54→**32px**（下半空区曾吃「导出日志」右上角形成死区）+ **✕ 热区 `::after` 上/左/右各扩 6px（绝不向下**——13px 下就是导出按钮）+ 移动端**隐藏 `_actions`**（「打开配置文件」；✕ 是 actions 的**兄弟**节点，关闭路径不受牵连） |
+| dshmarket ≥1.20 nav-hide 反制 | frame 域单规则 | frame 规则**保留**（测试守护 `tests/market-gallery-style.test.ts:26`）+ **portal 感知孪生**（`[role=dialog]:has([data-dsh-market-root]) > nav`，无 frame 前缀；rc.1 上与 frame 规则同声明双命中、无行为差；rc.2+ 由孪生接管） |
+
+**排查提示（本区通用）**：先判宿主代际（rc.1 vs rc.2+）再按表选锚。frame 域规则在 rc.2+ 失效的形态是**静默的**——选择器合法、styleSheets 里规则在场、就是不命中目标（被 portal 摘出 frame 子树）。「规则在场却不生效」类症状，先查目标还在不在 `[data-mobile-nav="frame"]` 子树里，再查谁藏了它（§6 手法）。
